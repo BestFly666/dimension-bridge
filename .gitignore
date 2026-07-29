@@ -1,0 +1,29 @@
+# Build outputs
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+*.DotSettings
+
+# Config with secrets
+config.json
+
+# Cache and progress data
+translation_cache.json
+translation_progress.json
+
+# Publish output
+publish/
+
+# User data files
+translation_dictionary.json
+glossary_terms.json
+expert_profiles.json
+
+# Default XML file (template)
+stable_us.xml
+
+# OS files
+.DS_Store
+Thumbs.db
