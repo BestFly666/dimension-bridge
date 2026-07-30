@@ -35,8 +35,10 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        name: "XML AI Translator ${{ github.ref_name }}"
+        name: "XML AI Translator ${{ github.ref_name }}（测试版）"
         body: |
+          > ⚠️ 此版本为个人测试预发布版，可能存在未知问题，仅供测试使用。
+
           ## 使用说明
 
           1. 下载 `XmlAiTranslator-win-x64.zip`
@@ -47,6 +49,6 @@ jobs:
           > 无需安装 .NET 运行时，单文件便携版。
         files: XmlAiTranslator-win-x64.zip
         draft: false
-        prerelease: false
+        prerelease: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
