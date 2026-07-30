@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SimpleXmlEditor.Dictionary;
@@ -29,7 +30,8 @@ namespace SimpleXmlEditor
             // Infrastructure
             services.AddSingleton<IXmlRepository, XmlRepository>();
 
-            // Orchestrator
+            // Orchestrator (log action registered separately for DI resolution)
+            services.AddSingleton<Action<string>>(_ => { });
             services.AddSingleton<TranslationOrchestrator>();
 
             // ViewModel
