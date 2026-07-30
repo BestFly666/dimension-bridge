@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using SimpleXmlEditor.Dictionary;
+using SimpleXmlEditor.ExpertProfiles;
 
 namespace SimpleXmlEditor.Services
 {
@@ -50,6 +52,7 @@ namespace SimpleXmlEditor.Services
         void SaveConfig();
         void SaveCache();
         void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries);
+        void SaveTranslationProgress(IEnumerable<LocalizationEntry> entries);
         Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries);
         int RestoreTranslationProgress(IEnumerable<LocalizationEntry> entries);
         void DeleteProgressFile();
@@ -60,5 +63,46 @@ namespace SimpleXmlEditor.Services
         void SetApiKey(string apiKey);
         string GetApiKey();
         bool MigrateLegacyApiKey();
+    }
+
+    public interface IGlossaryManager
+    {
+        Dictionary<string, GlossaryTerm> Terms { get; }
+        int Count { get; }
+        bool TryGetValue(string sourceText, out string translated);
+        Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries);
+        (int added, int updated, int skipped) ImportCsv(string filePath);
+        (int added, int updated) ImportJson(string filePath);
+        void SetEntry(string source, string translation, string category = "", string status = "confirmed", string tags = "");
+        void SetTerm(GlossaryTerm term);
+        bool RemoveEntry(string source);
+        void Clear();
+        void Load();
+        List<GlossaryTerm> Search(string query);
+        List<string> GetAllCategories();
+        void ExportCsv(string filePath);
+        void ExportJson(string filePath);
+        (int added, int updated) MergeFromProfile(string profileName, Dictionary<string, string> profileGlossary);
+        List<GlossaryConflict> DetectConflicts(IEnumerable<(string key, string source, string translation)> entries);
+    }
+
+    public interface IExpertProfileManager
+    {
+        List<ExpertProfile> Profiles { get; }
+        string ActiveProfileName { get; set; }
+        ExpertProfile ActiveProfile { get; }
+        void LoadProfiles();
+        void SaveProfiles();
+        void AddProfile(ExpertProfile profile);
+        void DeleteProfile(string name);
+        ExpertProfile GetProfile(string name);
+        void EnsureDefaultsExist();
+    }
+
+    public interface ITranslationEvaluator
+    {
+        event Action<string> LogMessage;
+        Task<EvaluationResult> EvaluateAsync(string originalText, string translatedText, string targetLanguage, string context = "");
+        Task<VotingResult> VoteAsync(string originalText, string[] candidateTranslations, string targetLanguage, string context = "");
     }
 }

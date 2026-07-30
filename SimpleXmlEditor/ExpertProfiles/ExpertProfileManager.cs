@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+using SimpleXmlEditor.Services;
 
 namespace SimpleXmlEditor.ExpertProfiles
 {
@@ -10,7 +11,7 @@ namespace SimpleXmlEditor.ExpertProfiles
     /// Manages the lifecycle of expert profiles: load, save, CRUD, and active profile tracking.
     /// Profiles are stored in expert_profiles.json.
     /// </summary>
-    public class ExpertProfileManager
+    public class ExpertProfileManager : IExpertProfileManager
     {
         private static readonly string ProfilesFile = Path.Combine(
             Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),

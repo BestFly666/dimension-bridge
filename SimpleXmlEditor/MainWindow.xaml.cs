@@ -20,6 +20,7 @@ using SimpleXmlEditor.Localization;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.Services;
 using SimpleXmlEditor.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace SimpleXmlEditor
 {
@@ -36,7 +37,8 @@ namespace SimpleXmlEditor
         public MainWindow()
         {
             InitializeComponent();
-            _viewModel = new MainViewModel();
+            // ViewModel may be injected by DI or manually created
+            _viewModel = App.Services?.GetService<MainViewModel>() ?? new MainViewModel();
             _viewModel.LogMessage += msg => Dispatcher.Invoke(() => AddLog(msg));
             
             EntriesGrid.ItemsSource = _viewModel.Entries;
@@ -52,7 +54,15 @@ namespace SimpleXmlEditor
             
             this.KeyDown += MainWindow_KeyDown;
             
+            InitializeFromConfig();
+        }
+
+        private void InitializeFromConfig()
+        {
             _viewModel.LoadConfig();
+            _viewModel.ConfigService.MigrateLegacyApiKey();
+            _viewModel.AiTranslationService.ApiKey = _viewModel.ConfigService.GetApiKey();
+            
             BatchSizeTxt.Text = _viewModel.BatchSize.ToString();
             _viewModel.ProfileManager.EnsureDefaultsExist();
             RefreshExpertProfileCombo();
@@ -93,7 +103,7 @@ namespace SimpleXmlEditor
                         if (string.IsNullOrEmpty(_viewModel.AiTranslationService.Model) || !models.Contains(_viewModel.AiTranslationService.Model))
                         {
                             _viewModel.AiTranslationService.Model = models.FirstOrDefault() ?? "";
-                            SaveConfig();
+                            _viewModel.SaveConfig();
                             AddLog($"🔧 {LocalizationManager.GetString("LogAutoModelSelected", _viewModel.AiTranslationService.Model)}");
                         }
                     }
@@ -125,7 +135,7 @@ namespace SimpleXmlEditor
             if (string.IsNullOrEmpty(_viewModel.AiTranslationService.Model) || !models.Contains(_viewModel.AiTranslationService.Model))
             {
                 _viewModel.AiTranslationService.Model = models.FirstOrDefault() ?? "";
-                SaveConfig();
+                _viewModel.SaveConfig();
             }
 
             AddLog($"✅ {LocalizationManager.GetString("LogDeepSeekModels", models.Count)}");
@@ -518,62 +528,6 @@ namespace SimpleXmlEditor
             }
         }
 
-        private void LoadConfig()
-        {
-            try
-            {
-                _viewModel.ConfigService.LoadConfig();
-                
-                // Migrate legacy plaintext API key to encrypted storage
-                _viewModel.ConfigService.MigrateLegacyApiKey();
-                
-                var config = _viewModel.ConfigService.Config;
-                _viewModel.AiTranslationService.ApiKey = _viewModel.ConfigService.GetApiKey();
-                _viewModel.AiTranslationService.Model = config.GeminiModel;
-                _viewModel.AiTranslationService.TargetLanguage = config.TargetLanguage;
-                _viewModel.AiTranslationService.CurrentProvider = Enum.TryParse<AIProvider>(config.AiProvider, out var provider) ? provider : AIProvider.GoogleGemini;
-                _viewModel.ProgramLanguage = config.ProgramLanguage;
-                _viewModel.CustomPrompt = config.CustomPrompt;
-                _viewModel.ActiveExpertProfileName = config.ActiveExpertProfile;
-                _viewModel.LastLoadedFilePath = config.LastLoadedFilePath;
-                _viewModel.BatchSize = config.BatchSize;
-                
-                _viewModel.AiProvider = _viewModel.AiTranslationService.CurrentProvider;
-                LocalizationManager.CurrentLanguage = _viewModel.ProgramLanguage;
-                
-                AddLog($"✅ {LocalizationManager.GetString("LogConfigLoaded")}");
-                AddLog($"✅ {LocalizationManager.GetString("LogCacheLoaded", _viewModel.ConfigService.Cache.Count)}");
-            }
-            catch (Exception ex)
-            {
-                AddLog($"❌ {LocalizationManager.GetString("ConfigLoadError", ex.Message)}");
-            }
-        }
-
-        private void SaveConfig()
-        {
-            try
-            {
-                var config = _viewModel.ConfigService.Config;
-                _viewModel.ConfigService.SetApiKey(_viewModel.AiTranslationService.ApiKey);
-                config.GeminiModel = _viewModel.AiTranslationService.Model;
-                config.TargetLanguage = _viewModel.AiTranslationService.TargetLanguage;
-                config.AiProvider = _viewModel.AiProvider.ToString();
-                config.ProgramLanguage = _viewModel.ProgramLanguage;
-                config.CustomPrompt = _viewModel.CustomPrompt;
-                config.ActiveExpertProfile = _viewModel.ActiveExpertProfileName;
-                config.LastLoadedFilePath = _viewModel.LastLoadedFilePath;
-                config.BatchSize = _viewModel.BatchSize;
-                
-                _viewModel.ConfigService.SaveConfig();
-                AddLog($"✅ {LocalizationManager.GetString("LogConfigSaved")}");
-            }
-            catch (Exception ex)
-            {
-                AddLog($"❌ {LocalizationManager.GetString("ConfigSaveError", ex.Message)}");
-            }
-        }
-
         private void LoadXml(string fileName = "stable_us.xml", bool isTranslationFile = false)
         {
             try
@@ -617,7 +571,7 @@ namespace SimpleXmlEditor
                     var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
                     view?.Refresh();
 
-                    RestoreTranslationProgress();
+                    _viewModel.RestoreTranslationProgress(_viewModel.Entries);
                 }
                 else
                 {
@@ -643,7 +597,7 @@ namespace SimpleXmlEditor
                     var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
                     view?.Refresh();
 
-                    RestoreTranslationProgress();
+                    _viewModel.RestoreTranslationProgress(_viewModel.Entries);
                 }
             }
             catch (Exception ex)
@@ -665,7 +619,7 @@ namespace SimpleXmlEditor
                 }
             };
 
-            var valueIsChinese = HasChineseChars(entry.Value);
+            var valueIsChinese = entry.Value.HasChineseChars();
 
             if (!string.IsNullOrEmpty(entry.Translation))
             {
@@ -735,12 +689,12 @@ namespace SimpleXmlEditor
         {
             try
             {
-                SyncEntriesToCache();
+                _viewModel.SyncEntriesToCache(_viewModel.Entries);
 
                 var entriesList = _viewModel.Entries.ToList();
                 _viewModel.XmlRepository.SaveXml(fileName, entriesList);
                 
-                SaveConfig();
+                _viewModel.SaveConfig();
                 UpdateCacheInfo();
                 StatusText.Text = LocalizationManager.GetString("SavedEntries", _viewModel.Entries.Count, Path.GetFileName(fileName));
                 AddLog($"💾 {LocalizationManager.GetString("LogXmlSaved", fileName, _viewModel.Entries.Count)}");
@@ -750,23 +704,6 @@ namespace SimpleXmlEditor
                 AddLog($"❌ {LocalizationManager.GetString("ErrorSavingXml", ex.Message)}");
                 MessageBox.Show(LocalizationManager.GetString("ErrorSavingXml", ex.Message), LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        /// <summary>
-        /// Detect if text contains Chinese (CJK) characters.
-        /// Returns true if the text appears to be Chinese rather than English source.
-        /// </summary>
-        private static bool HasChineseChars(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return false;
-            int cjkCount = 0;
-            foreach (char c in text)
-            {
-                if (c >= 0x4E00 && c <= 0x9FFF) cjkCount++; // CJK Unified Ideographs
-            }
-            // Any CJK character present = Chinese source
-            // (English game text with CJK chars mixed in is virtually non-existent)
-            return cjkCount >= 1;
         }
 
         private async Task<string> TranslateAsync(string text)
@@ -963,7 +900,7 @@ namespace SimpleXmlEditor
                 _viewModel.CustomPrompt = settings.CustomPrompt;
                 _viewModel.ActiveExpertProfileName = settings.ActiveExpertProfile;
                 
-                SaveConfig();
+                _viewModel.SaveConfig();
                 RefreshExpertProfileCombo();
                 AddLog($"✅ {LocalizationManager.GetString("LogSettingsUpdated", _viewModel.AiProvider, _viewModel.AiTranslationService.Model, _viewModel.AiTranslationService.TargetLanguage, _viewModel.ActiveExpertProfileName.Length > 0 ? _viewModel.ActiveExpertProfileName : "None")}");
             }
@@ -1124,7 +1061,7 @@ namespace SimpleXmlEditor
                     }
 
                     // Incremental save: write progress to recovery file after each batch
-                    SaveTranslationProgress(_viewModel.Entries);
+                    _viewModel.ConfigService.SaveTranslationProgress(_viewModel.Entries);
 
                     AddLog($"📊 {LocalizationManager.GetString("LogBatchDone", batchIndex + 1, batches.Count, batchSuccessCount, batchFailCount)}");
 
@@ -1212,67 +1149,6 @@ namespace SimpleXmlEditor
             }
         }
 
-        private void SaveTranslationProgress(IEnumerable<LocalizationEntry> entries)
-        {
-            try
-            {
-                var progress = new Dictionary<string, string>();
-                foreach (var entry in entries)
-                {
-                    if (!string.IsNullOrEmpty(entry.Value) && !string.IsNullOrEmpty(entry.Translation))
-                    {
-                        progress[entry.Value] = entry.Translation;
-                    }
-                }
-                if (progress.Count > 0)
-                {
-                    var progressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
-                    File.WriteAllText(progressPath, JsonConvert.SerializeObject(progress, Formatting.Indented), Encoding.UTF8);
-                }
-            }
-            catch (Exception ex)
-            {
-                AddLog($"⚠️ {LocalizationManager.GetString("LogProgressSaveError", ex.Message)}");
-            }
-        }
-
-        private void RestoreTranslationProgress()
-        {
-            try
-            {
-                var progressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
-                if (!File.Exists(progressPath)) return;
-
-                var json = File.ReadAllText(progressPath, Encoding.UTF8);
-                var progress = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-                if (progress == null || progress.Count == 0) return;
-
-                int restoredCount = 0;
-                foreach (var entry in _viewModel.Entries)
-                {
-                    if (string.IsNullOrEmpty(entry.Value)) continue;
-                    // Only restore if no translation already loaded (e.g., from saved 3rd column)
-                    if (!string.IsNullOrEmpty(entry.Translation)) continue;
-                    if (progress.TryGetValue(entry.Value, out var translation))
-                    {
-                        entry.Translation = translation;
-                        restoredCount++;
-                    }
-                }
-
-                if (restoredCount > 0)
-                {
-                    AddLog($"📂 {LocalizationManager.GetString("LogCrashRecovery", restoredCount)}");
-                }
-
-                // Don't delete yet — user may want to keep it until manual save
-            }
-            catch (Exception ex)
-            {
-                AddLog($"⚠️ {LocalizationManager.GetString("LogRecoveryError", ex.Message)}");
-            }
-        }
-
         private void DeleteProgressFile()
         {
             try
@@ -1302,7 +1178,7 @@ namespace SimpleXmlEditor
                 _viewModel.Entries.Clear();
                 _viewModel.LastLoadedFilePath = null;
                 _viewModel.ConfigService.Config.LastLoadedFilePath = null;
-                SaveConfig();
+                _viewModel.SaveConfig();
                 _viewModel.CacheHits = 0;
                 _viewModel.ApiCalls = 0;
                 _viewModel.GlossaryHits = 0;
@@ -1532,9 +1408,9 @@ namespace SimpleXmlEditor
                 // Commit any pending edit in DataGrid so changes are saved before reading
                 EntriesGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
-                SyncEntriesToCache();
+                _viewModel.SyncEntriesToCache(_viewModel.Entries);
                 SaveCache();
-                SaveConfig();
+                _viewModel.SaveConfig();
                 UpdateCacheInfo();
                 UpdateGlossaryInfo();
                 AddLog($"💾 {LocalizationManager.GetString("LogCacheUpdated", _viewModel.ConfigService.Cache.Count)}");
@@ -1555,23 +1431,6 @@ namespace SimpleXmlEditor
             catch (Exception ex)
             {
                 AddLog($"❌ {LocalizationManager.GetString("LogCacheWriteError", ex.Message)}");
-            }
-        }
-
-        /// <summary>
-        /// Sync all entries' translations into cache, keyed by both Key (stable) and Value hash (for cross-entry sharing).
-        /// </summary>
-        private void SyncEntriesToCache()
-        {
-            foreach (var entry in _viewModel.Entries)
-            {
-                if (!string.IsNullOrEmpty(entry.Translation) && !string.IsNullOrWhiteSpace(entry.Value))
-                {
-                    _viewModel.ConfigService.Cache[entry.Key] = entry.Translation;
-                    var valueCacheKey = _viewModel.ConfigService.GetCacheKey(entry.Value);
-                    if (valueCacheKey != null)
-                        _viewModel.ConfigService.Cache[valueCacheKey] = entry.Translation;
-                }
             }
         }
 
@@ -1823,7 +1682,7 @@ namespace SimpleXmlEditor
                 if (_viewModel.ActiveExpertProfileName != newProfile)
                 {
                     _viewModel.ActiveExpertProfileName = newProfile;
-                    SaveConfig();
+                    _viewModel.SaveConfig();
                     AddLog($"🧠 {LocalizationManager.GetString("LogExpertProfile", _viewModel.ActiveExpertProfileName.Length > 0 ? _viewModel.ActiveExpertProfileName : "None")}");
                 }
             }

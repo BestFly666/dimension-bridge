@@ -20,11 +20,11 @@ namespace SimpleXmlEditor
         public string ActiveExpertProfile { get; private set; }
         public AIProvider AiProvider { get; private set; }
         private readonly MainWindow _mainWindow;
-        private readonly ExpertProfileManager _profileManager;
+        private readonly IExpertProfileManager _profileManager;
 
         public SettingsWindow(string currentApiKey, string currentModel, string currentTargetLanguage, 
             string currentProgramLanguage, string currentCustomPrompt, string currentActiveExpertProfile,
-            AIProvider currentAiProvider, MainWindow mainWindow, ExpertProfileManager profileManager)
+            AIProvider currentAiProvider, MainWindow mainWindow, IExpertProfileManager profileManager)
         {
             InitializeComponent();
             

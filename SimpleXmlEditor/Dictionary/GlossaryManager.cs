@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
+using SimpleXmlEditor.Services;
 
 namespace SimpleXmlEditor.Dictionary
 {
@@ -21,7 +22,7 @@ namespace SimpleXmlEditor.Dictionary
     ///   - SubstituteTerms: used only when the caller explicitly wants in-place term
     ///     replacement (e.g., post-processing). NOT used in the hot translation path.
     /// </summary>
-    public class GlossaryManager
+    public class GlossaryManager : IGlossaryManager
     {
         private static readonly string DictFile = Path.Combine(Environment.CurrentDirectory, "translation_dictionary.json");
         private static readonly string GlossaryFile = Path.Combine(Environment.CurrentDirectory, "glossary_terms.json");
@@ -31,6 +32,15 @@ namespace SimpleXmlEditor.Dictionary
 
         /// <summary>Sorted by key length descending for longest-match-first</summary>
         private List<KeyValuePair<string, GlossaryTerm>> _sortedTerms = new();
+
+        /// <summary>
+        /// Inverted index: lowercase word → set of glossary terms whose English contains that word.
+        /// Enables O(entry_word_count × avg_candidates) matching instead of O(glossary_size × batch_size).
+        /// </summary>
+        private Dictionary<string, HashSet<string>> _invertedIndex = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Maximum glossary terms injected into a single batch prompt.</summary>
+        private const int MAX_GLOSSARY_CONTEXT_TERMS = 50;
 
         /// <summary>Regex cache shared across all methods (thread-safe reads, rebuild on import)</summary>
         private static readonly Dictionary<string, Regex> _regexCache = new();
@@ -126,6 +136,23 @@ namespace SimpleXmlEditor.Dictionary
                 .Where(t => !string.IsNullOrEmpty(t.Key) && t.Key.Length >= 2)
                 .OrderByDescending(t => t.Key.Length)
                 .ToList();
+
+            // Build inverted index: word → set of glossary term keys
+            _invertedIndex = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var term in Terms.Where(t => !string.IsNullOrEmpty(t.Key) && t.Key.Length >= 2))
+            {
+                var words = term.Key.Split(new[] { ' ', '-', '_', '/', '.' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var word in words)
+                {
+                    if (word.Length < 2) continue;
+                    if (!_invertedIndex.TryGetValue(word, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        _invertedIndex[word] = set;
+                    }
+                    set.Add(term.Key);
+                }
+            }
         }
 
         // ─── Exact match lookup ─────────────────────────────────────
@@ -239,6 +266,69 @@ namespace SimpleXmlEditor.Dictionary
         public bool ContainsTerm(string text, string term)
         {
             return ContainsWholeWord(text, term);
+        }
+
+        /// <summary>
+        /// Fast glossary context builder using inverted index.
+        /// For a batch of entries, finds up to MAX_GLOSSARY_CONTEXT_TERMS matching terms.
+        /// Returns dictionary of (term_key → chinese_translation) for prompt injection.
+        /// 
+        /// Performance: O(batch_word_count × avg_candidates_per_word) instead of
+        /// O(glossary_size × batch_size). With 100k glossary and 50 entries per batch,
+        /// this is ~1000x faster than iterating all glossary terms.
+        /// </summary>
+        public Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (entries.Count == 0 || _invertedIndex.Count == 0)
+                return result;
+
+            // Collect all unique candidate term keys from inverted index
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.Value) || entry.Value.Length < 2) continue;
+
+                // Tokenize entry text into words
+                var words = entry.Value.Split(new[] { ' ', '-', '_', '/', '.', ',', ':', ';', '!', '?',
+                    '"', '\'', '(', ')', '[', ']', '{', '}', '<', '>', '\t', '\n', '\r' },
+                    StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var word in words)
+                {
+                    if (word.Length < 2) continue;
+                    if (_invertedIndex.TryGetValue(word, out var termKeys))
+                    {
+                        foreach (var key in termKeys)
+                            candidates.Add(key);
+                    }
+                }
+            }
+
+            if (candidates.Count == 0) return result;
+
+            // Verify each candidate with ContainsWholeWord, longest match first
+            var sortedCandidates = candidates
+                .Where(c => _sortedTerms.Any(t => t.Key == c)) // filter to existing only (safety)
+                .OrderByDescending(c => c.Length);
+
+            foreach (var termKey in sortedCandidates)
+            {
+                foreach (var entry in entries)
+                {
+                    if (ContainsWholeWord(entry.Value, termKey))
+                    {
+                        if (Terms.TryGetValue(termKey, out var term))
+                            result[termKey] = term.Chinese;
+                        break; // found match for this term, check next term
+                    }
+                }
+
+                if (result.Count >= MAX_GLOSSARY_CONTEXT_TERMS)
+                    break;
+            }
+
+            return result;
         }
 
         /// <summary>

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore SimpleXmlEditor\SimpleXmlEditor.csproj
+    
+    - name: Build
+      run: dotnet build SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --no-restore
+    
+    - name: Test
+      run: dotnet test SimpleXmlEditor.Tests\SimpleXmlEditor.Tests.csproj --configuration Release --no-build --verbosity normal
+    
+    - name: Publish
+      run: dotnet publish SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --runtime win-x64 --self-contained true --output publish
+      
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: XmlAiTranslator
+        path: publish/

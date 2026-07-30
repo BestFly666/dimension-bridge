@@ -34,7 +34,7 @@ namespace SimpleXmlEditor.Services
     /// Service for AI-powered translation quality evaluation and multi-agent voting.
     /// Reuses the existing AiTranslationService for API communication.
     /// </summary>
-    public class TranslationEvaluator
+    public class TranslationEvaluator : ITranslationEvaluator
     {
         private readonly IAiTranslationService _aiService;
 

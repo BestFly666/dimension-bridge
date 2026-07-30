@@ -16,9 +16,9 @@ namespace SimpleXmlEditor.ViewModels
         private readonly IAiTranslationService _aiTranslationService;
         private readonly IXmlRepository _xmlRepository;
         private readonly IConfigService _configService;
-        private readonly ExpertProfileManager _profileManager;
-        private readonly GlossaryManager _glossary;
-        private readonly TranslationEvaluator _evaluator;
+        private readonly IExpertProfileManager _profileManager;
+        private readonly IGlossaryManager _glossary;
+        private readonly ITranslationEvaluator _evaluator;
         private readonly TranslationOrchestrator _orchestrator;
 
         private ObservableCollection<LocalizationEntry> _entries;
@@ -229,16 +229,23 @@ namespace SimpleXmlEditor.ViewModels
         public event PropertyChangedEventHandler PropertyChanged;
         public event Action<string> LogMessage;
 
-        public MainViewModel()
+        public MainViewModel(
+            IAiTranslationService aiTranslationService = null,
+            IXmlRepository xmlRepository = null,
+            IConfigService configService = null,
+            IExpertProfileManager profileManager = null,
+            IGlossaryManager glossary = null,
+            ITranslationEvaluator evaluator = null,
+            TranslationOrchestrator orchestrator = null)
         {
             _entries = new ObservableCollection<LocalizationEntry>();
-            _profileManager = new ExpertProfileManager();
-            _glossary = new GlossaryManager();
-            _aiTranslationService = new AiTranslationService();
-            _xmlRepository = new XmlRepository();
-            _configService = new ConfigService();
-            _evaluator = new TranslationEvaluator(_aiTranslationService);
-            _orchestrator = new TranslationOrchestrator(
+            _profileManager = profileManager ?? new ExpertProfileManager();
+            _glossary = glossary ?? new GlossaryManager();
+            _aiTranslationService = aiTranslationService ?? new AiTranslationService();
+            _xmlRepository = xmlRepository ?? new XmlRepository();
+            _configService = configService ?? new ConfigService();
+            _evaluator = evaluator ?? new TranslationEvaluator(_aiTranslationService);
+            _orchestrator = orchestrator ?? new TranslationOrchestrator(
                 _aiTranslationService, _configService, _glossary, _profileManager,
                 msg => OnLogMessage(msg));
 
@@ -271,9 +278,9 @@ namespace SimpleXmlEditor.ViewModels
         public IAiTranslationService AiTranslationService => _aiTranslationService;
         public IXmlRepository XmlRepository => _xmlRepository;
         public IConfigService ConfigService => _configService;
-        public ExpertProfileManager ProfileManager => _profileManager;
-        public GlossaryManager Glossary => _glossary;
-        public TranslationEvaluator Evaluator => _evaluator;
+        public IExpertProfileManager ProfileManager => _profileManager;
+        public IGlossaryManager Glossary => _glossary;
+        public ITranslationEvaluator Evaluator => _evaluator;
         public TranslationOrchestrator Orchestrator => _orchestrator;
 
         /// <summary>Thread-safe glossary hits increment.</summary>

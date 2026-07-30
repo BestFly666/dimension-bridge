@@ -20,8 +20,8 @@ namespace SimpleXmlEditor.Services
     {
         private readonly IAiTranslationService _aiService;
         private readonly IConfigService _configService;
-        private readonly GlossaryManager _glossary;
-        private readonly ExpertProfileManager _profileManager;
+        private readonly IGlossaryManager _glossary;
+        private readonly IExpertProfileManager _profileManager;
         private readonly Action<string> _logAction;
 
         // Mirror of MainWindow counters — owned by caller but updated here
@@ -33,8 +33,8 @@ namespace SimpleXmlEditor.Services
         public TranslationOrchestrator(
             IAiTranslationService aiService,
             IConfigService configService,
-            GlossaryManager glossary,
-            ExpertProfileManager profileManager,
+            IGlossaryManager glossary,
+            IExpertProfileManager profileManager,
             Action<string> logAction)
         {
             _aiService = aiService;
@@ -256,24 +256,8 @@ namespace SimpleXmlEditor.Services
 
         private string BuildGlossaryContext(List<LocalizationEntry> entries)
         {
-            if (_glossary.Count == 0 || entries.Count == 0)
-                return "";
-
-            var relevantTerms = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var kvp in _glossary.Terms.OrderByDescending(k => k.Key.Length))
-            {
-                if (string.IsNullOrEmpty(kvp.Key) || kvp.Key.Length < 2) continue;
-
-                foreach (var entry in entries)
-                {
-                    if (GlossaryManager.ContainsWholeWord(entry.Value, kvp.Key))
-                    {
-                        relevantTerms[kvp.Key] = kvp.Value.Chinese;
-                        break;
-                    }
-                }
-            }
+            // Use inverted-index based fast matching (capped at MAX_GLOSSARY_CONTEXT_TERMS)
+            var relevantTerms = _glossary.GetGlossaryContextTerms(entries);
 
             if (relevantTerms.Count == 0)
                 return "";

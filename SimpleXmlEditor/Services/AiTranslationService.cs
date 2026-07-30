@@ -502,7 +502,7 @@ namespace SimpleXmlEditor.Services
 
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, url)
+                using var request = new HttpRequestMessage(HttpMethod.Post, url)
                 {
                     Content = new StringContent(json, Encoding.UTF8, "application/json")
                 };
@@ -672,7 +672,7 @@ namespace SimpleXmlEditor.Services
             };
 
             var json = JsonConvert.SerializeObject(requestBody);
-            var request = new HttpRequestMessage(HttpMethod.Post, url)
+            using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };

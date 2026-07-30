@@ -8,17 +8,18 @@ using System.Windows.Media;
 using Microsoft.Win32;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.Localization;
+using SimpleXmlEditor.Services;
 
 namespace SimpleXmlEditor
 {
     public partial class GlossaryWindow : Window
     {
-        private readonly GlossaryManager _glossary;
+        private readonly IGlossaryManager _glossary;
         private List<GlossaryTerm> _displayedTerms = new();
         private bool _suppressFilterEvents = false;
         public event Action<List<GlossaryConflict>> ConflictsDetected;
 
-        public GlossaryWindow(GlossaryManager glossary)
+        public GlossaryWindow(IGlossaryManager glossary)
         {
             InitializeComponent();
             _glossary = glossary;
@@ -68,9 +69,8 @@ namespace SimpleXmlEditor
             if (catFilter == LocalizationManager.GetString("GlossaryFilterAll") || string.IsNullOrEmpty(catFilter))
                 catFilter = "";
 
-            var statusFilter = (StatusFilter.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "";
-            if (statusFilter == LocalizationManager.GetString("GlossaryFilterAll") || string.IsNullOrEmpty(statusFilter))
-                statusFilter = "";
+            var statusFilterItem = StatusFilter.SelectedItem as ComboBoxItem;
+            var statusFilter = statusFilterItem?.Tag?.ToString() ?? "";
 
             if (!string.IsNullOrEmpty(catFilter))
                 terms = terms.Where(t => t.Category == catFilter).ToList();
@@ -121,9 +121,13 @@ namespace SimpleXmlEditor
                 var prevStatus = (StatusFilter.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? allLabel;
                 StatusFilter.Items.Clear();
                 StatusFilter.Items.Add(new ComboBoxItem { Content = allLabel, IsSelected = prevStatus == allLabel });
-                foreach (var s in new[] { "confirmed", "pending", "rejected" })
+                foreach (var (english, localized) in new[] { 
+                    ("confirmed", LocalizationManager.GetString("GlossaryStatusConfirmed")),
+                    ("pending", LocalizationManager.GetString("GlossaryStatusPending")),
+                    ("rejected", LocalizationManager.GetString("GlossaryStatusRejected"))
+                })
                 {
-                    StatusFilter.Items.Add(new ComboBoxItem { Content = s, IsSelected = prevStatus == s });
+                    StatusFilter.Items.Add(new ComboBoxItem { Content = localized, Tag = english, IsSelected = prevStatus == localized });
                 }
             }
             finally
