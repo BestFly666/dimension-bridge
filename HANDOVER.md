@@ -1,10 +1,10 @@
 # 项目交接文档 — XML AI Translator
 
 > **最后更新**：2026-07-30  
-> **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪）  
+> **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪、运行时修复完成）  
 > **维护者**：Veloxcity  
 > **技术栈**：C# / .NET 8.0 / WPF / Newtonsoft.Json / Microsoft.Extensions.DI / xUnit / GitHub Actions  
-> **最近变更**：Phase 1 技术债务清零（接口补全、代码去重、资源泄漏修复）+ Phase 2 质量基础设施（DI 容器、单元测试 13/13、CI/CD）
+> **最近变更**：Phase 1+2 完成 + CI 构建修复 + dotnet run 运行时崩溃修复
 
 ---
 
@@ -260,13 +260,15 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 - 流程：restore → build → test → publish (win-x64 self-contained) → upload artifact
 
 ---
-## 7. 已知问题（2026-07-30 — 审计清零）
+## 7. 已知问题（2026-07-30 — 审计清零 + 运行时修复）
 
-> **8 个已知问题已全部关闭。** Phase 1+2 完成后无新增问题。
+> **所有已识别问题已全部关闭。**
 
 | 优先级 | 问题 | 状态 | 修复日期 |
 |--------|------|------|----------|
 | **P0** | 线程安全 | ✅ 已修复 | 早期（ConcurrentDictionary/ConcurrentQueue 已就位） |
+| **P0** | `dotnet run` 无响应 — DI 容器无法解析 `TranslationOrchestrator`（Action<string> 未注册） | ✅ 已修复 | 2026-07-30 |
+| **P0** | CI/CD 构建失败 — 测试项目未被编译 | ✅ 已修复 | 2026-07-30 |
 | **P1** | 接口缺失（GlossaryManager/ExpertProfileManager/TranslationEvaluator） | ✅ 已修复 | 2026-07-30 |
 | **P1** | MainWindow 重复代码（6 个方法） | ✅ 已修复 | 2026-07-30 |
 | **P2** | HasChineseChars 重复 | ✅ 已修复 | 2026-07-30 |
@@ -401,5 +403,5 @@ xml-ai-translator-main/
 ├── DEVELOPMENT_LOG.md                # 开发日志
 ├── HANDOVER.md                       # 项目交接文档
 ├── PRODUCT_PLAN.md                   # 产品规划
-└── README_zh.md                      # 中文 README
+└── README.md                         # 项目说明
 ```

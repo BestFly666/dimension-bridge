@@ -7,6 +7,7 @@
 ![平台](https://img.shields.io/badge/平台-.NET%208.0-blue)
 ![许可](https://img.shields.io/badge/许可-MIT-green)
 ![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
+![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
 
 ---
 
@@ -113,34 +114,77 @@
 ```bash
 git clone https://github.com/BestFly666/xml-ai-translator-tool.git
 cd xml-ai-translator-tool
-dotnet build SimpleXmlEditor/SimpleXmlEditor.csproj
+dotnet build
 dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 ```
 
 **要求**：.NET 8.0 SDK、Windows 10/11
+
+### 运行测试
+
+```bash
+dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
+# 当前: 13/13 通过，0 失败，0 跳过
+```
+
+### CI/CD
+
+每次 push 自动触发 GitHub Actions：restore → build → test → publish (win-x64 自包含单文件)
 
 ---
 
 ## 项目结构
 
 ```
-SimpleXmlEditor/
-├── Services/                    # 核心服务层
-│   ├── AiTranslationService.cs  # AI 翻译（8 家国内大模型）
-│   ├── ConfigService.cs         # 配置管理 + 缓存 + DPAPI 加密
-│   ├── Interfaces.cs            # 服务接口
-│   ├── TranslationEvaluator.cs  # 质量评估 + 多代理投票
-│   ├── TranslationOrchestrator.cs # 翻译流程编排
-│   └── XmlRepository.cs         # XML 读写
-├── ViewModels/MainViewModel.cs  # MVVM ViewModel
-├── Localization/                # 中英双语 UI
-├── Dictionary/GlossaryManager.cs # 术语表管理
-├── ExpertProfiles/              # 专家翻译配置
-├── MainWindow.xaml/.cs          # 主界面
-├── SettingsWindow.xaml/.cs      # 设置窗口
-├── GlossaryWindow.xaml/.cs      # 术语表窗口
-└── PromptTemplates.cs           # Prompt 模板
+project-root/
+├── SimpleXmlEditor/                     # WPF 主项目
+│   ├── Services/                        # 服务层（全部接口化 6/6）
+│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商）
+│   │   ├── ConfigService.cs             # IConfigService — 配置与缓存管理（DPAPI 加密）
+│   │   ├── Interfaces.cs                # 6 个服务接口定义
+│   │   ├── TranslationEvaluator.cs     # ITranslationEvaluator — 质量评估 + 多代理投票
+│   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（分批/术语/缓存/prompt/API）
+│   │   └── XmlRepository.cs             # IXmlRepository — XML 数据访问
+│   ├── ViewModels/
+│   │   └── MainViewModel.cs             # MVVM ViewModel（INotifyPropertyChanged，30+ 字段）
+│   ├── Localization/
+│   │   └── LocalizationManager.cs       # 中英文 UI 本地化（200+ 键值对）
+│   ├── Dictionary/
+│   │   ├── CsvHelper.cs                 # CSV 文件解析/转义工具
+│   │   └── GlossaryManager.cs           # IGlossaryManager — 术语表管理（CRUD/导入导出/冲突检测）
+│   ├── ExpertProfiles/
+│   │   ├── ExpertProfile.cs             # 专家配置数据模型
+│   │   └── ExpertProfileManager.cs      # IExpertProfileManager — 专家配置生命周期管理
+│   ├── MainWindow.xaml/.cs              # 主界面
+│   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口
+│   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
+│   ├── InputDialog.xaml/.cs             # 通用双输入对话框
+│   ├── FileTypeDialog.xaml/.cs          # 文件类型选择对话框
+│   ├── StringExtensions.cs              # 公共扩展方法
+│   ├── PromptTemplates.cs               # AI 提示词模板
+│   ├── App.xaml/.cs                     # 应用入口（DI 容器）
+│   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
+├── SimpleXmlEditor.Tests/               # xUnit 测试项目（13 个测试）
+│   ├── ConfigServiceTests.cs
+│   ├── StringExtensionsTests.cs
+│   ├── GlossaryManagerTests.cs
+│   └── SimpleXmlEditor.Tests.csproj
+├── .github/workflows/ci.yml             # GitHub Actions CI/CD
+├── DEVELOPMENT_LOG.md                   # 开发日志
+├── HANDOVER.md                          # 交接文档
+├── PRODUCT_PLAN.md                      # 产品规划
+└── README.md                            # 项目说明
 ```
+
+### 架构设计
+
+应用遵循 **MVVM（Model-View-ViewModel）** 模式 + **依赖注入**：
+
+- **View**：WPF 窗口，处理 UI 事件和展示
+- **ViewModel** (`MainViewModel`)：管理业务逻辑和状态，由 DI 容器构造注入
+- **Model**：数据模型和服务契约
+- **Services**：封装业务逻辑，全部通过接口实现松耦合
+- **DI 容器**：`Microsoft.Extensions.DependencyInjection`，`App.xaml.cs` 中统一注册
 
 ---
 

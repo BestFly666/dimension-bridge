@@ -105,6 +105,26 @@ MVVM 过渡完成度：70% → 100%
 
 ---
 
+### 2026-07-30（续）：运行时崩溃修复
+
+#### `dotnet run` 无响应（静默崩溃）
+
+- **现象**：`dotnet run` 执行后无任何窗口弹出，无错误信息（WinExe 静默崩溃）
+- **根因 1**：`App.xaml` 中 `StartupUri="MainWindow.xaml"` 与 `App.xaml.cs` 的 `OnStartup` 通过 DI 手动创建 `MainWindow` 冲突——WPF 处理 `StartupUri` 时调用参数化构造函数可能失败
+- **修复 1**：移除 `App.xaml` 中的 `StartupUri`（`OnStartup` 已通过 `Services.GetRequiredService<MainWindow>()` 处理窗口创建）
+- **根因 2**：`TranslationOrchestrator` 构造函数依赖 5 个参数，最后一个 `Action<string> logAction` 未在 DI 容器中注册，导致 `BuildServiceProvider()` → 解析 `MainViewModel` → 解析 `TranslationOrchestrator` 时抛出 `InvalidOperationException`
+- **修复 2**：在 `App.xaml.cs` 的 `OnStartup` 中注册 `Action<string>` 为 no-op 到 DI 容器
+- **影响文件**：[App.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/App.xaml)、[App.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/App.xaml.cs)
+
+#### CI/CD 构建失败
+
+- **现象**：GitHub Actions `dotnet test --no-build` 报错找不到 `SimpleXmlEditor.Tests.dll`
+- **根因**：`ci.yml` 只 restore/build 了 `SimpleXmlEditor\SimpleXmlEditor.csproj`，测试项目从未被编译
+- **修复**：改用 `dotnet restore` / `dotnet build` 不带项目路径，自动处理所有项目
+- **影响文件**：[ci.yml](file:///e:/translate/xml-ai-translator-main/.github/workflows/ci.yml)
+
+---
+
 ## 2026-07-29（续）
 
 ### 功能简化：删除"翻译前N行"
@@ -450,35 +470,44 @@ MVVM 过渡完成度：70% → 100%
 ## 当前架构一览
 
 ```
-SimpleXmlEditor/
-├── Services/                       # 服务层
-│   ├── AiTranslationService.cs     # IAiTranslationService ✓ — AI 翻译核心（8 个提供商）
-│   ├── ConfigService.cs            # IConfigService ✓ — 配置与缓存管理
-│   ├── Interfaces.cs               # 服务接口定义（3 个接口）
-│   ├── TranslationEvaluator.cs     # ✗ 无接口 — AI 翻译质量评估与多代理投票
-│   ├── TranslationOrchestrator.cs  # ✗ 无接口 — 翻译流程编排（prompt/API/cache/glossary）
-│   └── XmlRepository.cs            # IXmlRepository ✓ — XML 数据访问
-├── ViewModels/
-│   └── MainViewModel.cs            # 主窗口 ViewModel（INotifyPropertyChanged，30+ 字段）
-├── Localization/
-│   └── LocalizationManager.cs      # 中英文 UI 本地化（200+ 键值对）
-├── Dictionary/
-│   ├── CsvHelper.cs                # CSV 文件解析/转义工具
-│   └── GlossaryManager.cs          # ✗ 无接口 — 统一术语表管理（CRUD/导入导出/冲突检测）
-├── ExpertProfiles/
-│   ├── ExpertProfile.cs            # 专家配置数据模型
-│   └── ExpertProfileManager.cs     # ✗ 无接口 — 专家配置生命周期管理
-├── MainWindow.xaml/.cs             # 主界面（含残留业务逻辑待迁移）
-├── GlossaryWindow.xaml/.cs         # 术语表管理窗口（含内联对话框类）
-├── SettingsWindow.xaml/.cs         # 设置界面（含专家配置编辑器）
-├── InputDialog.xaml/.cs            # 通用双输入对话框
-├── FileTypeDialog.xaml/.cs         # 文件类型选择对话框
-├── PromptTemplates.cs              # AI 提示词模板
-├── App.xaml/.cs                    # 应用入口
-└── SimpleXmlEditor.csproj          # .NET 8.0 WPF 项目文件
-```
-
-注：✓ 表示已实现接口，✗ 表示缺少接口（见审计报告问题 #1）
+project-root/
+├── SimpleXmlEditor/                     # WPF 主项目
+│   ├── Services/                        # 服务层（全部接口化 6/6 ✓）
+│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商）
+│   │   ├── ConfigService.cs             # IConfigService — 配置与缓存管理
+│   │   ├── Interfaces.cs                # 6 个服务接口定义
+│   │   ├── TranslationEvaluator.cs     # ITranslationEvaluator — AI 翻译质量评估与多代理投票
+│   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（prompt/API/cache/glossary）
+│   │   └── XmlRepository.cs             # IXmlRepository — XML 数据访问
+│   ├── ViewModels/
+│   │   └── MainViewModel.cs             # 主窗口 ViewModel（INotifyPropertyChanged，30+ 字段）
+│   ├── Localization/
+│   │   └── LocalizationManager.cs       # 中英文 UI 本地化（200+ 键值对）
+│   ├── Dictionary/
+│   │   ├── CsvHelper.cs                 # CSV 文件解析/转义工具
+│   │   └── GlossaryManager.cs           # IGlossaryManager — 统一术语表管理（CRUD/导入导出/冲突检测）
+│   ├── ExpertProfiles/
+│   │   ├── ExpertProfile.cs             # 专家配置数据模型
+│   │   └── ExpertProfileManager.cs      # IExpertProfileManager — 专家配置生命周期管理
+│   ├── MainWindow.xaml/.cs              # 主界面（无业务逻辑残留）
+│   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口（含内联对话框类）
+│   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
+│   ├── InputDialog.xaml/.cs             # 通用双输入对话框
+│   ├── FileTypeDialog.xaml/.cs          # 文件类型选择对话框
+│   ├── StringExtensions.cs              # 公共扩展方法
+│   ├── PromptTemplates.cs               # AI 提示词模板
+│   ├── App.xaml/.cs                     # 应用入口（DI 容器）
+│   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
+├── SimpleXmlEditor.Tests/               # xUnit 测试项目
+│   ├── ConfigServiceTests.cs            # 4 个测试
+│   ├── StringExtensionsTests.cs         # 4 个测试
+│   ├── GlossaryManagerTests.cs          # 5 个测试
+│   └── SimpleXmlEditor.Tests.csproj
+├── .github/workflows/ci.yml             # GitHub Actions CI/CD
+├── DEVELOPMENT_LOG.md                   # 开发日志
+├── HANDOVER.md                          # 项目交接文档
+├── PRODUCT_PLAN.md                      # 产品规划
+└── README.md                            # 项目说明
 
 ---
 
