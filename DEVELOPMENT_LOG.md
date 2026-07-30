@@ -123,6 +123,21 @@ MVVM 过渡完成度：70% → 100%
 - **修复**：改用 `dotnet restore` / `dotnet build` 不带项目路径，自动处理所有项目
 - **影响文件**：[ci.yml](file:///e:/translate/xml-ai-translator-main/.github/workflows/ci.yml)
 
+#### 分支策略
+
+- **背景**：仅存在单一 `master` 分支，无备份冗余，代码丢失风险高
+- **方案**：创建 `stable` 和 `develop` 分支，形成三层分支保护：
+  - `master` — 主线，经过测试的稳定版本
+  - `stable` — 完全冗余备份，与 master 同步
+  - `develop` — 开发分支，新功能从此切出，测试通过后合并
+- **远程同步**：三个分支均推送至 GitHub，远程仓库形成多副本冗余
+
+#### 文档整合
+
+- **README 合并**：删除 `README_zh.md`，内容合并至 [README.md](file:///e:/translate/xml-ai-translator-main/README.md)（本地化已完善，不再需要单独中文版）
+- **开发文档更新**：[DEVELOPMENT_LOG.md](file:///e:/translate/xml-ai-translator-main/DEVELOPMENT_LOG.md) 补充运行时崩溃修复、CI 修复、分支策略记录
+- **交接文档同步**：[HANDOVER.md](file:///e:/translate/xml-ai-translator-main/HANDOVER.md) 更新已知问题表（+2 P0）、DI 架构图（含 `Action<string>` 注册）、项目结构
+
 ---
 
 ## 2026-07-29（续）
