@@ -19,10 +19,10 @@ jobs:
         dotnet-version: '8.0.x'
     
     - name: Restore dependencies
-      run: dotnet restore SimpleXmlEditor\SimpleXmlEditor.csproj
+      run: dotnet restore
     
     - name: Build
-      run: dotnet build SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --no-restore
+      run: dotnet build --configuration Release --no-restore
     
     - name: Test
       run: dotnet test SimpleXmlEditor.Tests\SimpleXmlEditor.Tests.csproj --configuration Release --no-build --verbosity normal
