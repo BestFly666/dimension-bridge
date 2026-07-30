@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test SimpleXmlEditor.Tests\SimpleXmlEditor.Tests.csproj --configuration Release --no-build --verbosity normal
+
+    - name: Publish
+      run: dotnet publish SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output publish
+
+    - name: Zip artifact
+      run: Compress-Archive -Path publish\* -DestinationPath XmlAiTranslator-win-x64.zip
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: "XML AI Translator ${{ github.ref_name }}"
+        body: |
+          ## 使用说明
+
+          1. 下载 `XmlAiTranslator-win-x64.zip`
+          2. 解压到任意目录
+          3. 双击 `SimpleXmlEditor.exe` 运行
+          4. 在设置中配置 AI 提供商和 API Key 即可使用
+
+          > 无需安装 .NET 运行时，单文件便携版。
+        files: XmlAiTranslator-win-x64.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
