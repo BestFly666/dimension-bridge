@@ -14,13 +14,23 @@ namespace SimpleXmlEditor.Services
         ExcelSpreadsheet
     }
 
+    public enum ReviewStatus
+    {
+        NotReviewed,
+        Reviewed,
+        NeedsFix
+    }
+
     public class LocalizationEntry : INotifyPropertyChanged
     {
+        public static bool BulkUpdateSuppression = false;
+
         private int _rowNumber;
         private string _key = "";
         private string _value = "";
         private string _translation = "";
         private bool _isSelected;
+        private ReviewStatus _reviewStatus = ReviewStatus.NotReviewed;
 
         public int RowNumber
         {
@@ -54,10 +64,27 @@ namespace SimpleXmlEditor.Services
         public bool IsSelected
         {
             get => _isSelected;
-            set { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); }
+            set { _isSelected = value; if (!BulkUpdateSuppression) OnPropertyChanged(nameof(IsSelected)); }
         }
 
-        public string StatusIcon => string.IsNullOrEmpty(Translation) ? "❌" : "✅";
+        public ReviewStatus ReviewStatus
+        {
+            get => _reviewStatus;
+            set
+            {
+                _reviewStatus = value;
+                OnPropertyChanged(nameof(ReviewStatus));
+                OnPropertyChanged(nameof(StatusIcon));
+            }
+        }
+
+        public string StatusIcon => _reviewStatus switch
+        {
+            ReviewStatus.Reviewed => "✅",
+            ReviewStatus.NeedsFix => "🔧",
+            ReviewStatus.NotReviewed => string.IsNullOrEmpty(Translation) ? "❌" : "📝",
+            _ => "❌"
+        };
 
         public event PropertyChangedEventHandler PropertyChanged;
 

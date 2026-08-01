@@ -107,6 +107,7 @@
 
                     <Button Name="ImportBtn" Content="Import" Click="ImportBtn_Click" Style="{StaticResource ModernButton}" FontSize="12"/>
                     <Button Name="ExportBtn" Content="Export" Click="ExportBtn_Click" Style="{StaticResource ModernButton}" FontSize="12"/>
+                    <Button Name="ShareBtn" Content="Share" Click="ShareBtn_Click" Style="{StaticResource SuccessBtn}" FontSize="12" ToolTip="Export glossary for community sharing with game metadata"/>
 
                     <Separator Width="2" Background="#E0E0E0" Margin="8,0"/>
 

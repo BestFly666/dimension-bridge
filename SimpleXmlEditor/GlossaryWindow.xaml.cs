@@ -217,7 +217,7 @@ namespace SimpleXmlEditor
         {
             var dlg = new OpenFileDialog
             {
-                Title = "Import Glossary",
+                Title = LocalizationManager.GetString("GlossaryImportTitle"),
                 Filter = "All supported|*.csv;*.json|CSV files|*.csv|JSON files|*.json",
                 FilterIndex = 1
             };
@@ -248,7 +248,7 @@ namespace SimpleXmlEditor
         {
             var dlg = new SaveFileDialog
             {
-                Title = "Export Glossary",
+                Title = LocalizationManager.GetString("GlossaryExportTitle"),
                 Filter = "CSV files|*.csv|JSON files|*.json",
                 FilterIndex = 1,
                 FileName = "glossary_export.csv"
@@ -265,6 +265,49 @@ namespace SimpleXmlEditor
                     string.Format(LocalizationManager.GetString("GlossaryExportResult"), _glossary.Count),
                     LocalizationManager.GetString("MsgPrompt"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+
+        private void ShareBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new SaveFileDialog
+            {
+                Title = LocalizationManager.GetString("GlossaryShareTitle"),
+                Filter = "JSON files|*.json",
+                FilterIndex = 1,
+                FileName = "shared_glossary.json"
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                var termList = _glossary.Terms.Values.ToList();
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("{");
+                sb.AppendLine("  \"source\": \"XML AI Translator Community\",");
+                sb.AppendLine("  \"game\": \"Unknown\",");
+                sb.AppendLine("  \"version\": \"1.0\",");
+                sb.AppendLine("  \"author\": \"\",");
+                sb.AppendLine("  \"description\": \"Shared glossary exported from XML AI Translator.\",");
+                sb.AppendLine($"  \"date\": \"{DateTime.Now:yyyy-MM-dd}\",");
+                sb.AppendLine("  \"terms\": [");
+                for (int i = 0; i < termList.Count; i++)
+                {
+                    var comma = i < termList.Count - 1 ? "," : "";
+                    string eng = EscapeJson(termList[i].English);
+                    string chn = EscapeJson(termList[i].Chinese);
+                    sb.AppendLine($"    {{\"english\": \"{eng}\", \"chinese\": \"{chn}\"}}{comma}");
+                }
+                sb.AppendLine("  ]");
+                sb.AppendLine("}");
+
+                System.IO.File.WriteAllText(dlg.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+                MessageBox.Show(LocalizationManager.GetString("GlossaryShareResult", termList.Count),
+                    LocalizationManager.GetString("GlossaryShareResultTitle"), MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private static string EscapeJson(string text)
+        {
+            return text.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
         }
 
         // ─── Merge Profile ───────────────────────────────────────────
@@ -349,7 +392,7 @@ namespace SimpleXmlEditor
         public TermEditDialog(GlossaryTerm existing)
         {
             _original = existing;
-            Title = existing == null ? "Add Term" : "Edit Term";
+            Title = existing == null ? LocalizationManager.GetString("TermAddTitle") : LocalizationManager.GetString("TermEditTitle");
             Width = 520;
             Height = 380;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;

@@ -7,7 +7,7 @@ namespace SimpleXmlEditor.Localization
     public static class LocalizationManager
     {
         private static Dictionary<string, Dictionary<string, string>> _translations = new();
-        private static string _currentLanguage = "en";
+        private static string _currentLanguage = "zh";
 
         static LocalizationManager()
         {
@@ -485,6 +485,148 @@ namespace SimpleXmlEditor.Localization
                 ["Lang_Indonesian"] = "Indonesian",
                 ["Lang_Hebrew"] = "Hebrew",
                 ["Lang_Persian"] = "Persian",
+
+                // === Review & Export ===
+                ["ExportReview"] = "Export Review",
+                ["ReviewReport"] = "Review Report",
+                ["ReviewStatusReviewed"] = "Reviewed",
+                ["ReviewStatusNeedsFix"] = "Needs Fix",
+                ["ReviewStatusNotReviewed"] = "Not Reviewed",
+                ["MarkedEntriesAsStatus"] = "Marked {0} entries as {1}",
+                ["ExportReviewLog"] = "Review report exported: {0} entries | ✅ {1} | 🔧 {2} | 📝 {3}",
+                ["ExportReviewMsg"] = "Exported {0} entries.\nReviewed: {1}\nNeeds Fix: {2}\nNot Reviewed: {3}",
+
+                // === Evaluation Window ===
+                ["EvaluationTitle"] = "Translation Quality Evaluation",
+                ["EvalScoreDist"] = "Score Distribution: ",
+                ["EvalHighCount"] = "Excellent (8-10): {0}",
+                ["EvalMidCount"] = "Good (5-7): {0}",
+                ["EvalLowCount"] = "Poor (0-4): {0}",
+                ["EvalAvgScore"] = "Average: {0:F1}/10",
+                ["EvalEvaluated"] = "Evaluated {0} entries",
+                ["EvalNA"] = "N/A",
+                ["EvalApplySuggestion"] = "Apply Suggestion",
+                ["EvalMarkLowScores"] = "Mark Low Scores",
+                ["EvalClose"] = "Close",
+                ["EvalMarkComplete"] = "Mark Complete",
+                ["EvalMarkedEntries"] = "Marked {0} entries for review.",
+                ["EvalAppliedSuggestion"] = "Applied suggestion for: {0}",
+                ["EvalMarkAsLow"] = "Mark as low: {0} (Score: {1:F1})",
+
+                // === Batch Evaluation & Voting ===
+                ["LogBatchEvaluating"] = "Evaluating {0} translations...",
+                ["EvalBatchProgress"] = "Evaluating {0}...",
+                ["EvalNoResults"] = "No results",
+                ["EvalBatchSummary"] = "Avg: {0:F1} | High: {1} | Low: {2}",
+                ["LogBatchEvalComplete"] = "Batch evaluation complete: {0} entries, Avg: {1:F1}, High: {2}, Low: {3}",
+                ["LogBatchVoting"] = "Multi-agent voting for {0} entries...",
+                ["VoteBatchProgress"] = "Voting {0}...",
+                ["VoteBatchResult"] = "{0} voted | Best: {1}",
+                ["LogBatchVoteComplete"] = "Batch voting complete: {0} entries, {1} entries rated best",
+                ["LogAppliedSuggestion"] = "Applied suggestion for: {0}",
+
+                // === Glossary ===
+                ["GlossaryShare"] = "Share",
+                ["GlossaryShareTitle"] = "Share Glossary for Community",
+                ["GlossaryShareResult"] = "Shared {0} terms for community use.",
+                ["GlossaryImportTitle"] = "Import Glossary",
+                ["GlossaryExportTitle"] = "Export Glossary",
+                ["MsgError"] = "Error",
+
+                // === File dialog ===
+                ["FileFilterAllSupported"] = "All Supported Files",
+                ["FileFilterXml"] = "XML Files",
+                ["FileFilterPo"] = "PO Files",
+                ["FileFilterJson"] = "JSON Files",
+                ["FileFilterAll"] = "All Files",
+                ["FileFilterCsv"] = "CSV Files",
+
+                // === Save/Load with plugins ===
+                ["LogSavedFile"] = "Saved {0} entries as {1}: {2}",
+                ["LogLoadedFile"] = "Loaded {0} entries ({1}): {2}",
+                ["StatusSavedPlugin"] = "Saved {0} entries ({1})",
+
+                // === Term Edit Dialog ===
+                ["TermAddTitle"] = "Add Term",
+                ["TermEditTitle"] = "Edit Term",
+
+                // === Misc dialogs ===
+                ["GlossaryShareResultTitle"] = "Shared",
+                ["ExportFailed"] = "Export failed: {0}",
+
+                // === Progress display ===
+                ["ProgressDisplay"] = "{0:F1}% ({1}/{2})",
+                ["SpeedDisplay"] = "{0:F1}/s",
+                ["EtaDisplay"] = "{0}",
+                ["CostDisplay"] = "${0:F4}",
+                ["FindPosition"] = "{0} / {1}",
+                ["LogFileClosed"] = "File closed",
+                ["NoFileLoaded"] = "No file loaded",
+
+                // === Menu ===
+                ["MenuFile"] = "File",
+                ["MenuEdit"] = "Edit",
+                ["MenuView"] = "View",
+                ["MenuTranslate"] = "Translate",
+                ["MenuQuality"] = "Quality",
+                ["MenuTools"] = "Tools",
+                ["MenuHelp"] = "Help",
+                ["MenuOpen"] = "Open...",
+                ["MenuSave"] = "Save",
+                ["MenuSaveAs"] = "Save As...",
+                ["MenuExport"] = "Export",
+                ["MenuExit"] = "Exit",
+                ["MenuUndo"] = "Undo",
+                ["MenuFind"] = "Find...",
+                ["MenuReplace"] = "Replace...",
+                ["MenuDarkMode"] = "Dark Mode",
+                ["MenuLightMode"] = "Light Mode",
+                ["MenuShowFilter"] = "Show Filter Bar",
+                ["MenuShowLog"] = "Show Activity Log",
+                ["MenuSmartPre"] = "Smart Pre-translate",
+                ["MenuConsistency"] = "Consistency Scan",
+                ["MenuShortcuts"] = "Keyboard Shortcuts",
+                ["MenuAbout"] = "About",
+
+                // === Untranslated filter ===
+                ["ShowUntranslatedOnly"] = "Show Untranslated Only",
+                ["ShowAll"] = "Show All",
+
+                // === Smart Pre-translate ===
+                ["PreTranslate"] = "Smart Pre-translate",
+                ["PreTranslateTip"] = "Fill translations from glossary and cache without API calls",
+                ["PreTranslateResult"] = "{0} entries pre-translated (glossary: {1}, cache: {2})",
+                ["LogPreTranslate"] = "Smart pre-translate: {0} entries filled (glossary: {1}, cache: {2})",
+
+                // === Consistency Scan ===
+                ["ConsistencyScan"] = "Consistency Scan",
+                ["ConsistencyScanTitle"] = "Consistency Check Results",
+                ["ConsistencyScanning"] = "Scanning for inconsistencies...",
+                ["ConsistencyNoIssues"] = "No consistency issues found.",
+                ["ConsistencyIssuesFound"] = "Found {0} consistency issues.",
+                ["ConsistencyIssueDesc"] = "{0} → translated as \"{1}\" and \"{2}\"",
+                ["LogConsistencyScan"] = "Consistency scan: {0} issues found in {1} entries",
+
+                // === Context-aware Translation ===
+                ["ContextAware"] = "Context-aware",
+                ["LogContextAware"] = "Context-aware mode: analyzing {0} neighboring entries for {1}",
+
+                // === Fuzzy Matching ===
+                ["FuzzyMatch"] = "Fuzzy Match",
+                ["FuzzyMatchResult"] = "{0} fuzzy matches found for \"{1}\"",
+
+                // === Multi-file ===
+                ["ProjectFiles"] = "Project Files",
+                ["CloseFile"] = "Close File",
+                ["CloseTab"] = "Close",
+
+                // === About ===
+                ["AboutTitle"] = "About XML AI Translator",
+                ["AboutText"] = "XML AI Translator v1.0\n\nAI-powered game localization tool.\nSupports XML, PO, JSON, Android Strings.\n\n8 AI providers, 30+ languages.",
+
+                // === Shortcuts ===
+                ["ShortcutsTitle"] = "Keyboard Shortcuts",
+                ["ShortcutsText"] = "Ctrl+O   Open File\nCtrl+S   Quick Save\nCtrl+Z   Undo\nCtrl+F   Find\nF5       AI Evaluate\nF6       Agent Vote\nCtrl+T   Translate Selected\nCtrl+Shift+T  Translate All\nEscape   Clear Filters",
             };
 
             // =========================================================================
@@ -896,6 +1038,148 @@ namespace SimpleXmlEditor.Localization
                 ["Lang_Indonesian"] = "印尼语",
                 ["Lang_Hebrew"] = "希伯来语",
                 ["Lang_Persian"] = "波斯语",
+
+                // === Review & Export ===
+                ["ExportReview"] = "导出审校报告",
+                ["ReviewReport"] = "审校报告",
+                ["ReviewStatusReviewed"] = "已审校",
+                ["ReviewStatusNeedsFix"] = "需修改",
+                ["ReviewStatusNotReviewed"] = "未审校",
+                ["MarkedEntriesAsStatus"] = "已将 {0} 条标记为 {1}",
+                ["ExportReviewLog"] = "审校报告已导出: {0} 条 | ✅ {1} | 🔧 {2} | 📝 {3}",
+                ["ExportReviewMsg"] = "已导出 {0} 条。\n已审校: {1}\n需修改: {2}\n未审校: {3}",
+
+                // === Evaluation Window ===
+                ["EvaluationTitle"] = "翻译质量评估",
+                ["EvalScoreDist"] = "评分分布: ",
+                ["EvalHighCount"] = "优秀 (8-10): {0}",
+                ["EvalMidCount"] = "良好 (5-7): {0}",
+                ["EvalLowCount"] = "较差 (0-4): {0}",
+                ["EvalAvgScore"] = "平均分: {0:F1}/10",
+                ["EvalEvaluated"] = "已评估 {0} 条",
+                ["EvalNA"] = "N/A",
+                ["EvalApplySuggestion"] = "应用建议",
+                ["EvalMarkLowScores"] = "标记低分条目",
+                ["EvalClose"] = "关闭",
+                ["EvalMarkComplete"] = "标记完成",
+                ["EvalMarkedEntries"] = "已标记 {0} 条待审校。",
+                ["EvalAppliedSuggestion"] = "已应用建议: {0}",
+                ["EvalMarkAsLow"] = "标记为低分: {0} (评分: {1:F1})",
+
+                // === Batch Evaluation & Voting ===
+                ["LogBatchEvaluating"] = "正在评估 {0} 条翻译...",
+                ["EvalBatchProgress"] = "评估中 {0}...",
+                ["EvalNoResults"] = "无结果",
+                ["EvalBatchSummary"] = "平均: {0:F1} | 优秀: {1} | 较差: {2}",
+                ["LogBatchEvalComplete"] = "批量评估完成: {0} 条, 平均: {1:F1}, 优秀: {2}, 较差: {3}",
+                ["LogBatchVoting"] = "多代理投票中 {0} 条...",
+                ["VoteBatchProgress"] = "投票中 {0}...",
+                ["VoteBatchResult"] = "{0} 条已投票 | 最优: {1}",
+                ["LogBatchVoteComplete"] = "批量投票完成: {0} 条, {1} 条评为最优",
+                ["LogAppliedSuggestion"] = "已应用建议: {0}",
+
+                // === Glossary ===
+                ["GlossaryShare"] = "分享",
+                ["GlossaryShareTitle"] = "分享术语表给社区",
+                ["GlossaryShareResult"] = "已分享 {0} 条术语供社区使用。",
+                ["GlossaryImportTitle"] = "导入术语表",
+                ["GlossaryExportTitle"] = "导出术语表",
+                ["MsgError"] = "错误",
+
+                // === File dialog ===
+                ["FileFilterAllSupported"] = "所有支持的文件",
+                ["FileFilterXml"] = "XML 文件",
+                ["FileFilterPo"] = "PO 文件",
+                ["FileFilterJson"] = "JSON 文件",
+                ["FileFilterAll"] = "所有文件",
+                ["FileFilterCsv"] = "CSV 文件",
+
+                // === Save/Load with plugins ===
+                ["LogSavedFile"] = "已保存 {0} 条 ({1}): {2}",
+                ["LogLoadedFile"] = "已加载 {0} 条 ({1}): {2}",
+                ["StatusSavedPlugin"] = "已保存 {0} 条 ({1})",
+
+                // === Term Edit Dialog ===
+                ["TermAddTitle"] = "新增术语",
+                ["TermEditTitle"] = "编辑术语",
+
+                // === Misc dialogs ===
+                ["GlossaryShareResultTitle"] = "已分享",
+                ["ExportFailed"] = "导出失败: {0}",
+
+                // === Progress display ===
+                ["ProgressDisplay"] = "{0:F1}% ({1}/{2})",
+                ["SpeedDisplay"] = "{0:F1}/s",
+                ["EtaDisplay"] = "{0}",
+                ["CostDisplay"] = "${0:F4}",
+                ["FindPosition"] = "{0} / {1}",
+                ["LogFileClosed"] = "文件已关闭",
+                ["NoFileLoaded"] = "未加载文件",
+
+                // === Menu ===
+                ["MenuFile"] = "文件",
+                ["MenuEdit"] = "编辑",
+                ["MenuView"] = "视图",
+                ["MenuTranslate"] = "翻译",
+                ["MenuQuality"] = "质量",
+                ["MenuTools"] = "工具",
+                ["MenuHelp"] = "帮助",
+                ["MenuOpen"] = "打开...",
+                ["MenuSave"] = "保存",
+                ["MenuSaveAs"] = "另存为...",
+                ["MenuExport"] = "导出",
+                ["MenuExit"] = "退出",
+                ["MenuUndo"] = "撤销",
+                ["MenuFind"] = "查找...",
+                ["MenuReplace"] = "替换...",
+                ["MenuDarkMode"] = "暗色模式",
+                ["MenuLightMode"] = "亮色模式",
+                ["MenuShowFilter"] = "显示筛选栏",
+                ["MenuShowLog"] = "显示日志面板",
+                ["MenuSmartPre"] = "智能预翻译",
+                ["MenuConsistency"] = "一致性扫描",
+                ["MenuShortcuts"] = "键盘快捷键",
+                ["MenuAbout"] = "关于",
+
+                // === Untranslated filter ===
+                ["ShowUntranslatedOnly"] = "仅显示未翻译",
+                ["ShowAll"] = "显示全部",
+
+                // === Smart Pre-translate ===
+                ["PreTranslate"] = "智能预翻译",
+                ["PreTranslateTip"] = "使用术语表和缓存填充译文，无需 API 调用",
+                ["PreTranslateResult"] = "{0} 条预翻译完成（术语表: {1}, 缓存: {2}）",
+                ["LogPreTranslate"] = "智能预翻译: 填充 {0} 条（术语表: {1}, 缓存: {2}）",
+
+                // === Consistency Scan ===
+                ["ConsistencyScan"] = "一致性扫描",
+                ["ConsistencyScanTitle"] = "一致性检查结果",
+                ["ConsistencyScanning"] = "正在扫描一致性问题...",
+                ["ConsistencyNoIssues"] = "未发现一致性问题。",
+                ["ConsistencyIssuesFound"] = "发现 {0} 个一致性问题。",
+                ["ConsistencyIssueDesc"] = "{0} → 分别译为 \"{1}\" 和 \"{2}\"",
+                ["LogConsistencyScan"] = "一致性扫描: 在 {1} 条中发现 {0} 个问题",
+
+                // === Context-aware Translation ===
+                ["ContextAware"] = "上下文感知",
+                ["LogContextAware"] = "上下文感知模式: 正在分析 {1} 的 {0} 条相邻条目",
+
+                // === Fuzzy Matching ===
+                ["FuzzyMatch"] = "模糊匹配",
+                ["FuzzyMatchResult"] = "为 \"{1}\" 找到 {0} 个模糊匹配",
+
+                // === Multi-file ===
+                ["ProjectFiles"] = "项目文件",
+                ["CloseFile"] = "关闭文件",
+                ["CloseTab"] = "关闭",
+
+                // === About ===
+                ["AboutTitle"] = "关于 XML AI 翻译器",
+                ["AboutText"] = "XML AI 翻译器 v1.0\n\nAI 驱动的游戏本地化工具。\n支持 XML、PO、JSON、Android Strings 格式。\n\n8 种 AI 提供商，30+ 种语言。",
+
+                // === Shortcuts ===
+                ["ShortcutsTitle"] = "键盘快捷键",
+                ["ShortcutsText"] = "Ctrl+O   打开文件\nCtrl+S   快速保存\nCtrl+Z   撤销\nCtrl+F   查找\nF5       AI 评估\nF6       代理投票\nCtrl+T   翻译选中\nCtrl+Shift+T  全部翻译\nEscape   清除筛选",
             };
         }
     }

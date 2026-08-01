@@ -52,6 +52,7 @@ namespace SimpleXmlEditor.Services
     public class AiTranslationService : IAiTranslationService
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfigService _configService;
         private AIProvider _currentProvider = AIProvider.GoogleGemini;
         private string _apiKey = "";
         private string _model = "";
@@ -62,6 +63,11 @@ namespace SimpleXmlEditor.Services
         public ConcurrentQueue<DateTime> RecentRequests { get; private set; } = new();
 
         public event Action<string> LogMessage;
+
+        // Statistics callbacks (raised for single-entry translation paths)
+        public event Action<int> CacheHit;
+        public event Action<int> ApiCallCounted;
+        public event Action<int, int> ApiCharsCounted; // (inputChars, outputChars)
 
         public AIProvider CurrentProvider
         {
@@ -89,14 +95,16 @@ namespace SimpleXmlEditor.Services
 
         public HttpClient HttpClient => _httpClient;
 
-        public AiTranslationService()
+        public AiTranslationService(IConfigService configService = null)
         {
             _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            _configService = configService;
         }
 
-        public AiTranslationService(HttpClient httpClient)
+        public AiTranslationService(HttpClient httpClient, IConfigService configService = null)
         {
             _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            _configService = configService;
         }
 
         public void SetConfiguration(AIProvider provider, string apiKey, string model, string targetLanguage)
@@ -571,6 +579,15 @@ namespace SimpleXmlEditor.Services
             if (string.IsNullOrEmpty(_apiKey) || string.IsNullOrEmpty(_model))
                 return null;
 
+            // Check cache first (skip API call when a cached translation exists)
+            var cacheKey = _configService?.GetCacheKey(text);
+            if (cacheKey != null && _configService != null
+                && _configService.Cache.TryGetValue(cacheKey, out var cachedValue))
+            {
+                CacheHit?.Invoke(1);
+                return cachedValue;
+            }
+
             var prompt = string.Format(PromptTemplates.SingleTranslatePrompt, _targetLanguage, text);
 
             for (int attempt = 0; attempt < maxRetries; attempt++)
@@ -579,18 +596,30 @@ namespace SimpleXmlEditor.Services
                 {
                     TrackRequest();
 
+                    string result;
                     if (_currentProvider == AIProvider.GoogleGemini)
                     {
-                        return await TranslateSingleGeminiAsync(text, prompt);
+                        result = await TranslateSingleGeminiAsync(text, prompt);
                     }
                     else if (ProviderConfig.UsesOpenAiFormat[_currentProvider])
                     {
-                        return await TranslateSingleOpenAiCompatAsync(text, prompt);
+                        result = await TranslateSingleOpenAiCompatAsync(text, prompt);
                     }
                     else
                     {
-                        return await TranslateSingleGeminiAsync(text, prompt);
+                        result = await TranslateSingleGeminiAsync(text, prompt);
                     }
+
+                    if (!string.IsNullOrEmpty(result))
+                    {
+                        // Write to cache and raise cost/billing statistics
+                        if (cacheKey != null && _configService != null)
+                            _configService.Cache[cacheKey] = result;
+                        ApiCallCounted?.Invoke(1);
+                        ApiCharsCounted?.Invoke(text.Length, result.Length);
+                    }
+
+                    return result;
                 }
                 catch (HttpRequestException ex) when (ex.Message.Contains("429"))
                 {

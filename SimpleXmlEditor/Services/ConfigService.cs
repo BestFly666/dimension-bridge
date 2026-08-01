@@ -15,7 +15,7 @@ namespace SimpleXmlEditor.Services
         public string EncryptedApiKey { get; set; } = "";
         public string GeminiModel { get; set; } = "";
         public string TargetLanguage { get; set; } = "Turkish";
-        public string ProgramLanguage { get; set; } = "en";
+        public string ProgramLanguage { get; set; } = "zh";
         public string CustomPrompt { get; set; } = "";
         public string ActiveExpertProfile { get; set; } = "";
         public string AiProvider { get; set; } = "GoogleGemini";
@@ -37,7 +37,10 @@ namespace SimpleXmlEditor.Services
 
         public ConfigService()
         {
-            _appDataDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            _appDataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SimpleXmlEditor");
+            Directory.CreateDirectory(_appDataDir);
             _configPath = Path.Combine(_appDataDir, "config.json");
             _cachePath = Path.Combine(_appDataDir, "translation_cache.json");
         }

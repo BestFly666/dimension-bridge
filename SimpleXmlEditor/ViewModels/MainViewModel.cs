@@ -5,12 +5,46 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Input;
+using SimpleXmlEditor.Commands;
 using SimpleXmlEditor.ExpertProfiles;
 using SimpleXmlEditor.Dictionary;
+using SimpleXmlEditor.Localization;
 using SimpleXmlEditor.Services;
 
 namespace SimpleXmlEditor.ViewModels
 {
+    /// <summary>Outcome of an AI evaluation run (single or batch).</summary>
+    public class EvaluationOutcome
+    {
+        public bool Failed { get; set; }
+        public List<EvaluationResult> Results { get; set; } = new();
+        public Dictionary<string, EvaluationResult> ResultMap { get; set; } = new();
+        public EvaluationResult SingleResult { get; set; }
+        public string EntryKey { get; set; } = "";
+        public double AverageScore { get; set; }
+        public int HighCount { get; set; }
+        public int LowCount { get; set; }
+    }
+
+    /// <summary>Outcome of a multi-agent voting run (single or batch).</summary>
+    public class VotingOutcome
+    {
+        public bool Failed { get; set; }
+        public VotingResult SingleResult { get; set; }
+        public bool HasSingleResult { get; set; }
+        public int Completed { get; set; }
+        public int BestCount { get; set; }
+    }
+
+    /// <summary>Outcome of the smart pre-translate (glossary + cache fill).</summary>
+    public class PreTranslateOutcome
+    {
+        public int GlossaryFilled { get; set; }
+        public int CacheFilled { get; set; }
+        public int Total => GlossaryFilled + CacheFilled;
+    }
+
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly IAiTranslationService _aiTranslationService;
@@ -20,9 +54,10 @@ namespace SimpleXmlEditor.ViewModels
         private readonly IGlossaryManager _glossary;
         private readonly ITranslationEvaluator _evaluator;
         private readonly TranslationOrchestrator _orchestrator;
+        private readonly PluginLoader _pluginLoader;
 
         private ObservableCollection<LocalizationEntry> _entries;
-        private string _programLanguage = "en";
+        private string _programLanguage = "zh";
         private string _customPrompt = "";
         private string _activeExpertProfileName = "";
         private int _batchSize = 50;
@@ -38,6 +73,36 @@ namespace SimpleXmlEditor.ViewModels
         private bool _isTranslationRunning = false;
         private string _lastLoadedFilePath = "";
         private string _statusMessage = "";
+        private int _translatedCount = 0;
+        private int _totalToTranslate = 0;
+        private double _translationSpeed = 0;
+        private string _estimatedTimeRemaining = "";
+        private double _progressPercentage = 0;
+        private DateTime _translationStartTime;
+        private CancellationTokenSource _translationCts;
+
+        // ── UI interaction events (consumed by MainWindow for pure UI rendering) ──
+        public event Action<string> StatusMessageChanged;
+        public event Action<int> TranslationStarted;
+        public event Action<int, int> TranslationProgressChanged;
+        public event Action TranslationFinished;
+        public event Action<string> TranslationErrorOccurred;
+        public event Action<string> EvaluationStatusText;
+        public event Action<EvaluationOutcome> EvaluationCompleted;
+        public event Action<string> VotingStatusText;
+        public event Action<VotingOutcome> VotingCompleted;
+        public event Action<PreTranslateOutcome> PreTranslateCompleted;
+        public event Action<List<string>> ConsistencyScanCompleted;
+        public event Func<string, string, Task<bool>> ConfirmationRequested;
+        public event Action<string, string> MessageRequested;
+
+        // ── Commands (ICommand bindings for toolbar / menu) ──
+        public RelayCommand TranslateSelectedCommand { get; }
+        public RelayCommand TranslateAllCommand { get; }
+        public RelayCommand EvaluateCommand { get; }
+        public RelayCommand VoteCommand { get; }
+        public RelayCommand SmartPreTranslateCommand { get; }
+        public RelayCommand ConsistencyScanCommand { get; }
 
         public ObservableCollection<LocalizationEntry> Entries
         {
@@ -168,6 +233,7 @@ namespace SimpleXmlEditor.ViewModels
             {
                 _isTranslationPaused = value;
                 OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
             }
         }
 
@@ -178,6 +244,7 @@ namespace SimpleXmlEditor.ViewModels
             {
                 _isTranslationRunning = value;
                 OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
             }
         }
 
@@ -206,14 +273,36 @@ namespace SimpleXmlEditor.ViewModels
 
         public int TotalCount => Entries?.Count ?? 0;
 
+        public PluginLoader PluginLoader => _pluginLoader;
+
+        public int TranslatedCount
+        {
+            get => _translatedCount;
+            set { _translatedCount = value; OnPropertyChanged(); }
+        }
+
+        public double ProgressPercentage
+        {
+            get => _progressPercentage;
+            set { _progressPercentage = value; OnPropertyChanged(); }
+        }
+
+        public double TranslationSpeed
+        {
+            get => _translationSpeed;
+            set { _translationSpeed = value; OnPropertyChanged(); }
+        }
+
+        public string EstimatedTimeRemaining
+        {
+            get => _estimatedTimeRemaining;
+            set { _estimatedTimeRemaining = value; OnPropertyChanged(); }
+        }
+
         public bool IsEvaluating
         {
             get => _isEvaluating;
-            set
-            {
-                _isEvaluating = value;
-                OnPropertyChanged();
-            }
+            set { _isEvaluating = value; OnPropertyChanged(); CommandManager.InvalidateRequerySuggested(); }
         }
 
         public string LastEvaluationResult
@@ -241,13 +330,16 @@ namespace SimpleXmlEditor.ViewModels
             _entries = new ObservableCollection<LocalizationEntry>();
             _profileManager = profileManager ?? new ExpertProfileManager();
             _glossary = glossary ?? new GlossaryManager();
-            _aiTranslationService = aiTranslationService ?? new AiTranslationService();
-            _xmlRepository = xmlRepository ?? new XmlRepository();
             _configService = configService ?? new ConfigService();
+            _aiTranslationService = aiTranslationService ?? new AiTranslationService(_configService);
+            _xmlRepository = xmlRepository ?? new XmlRepository();
             _evaluator = evaluator ?? new TranslationEvaluator(_aiTranslationService);
             _orchestrator = orchestrator ?? new TranslationOrchestrator(
                 _aiTranslationService, _configService, _glossary, _profileManager,
                 msg => OnLogMessage(msg));
+            _pluginLoader = new PluginLoader();
+            _pluginLoader.LogMessage += msg => OnLogMessage(msg);
+            _pluginLoader.DiscoverBuiltInPlugins();
 
             _orchestrator.OnCacheHit += count => IncrementCacheHits();
             _orchestrator.OnGlossaryHit += count => IncrementGlossaryHits();
@@ -260,9 +352,26 @@ namespace SimpleXmlEditor.ViewModels
             };
 
             _aiTranslationService.LogMessage += msg => OnLogMessage(msg);
+            _aiTranslationService.CacheHit += count => IncrementCacheHits();
+            _aiTranslationService.ApiCallCounted += count => IncrementApiCalls();
+            _aiTranslationService.ApiCharsCounted += (input, output) =>
+            {
+                TotalInputChars += input;
+                TotalOutputChars += output;
+                TotalCost += _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model);
+            };
+
             _xmlRepository.LogMessage += msg => OnLogMessage(msg);
             _configService.LogMessage += msg => OnLogMessage(msg);
             _evaluator.LogMessage += msg => OnLogMessage(msg);
+
+            // ── Commands ──
+            TranslateSelectedCommand = new RelayCommand(_ => ExecuteTranslateSelected(), _ => !IsTranslationRunning);
+            TranslateAllCommand = new RelayCommand(async _ => await ExecuteTranslateAllAsync(), _ => !IsTranslationRunning);
+            EvaluateCommand = new RelayCommand(async p => await EvaluateEntriesAsync(ExtractEntries(p)), _ => !IsEvaluating);
+            VoteCommand = new RelayCommand(async p => await VoteEntriesAsync(ExtractEntries(p)), _ => !IsEvaluating);
+            SmartPreTranslateCommand = new RelayCommand(p => SmartPreTranslate(ExtractEntries(p)), _ => !IsTranslationRunning);
+            ConsistencyScanCommand = new RelayCommand(_ => ExecuteConsistencyScan());
         }
 
         protected virtual void OnPropertyChanged(string propertyName = null)
@@ -273,6 +382,19 @@ namespace SimpleXmlEditor.ViewModels
         protected virtual void OnLogMessage(string message)
         {
             LogMessage?.Invoke(message);
+        }
+
+        private void RaiseStatusMessage(string message)
+        {
+            StatusMessage = message;
+            StatusMessageChanged?.Invoke(message);
+        }
+
+        private static List<LocalizationEntry> ExtractEntries(object parameter)
+        {
+            if (parameter is System.Collections.IEnumerable enumerable)
+                return enumerable.OfType<LocalizationEntry>().ToList();
+            return new List<LocalizationEntry>();
         }
 
         public IAiTranslationService AiTranslationService => _aiTranslationService;
@@ -341,6 +463,44 @@ namespace SimpleXmlEditor.ViewModels
             StatusMessage = $"📖 {dictCount} {Localization.LocalizationManager.GetString("DictionaryInfo", GlossaryHits)}";
         }
 
+        public void StartTranslationTracking(int totalToTranslate)
+        {
+            _translationStartTime = DateTime.Now;
+            _totalToTranslate = totalToTranslate;
+            TranslatedCount = 0;
+            ProgressPercentage = 0;
+            TranslationSpeed = 0;
+            EstimatedTimeRemaining = "...";
+        }
+
+        public void UpdateTranslationProgress(int translatedCount)
+        {
+            TranslatedCount = translatedCount;
+            if (_totalToTranslate > 0)
+            {
+                ProgressPercentage = Math.Round(translatedCount * 100.0 / _totalToTranslate, 1);
+            }
+            var elapsed = (DateTime.Now - _translationStartTime).TotalSeconds;
+            if (elapsed > 0.5 && translatedCount > 0)
+            {
+                TranslationSpeed = Math.Round(translatedCount / elapsed, 1);
+                var remaining = _totalToTranslate - translatedCount;
+                if (TranslationSpeed > 0)
+                {
+                    var remainingSeconds = remaining / TranslationSpeed;
+                    EstimatedTimeRemaining = remainingSeconds < 60
+                        ? $"{remainingSeconds:F0}s"
+                        : $"{remainingSeconds / 60:F0}m {remainingSeconds % 60:F0}s";
+                }
+            }
+        }
+
+        public string GetTranslationStatusIndicator()
+        {
+            if (!IsTranslationRunning) return "⚪";
+            return IsTranslationPaused ? "🟡" : "🟢";
+        }
+
         public void TrackRequest()
         {
             _aiTranslationService.TrackRequest();
@@ -366,6 +526,573 @@ namespace SimpleXmlEditor.ViewModels
         {
             return _configService.GetCacheKey(text);
         }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Entry processing (moved from MainWindow)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Process an entry during load: cache write/read, Chinese-source handling,
+        /// glossary application, and adding to the Entries collection.
+        /// </summary>
+        public LocalizationEntry ProcessEntry(LocalizationEntry entry)
+        {
+            entry.RowNumber = Entries.Count + 1;
+
+            var valueIsChinese = entry.Value.HasChineseChars();
+
+            if (!string.IsNullOrEmpty(entry.Translation))
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Value))
+                    _configService.Cache.TryAdd(entry.Key, entry.Translation);
+            }
+            else if (valueIsChinese)
+            {
+                entry.Translation = entry.Value;
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(entry.Value))
+                {
+                    if (_configService.Cache.TryGetValue(entry.Key, out var cachedByKey))
+                    {
+                        entry.Translation = cachedByKey;
+                    }
+                    else
+                    {
+                        var cacheKey = _configService.GetCacheKey(entry.Value);
+                        if (cacheKey != null && _configService.Cache.TryGetValue(cacheKey, out var cachedByValue))
+                        {
+                            entry.Translation = cachedByValue;
+                        }
+                    }
+
+                    TryApplyDictionary(entry);
+                }
+            }
+
+            if (valueIsChinese)
+            {
+                entry.Value = "";
+            }
+
+            Entries.Add(entry);
+            return entry;
+        }
+
+        /// <summary>
+        /// Try to apply glossary lookup. Only exact-match on Key or Value.
+        /// Term-level substitution is handled by BuildGlossaryContext via AI prompt.
+        /// </summary>
+        public bool TryApplyDictionary(LocalizationEntry entry)
+        {
+            if (!string.IsNullOrEmpty(entry.Translation))
+                return false;
+
+            // Exact match on Key (e.g., "UPGRADE_TECH" → "科技升级")
+            if (_glossary.TryGetValue(entry.Key, out var dictTranslation))
+            {
+                entry.Translation = dictTranslation;
+                IncrementGlossaryHits();
+                return true;
+            }
+            // Exact match on entire Value (single-word entries like "Jedi" → "绝地")
+            if (_glossary.TryGetValue(entry.Value, out dictTranslation))
+            {
+                entry.Translation = dictTranslation;
+                IncrementGlossaryHits();
+                return true;
+            }
+            return false;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Save helpers (moved from MainWindow)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>Save entries to XML. Returns true on success.</summary>
+        public bool SaveXml(string fileName = "stable_us.xml")
+        {
+            try
+            {
+                SyncEntriesToCache(Entries);
+
+                var entriesList = Entries.ToList();
+                _xmlRepository.SaveXml(fileName, entriesList);
+
+                SaveConfig();
+                RaiseStatusMessage(LocalizationManager.GetString("SavedEntries", Entries.Count, System.IO.Path.GetFileName(fileName)));
+                OnLogMessage($"💾 {LocalizationManager.GetString("LogXmlSaved", fileName, Entries.Count)}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                OnLogMessage($"❌ {LocalizationManager.GetString("ErrorSavingXml", ex.Message)}");
+                return false;
+            }
+        }
+
+        /// <summary>Persist the translation cache to disk.</summary>
+        public void SaveCache()
+        {
+            try
+            {
+                _configService.SaveCache();
+            }
+            catch (Exception ex)
+            {
+                OnLogMessage($"❌ {LocalizationManager.GetString("LogCacheWriteError", ex.Message)}");
+            }
+        }
+
+        /// <summary>Cancel the running translation pipeline.</summary>
+        public void CancelTranslation()
+        {
+            _translationCts?.Cancel();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Translation pipeline (moved from MainWindow.TranslateEntries)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Full translation pipeline: batch scheduling, pause/resume, cancellation,
+        /// progress tracking, incremental saves, and auto-save. UI renders via events.
+        /// </summary>
+        public async Task TranslateEntriesAsync(List<LocalizationEntry> entries, bool forceRefresh = false)
+        {
+            _translationCts = new CancellationTokenSource();
+            IsTranslationRunning = true;
+            IsTranslationPaused = false;
+
+            try
+            {
+                // Session begin — UI shows controls and resets progress display
+                TranslationStarted?.Invoke(0);
+
+                // Reset cost tracking for this translation session
+                TotalCost = 0;
+                TotalInputChars = 0;
+                TotalOutputChars = 0;
+
+                var successCount = 0;
+                var failCount = 0;
+
+                // Filter out entries that need translation
+                var entriesToTranslate = entries.Where(e => !string.IsNullOrEmpty(e.Value) && string.IsNullOrEmpty(e.Translation)).ToList();
+
+                if (!entriesToTranslate.Any())
+                {
+                    OnLogMessage($"ℹ️ {LocalizationManager.GetString("LogNoTranslationNeeded")}");
+                    RaiseStatusMessage(LocalizationManager.GetString("NoEntriesForTranslation"));
+                    return;
+                }
+
+                // Create batches based on token limits
+                var batches = _orchestrator.CreateBatches(entriesToTranslate, CustomPrompt, BatchSize);
+
+                StartTranslationTracking(entriesToTranslate.Count);
+                TranslationStarted?.Invoke(entriesToTranslate.Count);
+
+                OnLogMessage($"🌍 {LocalizationManager.GetString("LogBatchStart", entriesToTranslate.Count, batches.Count, forceRefresh ? " (force refresh)" : "")}");
+                OnLogMessage($"📊 {LocalizationManager.GetString("LogBatchModel", _aiTranslationService.Model)}");
+
+                for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
+                {
+                    // Check for cancellation
+                    if (_translationCts.Token.IsCancellationRequested)
+                    {
+                        OnLogMessage($"⏹️ {LocalizationManager.GetString("LogBatchCancelled", batchIndex + 1, batches.Count)}");
+                        break;
+                    }
+
+                    // Handle pause
+                    while (IsTranslationPaused && !_translationCts.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(500, _translationCts.Token);
+                    }
+
+                    if (_translationCts.Token.IsCancellationRequested)
+                        break;
+
+                    var batch = batches[batchIndex];
+                    var batchSize = batch.Count;
+
+                    RaiseStatusMessage(LocalizationManager.GetString("TranslatingBatch", batchIndex + 1, batches.Count, batchSize));
+                    OnLogMessage($"🔄 {LocalizationManager.GetString("LogBatchProgress", batchIndex + 1, batches.Count, batchSize)}");
+
+                    // Track request for rate limiting
+                    TrackRequest();
+
+                    var batchResults = await _orchestrator.TranslateBatchAsync(batch, forceRefresh, CustomPrompt);
+
+                    // Apply translations
+                    var batchSuccessCount = 0;
+                    var batchFailCount = 0;
+
+                    foreach (var entry in batch)
+                    {
+                        if (batchResults.ContainsKey(entry.Value))
+                        {
+                            entry.Translation = batchResults[entry.Value];
+                            batchSuccessCount++;
+                        }
+                        else
+                        {
+                            batchFailCount++;
+                        }
+                    }
+
+                    successCount += batchSuccessCount;
+                    failCount += batchFailCount;
+
+                    // Update entry-based progress
+                    var totalTranslated = successCount + failCount;
+                    UpdateTranslationProgress(totalTranslated);
+                    TranslationProgressChanged?.Invoke(totalTranslated, entriesToTranslate.Count);
+
+                    if (batchFailCount > 0)
+                    {
+                        // Only log failed keys individually (for debugging)
+                        var failedKeys = batch.Where(e => !batchResults.ContainsKey(e.Value))
+                            .Select(e => e.Key.Length > 40 ? e.Key[..40] : e.Key);
+                        OnLogMessage($"❌ {LocalizationManager.GetString("LogBatchFails", batchFailCount, string.Join(", ", failedKeys.Take(5)))}");
+                    }
+
+                    // Incremental save: write progress to recovery file after each batch
+                    _configService.SaveTranslationProgress(Entries);
+
+                    OnLogMessage($"📊 {LocalizationManager.GetString("LogBatchDone", batchIndex + 1, batches.Count, batchSuccessCount, batchFailCount)}");
+
+                    // Use model-specific optimal delay between batches
+                    if (batchIndex < batches.Count - 1 && !_translationCts.Token.IsCancellationRequested)
+                    {
+                        var delay = _aiTranslationService.CalculateOptimalDelay();
+                        RaiseStatusMessage(LocalizationManager.GetString("WaitingRateLimit", delay / 1000));
+
+                        try
+                        {
+                            await Task.Delay(delay, _translationCts.Token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                UpdateTranslationProgress(entriesToTranslate.Count);
+                TranslationProgressChanged?.Invoke(entriesToTranslate.Count, entriesToTranslate.Count);
+
+                // Auto-save if we have successful translations
+                if (successCount > 0)
+                {
+                    SaveXml();
+                    SaveCache();
+                    OnLogMessage($"💾 {LocalizationManager.GetString("LogCacheSaved")}");
+                    // Translation complete — delete recovery file
+                    _configService.DeleteProgressFile();
+                }
+
+                var statusMessage = _translationCts.Token.IsCancellationRequested
+                    ? LocalizationManager.GetString("StatusStoppedResult", successCount, failCount)
+                    : LocalizationManager.GetString("StatusBatchComplete", successCount, failCount);
+
+                RaiseStatusMessage(statusMessage);
+                OnLogMessage($"🎉 {LocalizationManager.GetString("LogTranslationDone", statusMessage)}");
+
+                if (failCount > 0)
+                {
+                    OnLogMessage($"💡 {LocalizationManager.GetString("LogTipHeader")}");
+                    OnLogMessage(LocalizationManager.GetString("LogTip1"));
+                    OnLogMessage(LocalizationManager.GetString("LogTip2"));
+                    OnLogMessage(LocalizationManager.GetString("LogTip3"));
+                }
+
+                // Show efficiency stats
+                var efficiency = entriesToTranslate.Count > 0 ? (successCount * 100.0 / entriesToTranslate.Count) : 0;
+                OnLogMessage($"📈 {LocalizationManager.GetString("LogEfficiency", efficiency.ToString("F1"), successCount, entriesToTranslate.Count)}");
+                OnLogMessage($"⚡ {LocalizationManager.GetString("LogBatchEfficiency", batches.Count, entriesToTranslate.Count, entriesToTranslate.Count - batches.Count)}");
+
+                // Show rate limit summary
+                if (_aiTranslationService.ModelLimits.ContainsKey(_aiTranslationService.Model))
+                {
+                    var limits = _aiTranslationService.ModelLimits[_aiTranslationService.Model];
+                    var requestsInLastMinute = _aiTranslationService.RecentRequests.Count;
+                    OnLogMessage($"📊 {LocalizationManager.GetString("LogRateLimitStatus", requestsInLastMinute, limits.requestsPerMinute)}");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                OnLogMessage($"⏹️ {LocalizationManager.GetString("LogTranslationCancelled")}");
+                RaiseStatusMessage(LocalizationManager.GetString("TranslationCancelled"));
+            }
+            catch (Exception ex)
+            {
+                OnLogMessage($"❌ {LocalizationManager.GetString("TranslationError", ex.Message)}");
+                RaiseStatusMessage(LocalizationManager.GetString("TranslationError", ex.Message));
+                TranslationErrorOccurred?.Invoke(LocalizationManager.GetString("TranslationError", ex.Message));
+            }
+            finally
+            {
+                IsTranslationRunning = false;
+                IsTranslationPaused = false;
+                _translationCts?.Dispose();
+                _translationCts = null;
+                TranslationFinished?.Invoke();
+            }
+        }
+
+        // ── Command implementations ──
+
+        private async void ExecuteTranslateSelected()
+        {
+            var selected = Entries.Where(entry => entry.IsSelected).ToList();
+            if (!selected.Any())
+            {
+                MessageRequested?.Invoke(LocalizationManager.GetString("SelectEntriesFirst"), LocalizationManager.GetString("MsgTip"));
+                return;
+            }
+
+            foreach (var entry in selected)
+            {
+                entry.Translation = "";
+            }
+
+            await TranslateEntriesAsync(selected, forceRefresh: true);
+        }
+
+        private async Task ExecuteTranslateAllAsync()
+        {
+            var untranslated = Entries.Where(e => string.IsNullOrEmpty(e.Translation) && !string.IsNullOrEmpty(e.Value)).ToList();
+            if (!untranslated.Any())
+            {
+                MessageRequested?.Invoke(LocalizationManager.GetString("NoUntranslatedEntries"), LocalizationManager.GetString("MsgTip"));
+                return;
+            }
+
+            var confirmed = await (ConfirmationRequested?.Invoke(
+                LocalizationManager.GetString("ConfirmTranslate", untranslated.Count),
+                LocalizationManager.GetString("MsgConfirm")) ?? Task.FromResult(true));
+
+            if (confirmed)
+                await TranslateEntriesAsync(untranslated);
+        }
+
+        private void ExecuteConsistencyScan()
+        {
+            OnLogMessage($"🔍 {LocalizationManager.GetString("ConsistencyScanning")}");
+            var issues = ScanConsistencyIssues();
+            ConsistencyScanCompleted?.Invoke(issues);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Evaluation / voting orchestration (moved from MainWindow)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>Evaluate selected entries (or all translated entries) with AI quality scoring.</summary>
+        public async Task EvaluateEntriesAsync(IEnumerable<LocalizationEntry> selection)
+        {
+            var entries = selection?.ToList() ?? new List<LocalizationEntry>();
+            if (entries.Count == 0)
+                entries = Entries.Where(e => !string.IsNullOrEmpty(e.Translation)).ToList();
+
+            if (entries.Count == 0)
+            {
+                OnLogMessage($"⚠ {LocalizationManager.GetString("NoTranslatedToEvaluate")}");
+                EvaluationCompleted?.Invoke(null);
+                return;
+            }
+
+            // Single entry evaluation
+            if (entries.Count == 1)
+            {
+                var entry = entries.First();
+                OnLogMessage($"🤖 {LocalizationManager.GetString("LogEvaluating", entry.Key)}");
+                EvaluationStatusText?.Invoke($"⏳ {LocalizationManager.GetString("EvalEvaluating")}");
+
+                var result = await EvaluateEntry(entry);
+
+                if (result == null)
+                {
+                    EvaluationCompleted?.Invoke(new EvaluationOutcome { Failed = true });
+                    return;
+                }
+
+                var outcome = new EvaluationOutcome { SingleResult = result, EntryKey = entry.Key };
+                outcome.ResultMap[entry.Key] = result;
+                EvaluationCompleted?.Invoke(outcome);
+                return;
+            }
+
+            // Batch evaluation for multiple entries
+            OnLogMessage($"🤖 {LocalizationManager.GetString("LogBatchEvaluating", entries.Count)}");
+            EvaluationStatusText?.Invoke($"⏳ {LocalizationManager.GetString("EvalBatchProgress", entries.Count)}");
+
+            var results = new List<EvaluationResult>();
+            var completed = 0;
+
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.Translation)) continue;
+
+                var result = await EvaluateEntry(entry);
+                if (result != null)
+                {
+                    result.TranslatedText = entry.Key;
+                    results.Add(result);
+                }
+                completed++;
+                EvaluationStatusText?.Invoke($"⏳ {completed}/{entries.Count}");
+            }
+
+            if (results.Count == 0)
+            {
+                EvaluationCompleted?.Invoke(new EvaluationOutcome { Failed = true });
+                return;
+            }
+
+            EvaluationCompleted?.Invoke(new EvaluationOutcome
+            {
+                Results = results,
+                ResultMap = results.ToDictionary(r => r.TranslatedText, r => r),
+                AverageScore = results.Where(r => r.Score > 0).Select(r => r.Score).DefaultIfEmpty(0).Average(),
+                HighCount = results.Count(r => r.Score >= 8),
+                LowCount = results.Count(r => r.Score > 0 && r.Score < 5)
+            });
+        }
+
+        /// <summary>Run multi-agent voting on selected entries (or all translated entries).</summary>
+        public async Task VoteEntriesAsync(IEnumerable<LocalizationEntry> selection)
+        {
+            var entries = selection?.ToList() ?? new List<LocalizationEntry>();
+            if (entries.Count == 0)
+                entries = Entries.Where(e => !string.IsNullOrEmpty(e.Translation)).ToList();
+
+            if (entries.Count == 0)
+            {
+                OnLogMessage($"⚠ {LocalizationManager.GetString("NoTranslatedToVote")}");
+                VotingCompleted?.Invoke(null);
+                return;
+            }
+
+            // Batch voting for multiple entries
+            if (entries.Count > 1)
+            {
+                OnLogMessage($"🗳 {LocalizationManager.GetString("LogBatchVoting", entries.Count)}");
+                VotingStatusText?.Invoke($"⏳ {LocalizationManager.GetString("VoteBatchProgress", entries.Count)}");
+                var completed = 0;
+                var bestCount = 0;
+
+                foreach (var e in entries)
+                {
+                    if (string.IsNullOrEmpty(e.Translation)) continue;
+                    var vr = await VoteEntry(e);
+                    completed++;
+                    if (vr != null && vr.BestTranslation == e.Translation) bestCount++;
+                    VotingStatusText?.Invoke($"⏳ {completed}/{entries.Count}");
+                }
+
+                VotingCompleted?.Invoke(new VotingOutcome { Completed = completed, BestCount = bestCount });
+                return;
+            }
+
+            // Single entry voting
+            var entry = entries.First();
+            OnLogMessage($"🗳 {LocalizationManager.GetString("LogVoting", entry.Key)}");
+            VotingStatusText?.Invoke($"⏳ {LocalizationManager.GetString("EvalVoting")}");
+
+            var result = await VoteEntry(entry);
+
+            if (result == null)
+            {
+                VotingCompleted?.Invoke(new VotingOutcome { Failed = true });
+                return;
+            }
+
+            VotingCompleted?.Invoke(new VotingOutcome { SingleResult = result, HasSingleResult = true });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Smart pre-translate + consistency scan (moved from MainWindow)
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Smart Pre-translate: fill translations from glossary and cache without API calls.
+        /// </summary>
+        public void SmartPreTranslate(List<LocalizationEntry> selected)
+        {
+            var entries = selected?.ToList() ?? new List<LocalizationEntry>();
+            if (entries.Count == 0)
+                entries = Entries.Where(en => !string.IsNullOrEmpty(en.Value)).ToList();
+
+            if (entries.Count == 0)
+            {
+                PreTranslateCompleted?.Invoke(null);
+                return;
+            }
+
+            var glossaryFilled = 0;
+            var cacheFilled = 0;
+
+            foreach (var entry in entries)
+            {
+                if (!string.IsNullOrEmpty(entry.Translation))
+                    continue;
+
+                // Try glossary first
+                if (_glossary.TryGetValue(entry.Key, out var dictVal))
+                {
+                    entry.Translation = dictVal;
+                    glossaryFilled++;
+                    continue;
+                }
+                if (_glossary.TryGetValue(entry.Value, out dictVal))
+                {
+                    entry.Translation = dictVal;
+                    glossaryFilled++;
+                    continue;
+                }
+
+                // Try cache
+                var cacheKey = _configService.GetCacheKey(entry.Value);
+                if (cacheKey != null && _configService.Cache.TryGetValue(cacheKey, out var cached))
+                {
+                    entry.Translation = cached;
+                    cacheFilled++;
+                }
+            }
+
+            PreTranslateCompleted?.Invoke(new PreTranslateOutcome { GlossaryFilled = glossaryFilled, CacheFilled = cacheFilled });
+        }
+
+        /// <summary>Consistency scan: check same source text translated differently.</summary>
+        public List<string> ScanConsistencyIssues()
+        {
+            var issues = new List<string>();
+            var groups = Entries
+                .Where(en => !string.IsNullOrEmpty(en.Value) && !string.IsNullOrEmpty(en.Translation))
+                .GroupBy(en => en.Value)
+                .Where(g => g.Select(en => en.Translation).Distinct().Count() > 1);
+
+            foreach (var group in groups)
+            {
+                var translations = group.Select(en => en.Translation).Distinct().ToList();
+                for (int i = 0; i < translations.Count - 1; i++)
+                {
+                    for (int j = i + 1; j < translations.Count; j++)
+                    {
+                        issues.Add(LocalizationManager.GetString("ConsistencyIssueDesc", group.Key, translations[i], translations[j]));
+                    }
+                }
+            }
+
+            return issues;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        //  Evaluation / voting primitives (single-entry)
+        // ═══════════════════════════════════════════════════════════
 
         /// <summary>
         /// Evaluate a single translation entry with AI quality scoring.

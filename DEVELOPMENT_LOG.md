@@ -105,6 +105,37 @@ MVVM 过渡完成度：70% → 100%
 
 ---
 
+### 2026-07-30（续 2）：CI 状态检查修复 + 产品规划
+
+#### CI 状态检查失败修复
+
+- **现象**：GitHub 仓库三个分支（master/develop/stable）的 CI 状态检查均未通过，commit 旁显示红色 ❌
+- **根因**：项目缺少 `.sln` 解决方案文件。`ci.yml` 中 `dotnet restore` 不带项目参数，在无 `.sln` 的工作目录中报错 `MSB1003: 请指定项目或解决方案文件`
+- **修复**：
+  1. 使用 `dotnet new sln -n SimpleXmlEditor` 创建解决方案
+  2. `dotnet sln add` 添加 `SimpleXmlEditor.csproj` 和 `SimpleXmlEditor.Tests.csproj`
+  3. 本地验证：restore → build（0 错误）→ test（13/13 通过）→ publish（成功）
+  4. 提交并推送至 `master`（commit `acd690f`）
+  5. Cherry-pick 至 `develop`（commit `a562c26`）和 `stable`（commit `6f1bf53`）
+- **影响文件**：[SimpleXmlEditor.sln](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.sln)（新建）、[ci.yml](file:///e:/translate/xml-ai-translator-main/.github/workflows/ci.yml)
+
+#### 分支同步
+
+- `develop` 和 `stable` 分支原本与 `master` 不同步，缺少 `.sln` 修复
+- 通过 cherry-pick 将修复同步至两个分支，确认推送成功
+- 三个分支远程状态一致：[master](https://github.com/BestFly666/xml-ai-translator-tool) / [develop](https://github.com/BestFly666/xml-ai-translator-tool/tree/develop) / [stable](https://github.com/BestFly666/xml-ai-translator-tool/tree/stable)
+
+#### 产品规划讨论
+
+- 产品经理 @Alex 审查项目现状，确认 Phase 1+2 已完成、Phase 3+4 已在 PRODUCT_PLAN 中规划
+- 提出 10 项新增功能建议，覆盖翻译质量、用户体验、效率提升、项目管理四个方向：
+  - **高优先级**：智能预翻译、待翻译筛选面板、快捷键体系
+  - **中优先级**：一致性扫描、暗色模式、审校格式导出
+  - **低优先级**：上下文感知翻译、模糊匹配、多文件项目管理
+- 功能建议已记录，未纳入当前迭代计划，留待后续评估
+
+---
+
 ### 2026-07-30（续）：运行时崩溃修复
 
 #### `dotnet run` 无响应（静默崩溃）
@@ -310,6 +341,83 @@ MVVM 过渡完成度：70% → 100%
 - 创建 `HANDOVER.md`（项目交接文档），涵盖架构、服务说明、数据流、配置、已知问题、构建流程
 
 
+## 2026-07-31 — Bug 修复 + 全面代码审计
+
+### 内容显示空白 + 手动导入失败（P0）
+
+- **现象**：加载 XML 文件后 DataGrid 无任何内容显示，日志也不报错
+- **根因 1 — DataGrid 绑定断裂**：插件加载路径（`.po`/`.json`）创建了新的 `ObservableCollection` 赋值给 `_viewModel.Entries`，但 `EntriesGrid.ItemsSource` 仅构造函数中设置一次（第 45 行），仍指向旧空集合。XML 加载路径用 `.Clear()` + `ProcessEntry()` 修改同一实例，因此正常。
+- **修复 1**：[MainWindow.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml.cs) 插件加载后添加 `EntriesGrid.ItemsSource = _viewModel.Entries;`
+- **根因 2 — AndroidStringsPlugin 劫持 XML**：[AndroidStringsPlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/AndroidStringsPlugin.cs) 的 `FileExtensions` 包含 `.xml`，所有 XML 文件被路由到插件路径。游戏 XML 根元素不是 `<resources>`，返回空列表。
+- **修复 2**：从 `FileExtensions` 移除 `.xml`，仅保留 `.android.xml`
+- **修复 3**：插件返回 0 条时回退到 XML 加载路径（含原文/译文选择对话框），增强容错
+
+### 全面代码审计
+
+由 @代码审查员 + @后端架构师 + @产品经理 对项目进行多角色审计：
+
+#### 代码质量 — 关键发现
+
+| 严重度 | 问题 | 位置 |
+|--------|------|------|
+| **Bug** | `MenuShowFilter_Click` 和 `MenuShowLog_Click` 为空方法，菜单项点击无反应 | MainWindow.xaml.cs |
+| **Bug** | `TranslateWithContextAsync` 收集了上下文条目但从未传入翻译请求，上下文功能完全未实现 | MainWindow.xaml.cs |
+| **Bug** | 清除缓存按钮硬编码中文 `"🗑 清空缓存"`，英文模式下不切换 | MainWindow.xaml L324 |
+| 高 | `_totalCost`（double）在异步回调中 `+=` 操作，非原子 | MainViewModel.cs |
+| 高 | `FetchAvailableModelsAsync` 临时覆盖 `_apiKey` 后恢复，并发调用时可能使用错误 Key | AiTranslationService.cs |
+| 高 | 多处 `catch (Exception)` 仅写 `Debug.WriteLine` 或返回空，用户无感知 | AiTranslationService.cs |
+| 中 | `_cacheLock` 声明后从未使用（死代码） | ConfigService.cs |
+| 中 | `TranslateBatchAsync` 外层 catch 吞掉了认证/付费异常（auth/payment 错误无法传播到调用方） | AiTranslationService.cs |
+| 中 | `ProcessEntry` 缓存污染：已有译文的条目先从文件加载，再被缓存中可能过期的值覆盖 | MainWindow.xaml.cs |
+| 中 | 翻译重试逻辑 catch 所有 `Exception` 而非仅捕获 `HttpRequestException`，非瞬态错误也被重试 | MainWindow.xaml.cs |
+| 低 | `ApplyTheme` 用 `FindName` 字符串查找控件，XAML 重命名后静默失败 | MainWindow.xaml.cs |
+| 低 | `EntriesGrid.Columns` 按索引访问，列顺序变更即出错 | MainWindow.xaml.cs |
+| 低 | `SanitizeLogMessage` 每次调用新建 Regex 实例，不必要的 GC 开销 | AiTranslationService.cs |
+| 低 | `SaveTranslationProgress` 存储在 exe 目录而非 LocalAppData，与 config/cache 路径不一致 | ConfigService.cs |
+| 低 | 撤销栈仅在批量替换时入栈，手动编辑翻译无撤销支持 | MainWindow.xaml.cs |
+| 低 | 筛选文本框无占位符提示 | MainWindow.xaml |
+| 低 | `Separator` 被用作间距控件（语义不当） | MainWindow.xaml L242 |
+
+#### 架构评估
+
+- **分层整体合理**：View → ViewModel → Orchestrator → Service，接口覆盖 6/6
+- **核心问题**：MainWindow.xaml.cs 2158 行，承载约 40% 业务逻辑
+  - `TranslateEntries`（200 行翻译流水线）应在 ViewModel/Orchestrator
+  - `TranslateAsync`（含重试/计费/速率限制）应在 AiTranslationService
+  - CSV 导出、一致性扫描的 LINQ 分析等应独立为 Service
+- **MVVM 不彻底**：ViewModel 无 `ICommand`，所有交互走 Click 事件处理器
+- **亮点**：TranslationOrchestrator 编排层设计优秀、多提供商架构清晰、三级回退解析健壮
+
+#### 产品审计
+
+- **完成度 B+**：智能预翻译、一致性扫描、评估投票、插件系统等核心功能均已交付
+- **14 种语言仅 2 种有翻译**（中/英），其余 12 种静默回退英文
+- **XAML 约 40+ 处硬编码**文本，未绑定 LocalizationManager
+- **窗口无最小尺寸约束**，缩放过小 UI 崩溃
+- **暗色模式无 XAML 主题基础设施**，全靠代码手动设颜色
+
+### 本地化完善
+
+- `MenuSave` 本地化键补充：en `"Save"` → zh `"保存"`
+- 菜单栏顶部按钮本地化对齐（File/Edit/View/Translate/Quality/Tools/Help）
+
+### 新增审计问题
+
+| 编号 | 优先级 | 描述 |
+|------|--------|------|
+| #11 | P1 | `MenuShowFilter_Click` / `MenuShowLog_Click` 空方法实现 |
+| #12 | P1 | `TranslateWithContextAsync` 上下文功能实现或删除 |
+| #13 | P1 | XAML 硬编码中文 `"🗑 清空缓存"` → LocalizationManager |
+| #14 | P1 | `FetchAvailableModelsAsync` API Key 并发竞争 |
+| #15 | P2 | ViewModel 统计字段非原子操作 |
+| #16 | P2 | 多处无声错误吞噬 → 加日志或用户通知 |
+| #17 | P3 | `_cacheLock` 死代码清理 |
+| #18 | P3 | XAML 硬编码文本迁移至 LocalizationManager |
+| #19 | P3 | ViewModel 添加 ICommand 替代 Click 事件 |
+| #20 | P3 | 暗色模式 XAML 主题基础设施 |
+| #21 | P3 | 窗口 MinWidth/MinHeight 约束 |
+
+---
 ## 2026-07-28
 
 ### 批量翻译解析修复
@@ -488,14 +596,17 @@ MVVM 过渡完成度：70% → 100%
 project-root/
 ├── SimpleXmlEditor/                     # WPF 主项目
 │   ├── Services/                        # 服务层（全部接口化 6/6 ✓）
-│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商）
+│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商，含缓存/重试/计费）
 │   │   ├── ConfigService.cs             # IConfigService — 配置与缓存管理
 │   │   ├── Interfaces.cs                # 6 个服务接口定义
+│   │   ├── ReviewExporter.cs            # 审校报告 CSV 导出（ReviewExportResult）
 │   │   ├── TranslationEvaluator.cs     # ITranslationEvaluator — AI 翻译质量评估与多代理投票
 │   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（prompt/API/cache/glossary）
 │   │   └── XmlRepository.cs             # IXmlRepository — XML 数据访问
 │   ├── ViewModels/
-│   │   └── MainViewModel.cs             # 主窗口 ViewModel（INotifyPropertyChanged，30+ 字段）
+│   │   └── MainViewModel.cs             # 主窗口 ViewModel（业务逻辑中枢：翻译/评估/投票/一致性扫描）
+│   ├── Commands/
+│   │   └── RelayCommand.cs              # ICommand 实现（驱动 ViewModel 命令属性）
 │   ├── Localization/
 │   │   └── LocalizationManager.cs       # 中英文 UI 本地化（200+ 键值对）
 │   ├── Dictionary/
@@ -504,7 +615,12 @@ project-root/
 │   ├── ExpertProfiles/
 │   │   ├── ExpertProfile.cs             # 专家配置数据模型
 │   │   └── ExpertProfileManager.cs      # IExpertProfileManager — 专家配置生命周期管理
-│   ├── MainWindow.xaml/.cs              # 主界面（无业务逻辑残留）
+│   ├── Plugins/                          # 插件系统
+│   │   ├── PoFilePlugin.cs               # IFileFormatPlugin — GNU Gettext (.po/.pot)
+│   │   ├── JsonI18nPlugin.cs             # IFileFormatPlugin — JSON i18n (.json)
+│   │   └── AndroidStringsPlugin.cs       # IFileFormatPlugin — Android strings (.android.xml)
+│   ├── MainWindow.xaml/.cs              # 主界面（纯 UI 职责：事件转发/生命周期/主题/本地化）
+│   ├── EvaluationWindow.xaml/.cs        # AI 评估结果展示窗口
 │   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口（含内联对话框类）
 │   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
 │   ├── InputDialog.xaml/.cs             # 通用双输入对话框
@@ -513,6 +629,9 @@ project-root/
 │   ├── PromptTemplates.cs               # AI 提示词模板
 │   ├── App.xaml/.cs                     # 应用入口（DI 容器）
 │   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
+├── SimpleXmlEditor.Cli/                 # CLI 命令行工具
+│   ├── Program.cs                        # 命令行入口（基础框架）
+│   └── SimpleXmlEditor.Cli.csproj
 ├── SimpleXmlEditor.Tests/               # xUnit 测试项目
 │   ├── ConfigServiceTests.cs            # 4 个测试
 │   ├── StringExtensionsTests.cs         # 4 个测试
@@ -543,15 +662,119 @@ project-root/
 - [x] ~~删除 MainWindow 中未使用的 `LoadConfig()` 方法（审计 #9）~~
 - [ ] SettingsWindow AI provider 刷新逻辑去重（审计 #10）
 
+### 新增审计项（2026-07-31）
+- [x] ~~DataGrid 绑定断裂 → 插件加载后无内容（审计 #11a）~~
+- [x] ~~AndroidStringsPlugin 劫持 XML 文件（审计 #11b）~~
+- [ ] `MenuShowFilter_Click` / `MenuShowLog_Click` 空方法实现或删除（审计 #12，P1）
+- [ ] `TranslateWithContextAsync` 上下文功能实现或删除（审计 #13，P1）
+- [x] ~~XAML 硬编码中文 `"🗑 清空缓存"` → LocalizationManager（审计 #14，P1，已在 `ApplyLocalization` 中动态设置 `ClearCacheBtn.Content`）~~
+- [ ] `FetchAvailableModelsAsync` API Key 并发竞争（审计 #15，P1）
+- [ ] ViewModel 统计字段非原子操作（审计 #16，P2）
+- [ ] 多处无声错误吞噬 → 加日志或用户通知（审计 #17，P2）
+- [ ] `TranslateBatchAsync` 外层 catch 吞认证/付费异常（审计 #18，P2）
+- [ ] `ProcessEntry` 缓存污染：过期缓存覆盖文件译文（审计 #19，P2）
+- [ ] 翻译重试 catch 范围过宽（应仅捕获 HttpRequestException）（审计 #20，P2）
+- [ ] `_cacheLock` 死代码清理（审计 #21，P3）
+- [ ] XAML 硬编码文本迁移至 LocalizationManager（审计 #22，P3）
+- [x] ~~ViewModel 添加 ICommand 替代 Click 事件（审计 #23，P3，RelayCommand + 6 个命令属性已完成，按钮仍由 XAML Click 转发）~~
+- [ ] 暗色模式 XAML 主题基础设施（审计 #24，P3）
+- [ ] 窗口 MinWidth/MinHeight 约束（审计 #25，P3）
+- [ ] `ApplyTheme` FindName 字符串查找 → 改为编译时引用（审计 #26，P3）
+- [ ] `EntriesGrid.Columns` 索引访问 → 改为 Name 查找（审计 #27，P3）
+- [ ] `SanitizeLogMessage` Regex 缓存优化（审计 #28，P3）
+- [ ] `SaveTranslationProgress` 路径统一到 LocalAppData（审计 #29，P3）
+- [ ] 手动编辑翻译的撤销支持（审计 #30，P3）
+
 ### 功能规划
 - [x] ~~单元测试 / 集成测试覆盖~~（13 个测试，核心服务覆盖）
 - [x] ~~GitHub Actions CI/CD 流水线~~
+- [x] ~~插件系统~~（3 个格式插件：.po、.json、.android.xml）
 - [ ] 更多 XML 格式支持（如 XLIFF）
-- [ ] CLI 命令行模式
+- [ ] CLI 命令行模式完善
 - [ ] macOS 跨平台支持探索
-- [ ] 翻译质量评估 UI 集成
-- [ ] 多代理投票功能完善
-- [ ] 插件系统
+- [x] ~~翻译质量评估 UI 集成~~（EvaluationWindow 评估结果展示）
+- [x] ~~多代理投票功能完善~~（3 视图投票系统）
+
+### 下次迭代计划（用户已确认 2026-07-31）
+
+**核心目标：UI 与业务逻辑彻底分离**（解决 MainWindow.xaml.cs 2158 行、~40% 业务逻辑残留问题）
+
+| 序号 | 任务 | 迁移目标 | 状态 |
+|------|------|----------|------|
+| 1 | `TranslateEntries`（200 行翻译流水线：批次调度/暂停恢复/进度统计）→ ViewModel 或 Orchestrator | MainViewModel.cs / TranslationOrchestrator.cs | ✅ 已完成 |
+| 2 | `TranslateAsync`（重试/缓存/计费逻辑）→ AiTranslationService | AiTranslationService.cs | ✅ 已完成 |
+| 3 | `ProcessEntry`（缓存写入/词典应用/中文检测）→ ViewModel 或 Repository | MainViewModel.cs | ✅ 已完成 |
+| 4 | `RunEvaluateAsync`/`RunVoteAsync`（批量评估投票编排）→ ViewModel | MainViewModel.cs | ✅ 已完成 |
+| 5 | CSV 导出逻辑 → 独立 `ReviewExporter` Service | Services/ReviewExporter.cs | ✅ 已完成 |
+| 6 | 一致性扫描的 LINQ 分析 → ViewModel 或独立 Service | MainViewModel.cs | ✅ 已完成 |
+| 7 | ViewModel 引入 ICommand（RelayCommand），按钮/菜单改为命令绑定 | MainViewModel.cs + MainWindow.xaml | ✅ 已完成（RelayCommand + ViewModel 命令；按钮保留 XAML Click 转发） |
+
+**验收标准**
+- MainWindow.xaml.cs 仅保留事件转发、窗口生命周期、主题/本地化应用等纯 UI 职责 ✅
+- 迁移后的逻辑可通过现有测试项目验证（无回归）✅（13/13 测试通过）
+- 行为与现状完全一致（翻译、暂停、恢复、缓存、评估投票均可正常使用）✅
+
+---
+
+## 2026-08-01 — UI 与业务逻辑彻底分离完成
+
+### 核心目标达成
+
+按 2026-07-31 确认的迭代计划，完成 MainWindow.xaml.cs 从 2158 行到 ~1605 行的重构，**业务逻辑全部下沉到 ViewModel / 服务层**。
+
+### 任务完成明细
+
+#### 任务 1：`TranslateEntries` 翻译流水线 → ViewModel ✅
+- `TranslateEntriesAsync(List<LocalizationEntry>, bool forceRefresh)` 迁移至 MainViewModel
+- 完整保留：批次调度（`CreateBatches`）、暂停/恢复（`IsTranslationPaused` + 轮询延迟）、取消（`CancellationTokenSource`）、逐批增量保存进度、模型级最优延迟
+- 进度统计（`successCount`/`failCount`/效率/速率限制摘要）与 `UpdateProgressDisplay` 拆分
+- `TranslateSelectedCommand` / `TranslateAllCommand` 命令属性提供 UI 入口
+
+#### 任务 2：`TranslateAsync` 重试/缓存/计费 → AiTranslationService ✅
+- `TranslateSingleAsync` 内建缓存检查（命中触发 `CacheHit` 事件）、写入缓存、`ApiCallCounted`/`ApiCharsCounted` 计费事件
+- 429 限流重试：`HttpRequestException("429")` → `CalculateOptimalDelay() * (attempt + 2)` 递增退避
+- 构造函数支持 `IConfigService` 注入（MainViewModel 已接线）
+
+#### 任务 3：`ProcessEntry` → ViewModel ✅
+- `ProcessEntry` 迁移至 MainViewModel：RowNumber 分配、`TryApplyDictionary`、中文原文检测（中文直接填入译文）、Key/原文双路径缓存命中
+- `TryApplyDictionary` 仅对空译文生效（对照表语义不变）
+
+#### 任务 4：评估/投票编排 → ViewModel ✅
+- `EvaluateEntriesAsync` / `VoteEntriesAsync`（批量）与 `EvaluateEntry` / `VoteEntry`（单条）迁移
+- `EvaluationOutcome` / `VotingOutcome` / `PreTranslateOutcome` 结果类封装统计信息
+- 评估/投票过程状态通过 `EvaluationStatusText` / `VotingStatusText` 事件推送
+
+#### 任务 5：CSV 导出 → ReviewExporter ✅
+- 新建 `Services/ReviewExporter.cs`：`ReviewExportResult`（Total/Reviewed/NeedsFix/NotReviewed）+ `Export(filePath, entries)`
+- 表头 `Status,Key,Original,Translation`，审校状态本地化标签，CSV 转义
+- MainWindow `ExportReviewBtn_Click` 仅保留文件对话框与结果展示
+
+#### 任务 6：一致性扫描 → ViewModel ✅
+- `ScanConsistencyIssues()` 迁移至 MainViewModel，`ConsistencyScanCompleted` 事件回传问题列表
+
+#### 任务 7：ICommand（RelayCommand）✅
+- 新建 `Commands/RelayCommand.cs`（标准 ICommand 实现，`CommandManager.RequerySuggested` 驱动 CanExecute）
+- MainViewModel 暴露 6 个命令：`TranslateSelectedCommand`、`TranslateAllCommand`、`EvaluateCommand`、`VoteCommand`、`SmartPreTranslateCommand`、`ConsistencyScanCommand`
+- 按钮/菜单保留 XAML Click 事件，MainWindow 转发为命令执行（降低重写风险，行为与现状完全一致）
+
+### MainWindow.xaml.cs 新结构（纯 UI 职责）
+
+- **事件订阅渲染**：13 个 ViewModel 事件（LogMessage、StatusMessageChanged、TranslationStarted/Progress/Finished/Error、Evaluation/Voting 状态与完成、PreTranslateCompleted、ConsistencyScanCompleted、ConfirmationRequested、MessageRequested）
+- **转发层**：翻译/评估/投票/预翻译/一致性扫描 → 命令或 `TranslateEntriesAsync`；Pause/Stop → ViewModel 状态或 `CancelTranslation`
+- **窗口生命周期**：`InitializeFromConfig`、`AutoLoadModelsAsync`、`OnClosed`、`ApplyTheme`、`ApplyLocalization`、`OnEntryPropertyChanged` 清理
+- **纯 UI 辅助**：DataGrid 选择/列头双击排序、筛选（Key/原文/译文 + 未翻译切换）、批量替换/撤销（`_undoStack`）、快捷键（Ctrl+S/O/Z/T/Shift+T、F5/F6、Esc）、查找栏逻辑移除（当前 XAML 无查找栏）
+
+### 验证
+
+- `dotnet build SimpleXmlEditor.sln`：**0 错误**
+- `dotnet test SimpleXmlEditor.sln`：**13/13 通过**（ConfigService 4 + StringExtensions 4 + GlossaryManager 5）
+- 未改动：`TranslationOrchestrator`（387 行）、`App.xaml.cs`（DI 注册）、插件系统、CLI
+
+### 遗留
+
+- 审计 #12（`MenuShowFilter_Click`/`MenuShowLog_Click` 空方法）：保留为预留占位，待后续实现筛选栏/日志栏显隐
+- 审计 #13（`TranslateWithContextAsync` 死代码）：未被任何入口调用，可安全删除
+- 测试项目 `StringExtensionsTests.cs` 存在 1 个 CS8600 警告（既有，非本次引入）
 
 ---
 

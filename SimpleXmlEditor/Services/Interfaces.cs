@@ -22,6 +22,11 @@ namespace SimpleXmlEditor.Services
         
         event Action<string> LogMessage;
         
+        // Statistics callbacks (raised by the service itself for single-entry translation paths)
+        event Action<int> CacheHit;
+        event Action<int> ApiCallCounted;
+        event Action<int, int> ApiCharsCounted; // (inputChars, outputChars)
+        
         Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null);
         Task<string> TranslateSingleAsync(string text, int maxRetries = 3);
         Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3);
@@ -104,5 +109,27 @@ namespace SimpleXmlEditor.Services
         event Action<string> LogMessage;
         Task<EvaluationResult> EvaluateAsync(string originalText, string translatedText, string targetLanguage, string context = "");
         Task<VotingResult> VoteAsync(string originalText, string[] candidateTranslations, string targetLanguage, string context = "");
+    }
+
+    /// <summary>
+    /// Plugin for supporting additional file formats beyond the built-in XML types.
+    /// Each plugin reports its supported extensions, and provides Load/Save methods.
+    /// </summary>
+    public interface IFileFormatPlugin
+    {
+        string FormatName { get; }
+        string[] FileExtensions { get; }
+        List<LocalizationEntry> Load(string filePath);
+        void Save(string filePath, List<LocalizationEntry> entries);
+    }
+
+    /// <summary>
+    /// Plugin for post-processing translations after AI translation completes.
+    /// Examples: formatting cleanup, consistency check, duplicate removal.
+    /// </summary>
+    public interface IPostProcessPlugin
+    {
+        string Name { get; }
+        void Process(List<LocalizationEntry> entries, string sourceLanguage, string targetLanguage);
     }
 }

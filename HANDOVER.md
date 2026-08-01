@@ -4,7 +4,7 @@
 > **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪、运行时修复完成）  
 > **维护者**：Veloxcity  
 > **技术栈**：C# / .NET 8.0 / WPF / Newtonsoft.Json / Microsoft.Extensions.DI / xUnit / GitHub Actions  
-> **最近变更**：Phase 1+2 完成 + CI 构建修复 + dotnet run 运行时崩溃修复
+> **最近变更**：Phase 1+2 完成 + CI 构建修复 + dotnet run 修复 + .sln 补全 + 三分支同步
 
 ---
 
@@ -224,11 +224,17 @@ foreach batch in CreateBatches():
 # 进入项目目录
 cd xml-ai-translator-main
 
-# 编译
+# 编译（推荐通过 .sln 编译所有项目含测试）
+dotnet build
+
+# 仅编译主项目
 dotnet build SimpleXmlEditor/SimpleXmlEditor.csproj
 
 # 运行
 dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
+
+# 运行测试
+dotnet test
 
 # 发布自包含单文件（无需安装运行时）
 dotnet publish SimpleXmlEditor/SimpleXmlEditor.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
@@ -268,7 +274,7 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 |--------|------|------|----------|
 | **P0** | 线程安全 | ✅ 已修复 | 早期（ConcurrentDictionary/ConcurrentQueue 已就位） |
 | **P0** | `dotnet run` 无响应 — DI 容器无法解析 `TranslationOrchestrator`（Action<string> 未注册） | ✅ 已修复 | 2026-07-30 |
-| **P0** | CI/CD 构建失败 — 测试项目未被编译 | ✅ 已修复 | 2026-07-30 |
+| **P0** | CI/CD 构建失败 — 缺少 `.sln` 文件，`dotnet restore` 无法定位项目 | ✅ 已修复 | 2026-07-30 |
 | **P1** | 接口缺失（GlossaryManager/ExpertProfileManager/TranslationEvaluator） | ✅ 已修复 | 2026-07-30 |
 | **P1** | MainWindow 重复代码（6 个方法） | ✅ 已修复 | 2026-07-30 |
 | **P2** | HasChineseChars 重复 | ✅ 已修复 | 2026-07-30 |
@@ -400,8 +406,10 @@ xml-ai-translator-main/
 │   └── SimpleXmlEditor.Tests.csproj
 ├── .github/workflows/
 │   └── ci.yml                        # GitHub Actions CI/CD
+├── SimpleXmlEditor.sln                # 解决方案文件（包含两个项目）
 ├── DEVELOPMENT_LOG.md                # 开发日志
 ├── HANDOVER.md                       # 项目交接文档
 ├── PRODUCT_PLAN.md                   # 产品规划
+├── PROJECT_INDEX.md                  # 项目文件索引
 └── README.md                         # 项目说明
 ```
