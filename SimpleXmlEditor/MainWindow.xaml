@@ -161,35 +161,6 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-
-        <!-- ===== Global TextBox Style (keyboard accessibility + unified radius) ===== -->
-        <Style TargetType="TextBox">
-            <Setter Property="Padding" Value="6,4"/>
-            <Setter Property="BorderBrush" Value="#CFD8DC"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="TextBox">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="4">
-                            <ScrollViewer x:Name="PART_ContentHost"
-                                          Margin="{TemplateBinding Padding}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#2196F3"/>
-                                <Setter TargetName="bd" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="#F5F5F5"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
 
     <Grid>

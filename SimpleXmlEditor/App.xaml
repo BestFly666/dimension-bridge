@@ -7,6 +7,13 @@
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            <!-- Global accent color: Material Blue, matching the toolbar gradient.
+                 Other accent colors (green/orange/cyan) remain as per-element highlights.
+                 NOTE: HandyControl theme keys are Color (not Brush). -->
+            <Color x:Key="PrimaryColor">#2196F3</Color>
+            <Color x:Key="PrimaryColorDark">#1976D2</Color>
+            <Color x:Key="PrimaryColorLight">#BBDEFB</Color>
+            <Color x:Key="PrimaryTextColor">#FFFFFF</Color>
         </ResourceDictionary>
     </Application.Resources>
 </Application>
