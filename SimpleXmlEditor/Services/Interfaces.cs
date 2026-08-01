@@ -109,6 +109,20 @@ namespace SimpleXmlEditor.Services
         event Action<string> LogMessage;
         Task<EvaluationResult> EvaluateAsync(string originalText, string translatedText, string targetLanguage, string context = "");
         Task<VotingResult> VoteAsync(string originalText, string[] candidateTranslations, string targetLanguage, string context = "");
+        /// <summary>Generate N alternative translation candidates for a single source text (for voting).</summary>
+        Task<string[]> GenerateCandidatesAsync(string originalText, string targetLanguage, string context = "", int count = 2);
+        /// <summary>Evaluate multiple entries in a single API call (batch acceleration).</summary>
+        Task<List<EvaluationResult>> EvaluateBatchAsync(
+            List<(string Key, string Original, string Translated)> items,
+            string targetLanguage,
+            string context = "",
+            int batchSize = 20);
+        /// <summary>Vote on multiple entries in a single API call (batch acceleration).</summary>
+        Task<List<VotingResult>> VoteBatchAsync(
+            List<(string Key, string Original, string[] Candidates)> items,
+            string targetLanguage,
+            string context = "",
+            int batchSize = 10);
     }
 
     /// <summary>

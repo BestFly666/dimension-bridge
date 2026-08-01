@@ -332,7 +332,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogDictApplied"] = "Dictionary matched {0} existing entries",
                 ["LogDictCleared"] = "Dictionary cleared",
                 ["LogBatchReplace"] = "Batch replace complete - {0} replacements",
-                ["LogUndo"] = "Undo applied - last batch replace reverted",
+                ["LogUndo"] = "Undo applied - previous operation reverted",
                 ["LogCacheUpdated"] = "Cache updated - {0} entries",
                 ["LogCacheWriteError"] = "Cache write error: {0}",
                 ["LogCleared"] = "Log cleared",
@@ -524,6 +524,10 @@ namespace SimpleXmlEditor.Localization
                 ["VoteBatchResult"] = "{0} voted | Best: {1}",
                 ["LogBatchVoteComplete"] = "Batch voting complete: {0} entries, {1} entries rated best",
                 ["LogAppliedSuggestion"] = "Applied suggestion for: {0}",
+                ["VoteAppliedBest"] = "Voting complete: applied best translation to {0} entries",
+                ["VoteApplyPrompt"] = "Apply best translation for \"{0}\"?\n\n{1}",
+                ["VoteApplyTitle"] = "Apply Best Translation",
+                ["VoteApplied"] = "Best translation applied for {0}",
 
                 // === Glossary ===
                 ["GlossaryShare"] = "Share",
@@ -885,7 +889,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogDictApplied"] = "对照表匹配到 {0} 条已有条目",
                 ["LogDictCleared"] = "对照表已清除",
                 ["LogBatchReplace"] = "批量替换完成 - 替换 {0} 处",
-                ["LogUndo"] = "已撤销上一次批量替换",
+                ["LogUndo"] = "已撤销上一步操作",
                 ["LogCacheUpdated"] = "缓存已更新 - {0} 条",
                 ["LogCacheWriteError"] = "缓存写入错误: {0}",
                 ["LogCleared"] = "日志已清除",
@@ -1077,6 +1081,10 @@ namespace SimpleXmlEditor.Localization
                 ["VoteBatchResult"] = "{0} 条已投票 | 最优: {1}",
                 ["LogBatchVoteComplete"] = "批量投票完成: {0} 条, {1} 条评为最优",
                 ["LogAppliedSuggestion"] = "已应用建议: {0}",
+                ["VoteAppliedBest"] = "投票完成: 已为 {0} 条应用最佳译文",
+                ["VoteApplyPrompt"] = "是否将 \"{0}\" 的最佳译文应用？\n\n{1}",
+                ["VoteApplyTitle"] = "应用最佳译文",
+                ["VoteApplied"] = "已为 {0} 应用最佳译文",
 
                 // === Glossary ===
                 ["GlossaryShare"] = "分享",

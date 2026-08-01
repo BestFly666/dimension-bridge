@@ -11,6 +11,8 @@
 
 **XML AI Translator** 是一款专为游戏本地化设计的 XML 批量翻译工具。核心定位是基于 AI（8 个提供商）对 Excel Spreadsheet 格式的 XML 本地化文件进行批量翻译，通过智能分批、翻译缓存、速率限制等机制大幅降低 API 调用成本（90%+），同时提供 Material Design 风格的现代化桌面界面。
 
+**产品定位（2026-08-01 确认）**：面向**中文游戏本地化译者**的一站式 AI 翻译工作台——将术语一致性、质量评估、格式兼容等专业流程自动化；同时为**独立游戏开发者**提供开箱即用的极简版，让"游戏文本 → 多语言"从几周变成几小时。共享核心引擎，双入口形态。
+
 ---
 
 ## 2026-07-30 — Phase 1+2: 架构稳固
@@ -716,6 +718,46 @@ project-root/
 
 ---
 
+## 2026-08-01 — 产品定位确认（PM 评审）
+
+> 背景：对项目竞争力产生疑问（"Excel 等专业软件加这些功能是不是很容易取代"），经产品经理评审后确认产品定位与双用户群策略。
+
+### 竞品威胁分析结论
+
+| 层级 | 玩家 | 威胁等级 |
+|------|------|---------|
+| 通用表格 | Excel / WPS | 低（加"AI 翻译按钮"容易，加"游戏本地化工作流闭环"等于重写本工具） |
+| 通用 CAT 工具 | Trados、memoQ、Crowdin、Poedit | 中 |
+| 模型厂商官方工具 | DeepSeek/豆包翻译平台、官方插件 | 中高（真实威胁） |
+
+**关键判断**：70% 的功能价值不在单点功能，而在**编排**（智能分批 + 速率限制 + 术语注入 + 缓存 + 崩溃恢复 + 评估投票 的闭环）。术语表注入 Prompt、游戏 XML 格式兼容（CDATA/LocalisationData）、崩溃恢复续传是 Excel 复制成本最高的部分。
+
+### 双用户群定位（已确认）
+
+| 维度 | 主：游戏本地化译者 | 次：独立游戏开发者 |
+|------|------------------|------------------|
+| 痛点 | 术语一致性、质量、批量、格式兼容 | 快、简单、便宜、不用学 |
+| 语言方向 | 主语言 → 中文 | 英文 → 多语言（日/德/法/西…） |
+| 配置意愿 | 高（术语表/评估/专家配置） | 低（一键翻译） |
+| 现状替代品 | Trados/Crowdin（成熟但重） | **真空地带** |
+
+- **主攻译者**（用户拍板）：最懂需求（用户本身是译者），竞品是庞然大物但突围点在垂直深度
+- **极简版面向开发者**：从现有项目派生（复用核心引擎），不增加引擎研发成本
+- **产品风险提示**：避免"两头都不讨好"——共享引擎、双入口（极简模式/专业模式），而非功能堆叠
+
+### 极简版（开发者入口）减法清单
+
+拟砍掉：专家配置、评估/投票、崩溃恢复（保留但后台化）、术语表管理（保留基础版）
+拟保留：批量翻译、翻译缓存、格式兼容、一键导出（Unity/Godot/Unreal 格式）
+
+### 下一步建议（待执行）
+
+- [ ] 验证主产品护城河：找 2-3 名真实译者用户，验证"术语一致性"是否为最痛点
+- [ ] 轻量 PRD：定义极简版范围、用户故事、成功指标后再动手
+- [ ] 产品定位同步至 README
+
+---
+
 ## 2026-08-01 — UI 与业务逻辑彻底分离完成
 
 ### 核心目标达成
@@ -775,6 +817,43 @@ project-root/
 - 审计 #12（`MenuShowFilter_Click`/`MenuShowLog_Click` 空方法）：保留为预留占位，待后续实现筛选栏/日志栏显隐
 - 审计 #13（`TranslateWithContextAsync` 死代码）：未被任何入口调用，可安全删除
 - 测试项目 `StringExtensionsTests.cs` 存在 1 个 CS8600 警告（既有，非本次引入）
+
+---
+
+## 2026-08-01 — 多代理投票与翻译评估完成度提升
+
+> 背景：评估/投票功能此前仅"名义可用"（候选集只有 [当前译文, 原文] 两项、投票结果无法一键应用、逐条调用慢）。本次按最小变更原则补齐四个能力，使投票与评估达到可用状态。
+
+### 完成明细
+
+#### A. 候选译文生成（投票从"二选一"变"三选一"）✅
+- `ITranslationEvaluator.GenerateCandidatesAsync` 新增（[Interfaces.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/Interfaces.cs)）
+- `TranslationEvaluator.GenerateCandidatesAsync`：单次 API 调用返回 N 个候选（JSON 数组），`ParseCandidateResponse` 失败时回退正则提取引号字符串
+- 投票候选集 = 当前译文 + AI 生成 2 个备选（去重），无译文时兜底原文
+
+#### B. 应用最佳译文（投票结果闭环）✅
+- 批量投票：`VoteBatchAsync` 结果按 `EntryKey` 回填 `Entries`，`PushUndoSnapshot` 快照后自动应用最佳译文（日志提示应用条数）
+- 单条投票：`ConfirmationRequested` 弹窗确认后应用（含 Undo 快照），新增 `VoteApplyPrompt`/`VoteApplyTitle`/`VoteApplied`/`VoteAppliedBest` 4 个中英文本地化键
+
+#### C. 批量 API 调用加速 ✅
+- `EvaluateBatchAsync`（20 条/批）+ `VoteBatchAsync`（10 条/批）：一次 Prompt 含多条目，JSON 返回含 `index` 映射回条目
+- 解析失败自动回退逐条调用（不影响可用性）
+- 接口补齐 `EvaluateBatchAsync`/`VoteBatchAsync` 声明（实现先行、接口遗漏导致首次编译 4 错误，已修复）
+
+#### D. 上下文注入 ✅
+- 新增 `MainViewModel.GetEvaluationContext()`：从激活的 ExpertProfile（Description + Context）构建评估/投票上下文
+- `EvaluateEntry`/`VoteEntry`/`EvaluateEntriesAsync`/`VoteEntriesAsync` 全链路传入
+
+### 验证
+
+- `dotnet build SimpleXmlEditor.sln`：**0 错误**（1 个既有测试 CS8600 警告，非本次引入）
+- `dotnet test SimpleXmlEditor.sln`：**13/13 通过**
+- 修复项：接口缺失 `EvaluateBatchAsync`/`VoteBatchAsync` 声明（CS1061）、批量分支 `entry` 变量与方法体同名冲突（CS0136）
+
+### 遗留
+
+- 投票批量分支自动应用最佳译文（无确认弹窗），与单条分支（有确认）行为不一致，后续可加"批量应用前确认一次"选项
+- `BuildCandidatePrompt` 中源语言标注为 `Original ({targetLang})`，措辞可再优化（不影响功能）
 
 ---
 

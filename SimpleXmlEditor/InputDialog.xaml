@@ -4,6 +4,32 @@
         Title="InputDialog" Height="180" Width="380"
         WindowStyle="ToolWindow" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner">
+    <Window.Resources>
+        <Style x:Key="RoundedButton" TargetType="Button">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="#2196F3"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -28,8 +54,8 @@
 
         <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" 
                     HorizontalAlignment="Right">
-            <Button Name="CancelBtn" Content="取消" Width="70" Margin="0,0,10,0" Click="CancelBtn_Click"/>
-            <Button Name="OKBtn" Content="确定" Width="70" Click="OKBtn_Click" IsDefault="True"/>
+            <Button Name="CancelBtn" Content="取消" Width="70" Margin="0,0,10,0" Click="CancelBtn_Click" Style="{StaticResource RoundedButton}"/>
+            <Button Name="OKBtn" Content="确定" Width="70" Click="OKBtn_Click" IsDefault="True" Style="{StaticResource RoundedButton}"/>
         </StackPanel>
     </Grid>
 </Window>

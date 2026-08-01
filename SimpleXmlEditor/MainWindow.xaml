@@ -3,9 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:SimpleXmlEditor"
         Title="" Height="800" Width="1400"
-        WindowStartupLocation="CenterScreen" Background="#F0F2F5">
+        MinWidth="1100" MinHeight="640"
+        WindowStartupLocation="CenterScreen" Background="#F0F2F5" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
 
     <Window.Resources>
+        <!-- Convert DataGrid column DisplayIndex to an Excel-style letter (A, B, C, ...) -->
+        <local:IndexToLetterConverter x:Key="IndexToLetter"/>
         <!-- ===== Button Base Template ===== -->
         <Style x:Key="BaseButton" TargetType="Button">
             <Setter Property="Foreground" Value="White"/>
@@ -15,16 +18,21 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border Background="{TemplateBinding Background}"
-                                CornerRadius="6"
+                                CornerRadius="10"
                                 Padding="{TemplateBinding Padding}"
                                 RenderOptions.BitmapScalingMode="HighQuality">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            <Grid>
+                                <Border x:Name="FocusRing" CornerRadius="10" BorderThickness="2"
+                                        BorderBrush="#00000000" Margin="-4" IsHitTestVisible="False"/>
+                                <ContentPresenter HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -35,6 +43,9 @@
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="#1976D2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -84,13 +95,18 @@
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                            TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <Grid>
+                                <Border x:Name="FocusRing" CornerRadius="10" BorderThickness="2"
+                                        BorderBrush="#00000000" Margin="-3" IsHitTestVisible="False"/>
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                TextElement.Foreground="{TemplateBinding Foreground}"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -98,6 +114,9 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#FFFFFF10"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="#FFFFFF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -113,6 +132,12 @@
             <Setter Property="Margin" Value="8"/>
             <Setter Property="BorderBrush" Value="#E8ECF0"/>
             <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect Color="#263238" BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.10"/>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ===== Section Title ===== -->
@@ -136,6 +161,35 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+
+        <!-- ===== Global TextBox Style (keyboard accessibility + unified radius) ===== -->
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="BorderBrush" Value="#CFD8DC"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#2196F3"/>
+                                <Setter TargetName="bd" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Background" Value="#F5F5F5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -149,16 +203,50 @@
         </Grid.RowDefinitions>
 
         <!-- ═══════════ MENU BAR ═══════════ -->
-        <Menu Grid.Row="0" Background="#37474F" FontSize="14" FontWeight="SemiBold" BorderBrush="#263238" BorderThickness="0,0,0,1">
+        <Menu Grid.Row="0" FontSize="14" FontWeight="SemiBold" BorderThickness="0,0,0,2">
+            <Menu.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#546E7A" Offset="0.0"/>
+                    <GradientStop Color="#455A64" Offset="0.5"/>
+                    <GradientStop Color="#263238" Offset="1.0"/>
+                </LinearGradientBrush>
+            </Menu.Background>
+            <Menu.BorderBrush>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#1E88E5" Offset="0.0"/>
+                    <GradientStop Color="#7E57C2" Offset="0.5"/>
+                    <GradientStop Color="#00ACC1" Offset="1.0"/>
+                </LinearGradientBrush>
+            </Menu.BorderBrush>
             <Menu.Resources>
+                <!-- Sub-menu (dropdown) item style: light card + highlight on hover,
+                     so dropdowns match the app's light theme instead of the raw system look. -->
                 <Style TargetType="MenuItem">
-                    <Setter Property="Padding" Value="14,5"/>
-                    <Setter Property="Foreground" Value="#333333"/>
+                    <Setter Property="Padding" Value="16,7"/>
+                    <Setter Property="Foreground" Value="#37474F"/>
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter Property="Background" Value="#E3F2FD"/>
+                            <Setter Property="Foreground" Value="#1565C0"/>
+                        </Trigger>
+                    </Style.Triggers>
                 </Style>
                 <Style TargetType="MenuItem" x:Key="TopMenuStyle">
                     <Setter Property="Padding" Value="14,5"/>
                     <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="Background" Value="#37474F"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter Property="Background" Value="#26FFFFFF"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+                <Style TargetType="Separator">
+                    <Setter Property="Background" Value="#E0E0E0"/>
+                    <Setter Property="Margin" Value="8,4"/>
+                    <Setter Property="Height" Value="1"/>
                 </Style>
             </Menu.Resources>
 
@@ -169,6 +257,8 @@
                 <MenuItem Name="MenuSave" Header="💾 Save (Ctrl+S)" Click="SaveBtn_Click" InputGestureText="Ctrl+S"/>
                 <Separator/>
                 <MenuItem Name="MenuExportReview" Header="📋 Export Review (CSV)" Click="ExportReviewBtn_Click"/>
+                <Separator/>
+                <MenuItem Name="MenuSettings" Header="⚙️ Settings" Click="SettingsBtn_Click"/>
                 <Separator/>
                 <MenuItem Name="MenuExit" Header="Exit" Click="MenuExit_Click"/>
             </MenuItem>
@@ -191,7 +281,6 @@
                 <MenuItem Name="MenuTranslateSelected" Header="🎯 Selected" Click="TranslateSelectedBtn_Click"/>
                 <MenuItem Name="MenuTranslateAll" Header="🚀 All" Click="TranslateAllBtn_Click"/>
                 <MenuItem Name="MenuSmartPreTrans" Header="🔮 Smart Pre-trans" Click="MenuSmartPreTrans_Click"/>
-                <MenuItem Name="MenuBatchSize" Header="📦 Batch Size: 50"/>
             </MenuItem>
 
             <!-- Quality -->
@@ -205,7 +294,6 @@
             <MenuItem Name="MenuTools" Header="🔧 Tools" Style="{StaticResource TopMenuStyle}">
                 <MenuItem Name="MenuGlossary" Header="📖 Glossary" Click="GlossaryBtn_Click"/>
                 <MenuItem Name="MenuStatistics" Header="📊 Statistics" Click="StatsBtn_Click"/>
-                <MenuItem Name="MenuSettings" Header="⚙️ Settings" Click="SettingsBtn_Click"/>
                 <Separator/>
                 <MenuItem Name="MenuClearDict" Header="🗑️ Clear Glossary" Click="ClearDictBtn_Click"/>
             </MenuItem>
@@ -230,7 +318,7 @@
                     <TextBlock Text="🌐" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="#B3E5FC"/>
+                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="#E1F5FE"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -263,7 +351,8 @@
                 </Border>
                 <Button Name="CloseFileBtn" Content="✕" Width="22" Height="22" Padding="0"
                         Style="{StaticResource GreyBtn}" FontSize="10" Margin="4,0,0,0"
-                        VerticalAlignment="Center" Click="CloseFileBtn_Click"/>
+                        VerticalAlignment="Center" Click="CloseFileBtn_Click"
+                        ToolTip="Close current file (Ctrl+W)"/>
             </StackPanel>
         </Border>
 
@@ -339,7 +428,7 @@
         <Grid Grid.Row="4" Margin="8,4,8,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="380"/>
+                <ColumnDefinition x:Name="LogColumn" Width="380"/>
             </Grid.ColumnDefinitions>
 
             <!-- ===== LEFT: DataGrid ===== -->
@@ -360,7 +449,7 @@
                         <TextBlock Grid.Column="0" Name="TranslationDataTitle" Text="📋 Translation Data"
                                   Style="{StaticResource SectionTitle}" Margin="0"/>
                         <TextBlock Grid.Column="1" Name="FilterCountText" Text="0"
-                                  Foreground="#90A4AE" FontSize="12" VerticalAlignment="Center"/>
+                                  Foreground="#78909C" FontSize="12" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Filter Row -->
@@ -394,9 +483,11 @@
                     <!-- DataGrid -->
                     <DataGrid Grid.Row="2" Name="EntriesGrid"
                              AutoGenerateColumns="False" CanUserAddRows="False"
-                             SelectionMode="Extended" GridLinesVisibility="Horizontal"
-                             AlternatingRowBackground="#F8FAFB" HeadersVisibility="Column"
-                             BorderThickness="0" Loaded="EntriesGrid_Loaded"
+                             SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
+                             HeadersVisibility="All"
+                             GridLinesVisibility="Horizontal" RowHeaderWidth="52"
+                             AlternatingRowBackground="#F8FAFB" BorderThickness="0"
+                             Loaded="EntriesGrid_Loaded"
                              FontSize="12.5">
                         <DataGrid.ContextMenu>
                             <ContextMenu FontSize="12">
@@ -428,36 +519,133 @@
                                 <Setter Property="Padding" Value="10,6"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,2"/>
                                 <Setter Property="BorderBrush" Value="#CFD8DC"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridColumnHeader">
+                                            <Grid Background="{TemplateBinding Background}">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="18"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <!-- Column letter strip: click to select the whole column -->
+                                                <Button Grid.Row="0" Padding="0" Cursor="Hand"
+                                                        Foreground="#607D8B" FontWeight="Bold" FontSize="10"
+                                                        Background="#E3E7EB" BorderBrush="#CFD8DC" BorderThickness="0,0,0,1"
+                                                        Content="{Binding Column.DisplayIndex, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource IndexToLetter}}"
+                                                        Click="ColumnLetterBtn_Click"
+                                                        Tag="{Binding RelativeSource={RelativeSource TemplatedParent}}">
+                                                    <Button.Template>
+                                                        <ControlTemplate TargetType="Button">
+                                                            <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                  TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="bd" Property="Background" Value="#B3E5FC"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Button.Template>
+                                                </Button>
+                                                <!-- Sortable column title -->
+                                                <StackPanel Grid.Row="1" Orientation="Horizontal"
+                                                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                            Margin="{TemplateBinding Padding}">
+                                                    <ContentPresenter/>
+                                                    <TextBlock x:Name="SortArrow" Text="▲" FontSize="9"
+                                                               Foreground="#546E7A" Margin="4,0,0,0" Visibility="Collapsed"/>
+                                                </StackPanel>
+                                            </Grid>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="SortDirection" Value="Ascending">
+                                                    <Setter TargetName="SortArrow" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="SortArrow" Property="Text" Value="▲"/>
+                                                </Trigger>
+                                                <Trigger Property="SortDirection" Value="Descending">
+                                                    <Setter TargetName="SortArrow" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="SortArrow" Property="Text" Value="▼"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </DataGrid.ColumnHeaderStyle>
+                        <DataGrid.RowHeaderStyle>
+                            <Style TargetType="DataGridRowHeader">
+                                <Setter Property="Background" Value="#ECEFF1"/>
+                                <Setter Property="Foreground" Value="#78909C"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                                <Setter Property="BorderBrush" Value="#CFD8DC"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="DataGridRowHeader">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}">
+                                                <TextBlock Text="{Binding RowNumber}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{TemplateBinding Foreground}"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </DataGrid.RowHeaderStyle>
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Background" Value="#E3F2FD"/>
                                     </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#BBDEFB"/>
+                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </Trigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="#" Binding="{Binding RowNumber}" Width="36" IsReadOnly="True" FontFamily="Consolas" FontSize="11"/>
                             <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected}" Width="36"/>
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusIcon}" Width="48" IsReadOnly="True" FontSize="12"/>
-                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*" IsReadOnly="True" MinWidth="120">
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*" MinWidth="120">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="Wrap"/>
                                         <Setter Property="Padding" Value="8,4"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
+                                <DataGridTextColumn.EditingElementStyle>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Padding" Value="6,2"/>
+                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                    </Style>
+                                </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Original" Binding="{Binding Value}" Width="1.5*" IsReadOnly="True" MinWidth="150">
+                            <DataGridTextColumn Header="Original" Binding="{Binding Value}" Width="1.5*" MinWidth="150">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="Wrap"/>
                                         <Setter Property="Padding" Value="8,4"/>
                                     </Style>
                                 </DataGridTextColumn.ElementStyle>
+                                <DataGridTextColumn.EditingElementStyle>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                        <Setter Property="Padding" Value="6,2"/>
+                                        <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                    </Style>
+                                </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
                             <DataGridTemplateColumn Header="Translation" Width="1.5*" MinWidth="150">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -479,7 +667,7 @@
             </Border>
 
             <!-- ===== RIGHT: Activity Log ===== -->
-            <Border Grid.Column="1" Style="{StaticResource Card}" Margin="4,0,0,0">
+            <Border x:Name="LogPanel" Grid.Column="1" Style="{StaticResource Card}" Margin="4,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -495,9 +683,14 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Name="ActivityLogTitle" Text="📋 Activity Log"
                                   Style="{StaticResource SectionTitle}" Margin="0"/>
-                        <Button Grid.Column="1" Name="ClearLogBtn" Content="🗑 Clear"
-                               Click="ClearLogBtn_Click"
-                               Style="{StaticResource GreyBtn}" Width="80" Padding="8,6" FontSize="11"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button Name="ToggleLogBtn" Content="◀" Click="ToggleLogBtn_Click"
+                                    Style="{StaticResource GreyBtn}" Width="30" Padding="4,4" FontSize="10"
+                                    Margin="0,0,4,0" ToolTip="Collapse log"/>
+                            <Button Name="ClearLogBtn" Content="🗑 Clear"
+                                   Click="ClearLogBtn_Click"
+                                   Style="{StaticResource GreyBtn}" Width="80" Padding="8,6" FontSize="11"/>
+                        </StackPanel>
                     </Grid>
 
                     <!-- Console -->
@@ -527,6 +720,9 @@
         <!-- ═══════════ BOTTOM BAR ═══════════ -->
         <Border Grid.Row="5" Background="White" CornerRadius="4" Padding="10,6"
                 Margin="8,0,8,8" BorderBrush="#E8ECF0" BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect Color="#263238" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.08"/>
+            </Border.Effect>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -548,9 +744,9 @@
 
                 <!-- Speed / ETA / Cost -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Name="SpeedText" Text="" FontSize="10" Foreground="#90A4AE"
+                    <TextBlock Name="SpeedText" Text="" FontSize="10" Foreground="#78909C"
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Name="EtaText" Text="" FontSize="10" Foreground="#90A4AE"
+                    <TextBlock Name="EtaText" Text="" FontSize="10" Foreground="#78909C"
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBlock Name="CostText" Text="" FontSize="10" FontWeight="SemiBold"
                               Foreground="#43A047" VerticalAlignment="Center"/>

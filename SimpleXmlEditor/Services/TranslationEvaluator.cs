@@ -24,6 +24,8 @@ namespace SimpleXmlEditor.Services
     public class VotingResult
     {
         public string OriginalText { get; set; } = "";
+        /// <summary>Entry key this vote belongs to (set for batch voting).</summary>
+        public string EntryKey { get; set; } = "";
         public List<EvaluationResult> AgentResults { get; set; } = new();
         public double AverageScore { get; set; }
         public string BestTranslation { get; set; } = "";
@@ -194,6 +196,340 @@ Return in this exact JSON format:
 }}
 
 Only return the JSON, no other text.";
+        }
+
+        /// <summary>
+        /// Generate N alternative translation candidates for a single source text (for voting).
+        /// Uses ONE API call; AI returns all candidates in a JSON array.
+        /// </summary>
+        public async Task<string[]> GenerateCandidatesAsync(
+            string originalText,
+            string targetLanguage,
+            string context = "",
+            int count = 2)
+        {
+            if (string.IsNullOrEmpty(originalText) || count <= 0)
+                return Array.Empty<string>();
+
+            try
+            {
+                var prompt = BuildCandidatePrompt(originalText, targetLanguage, context, count);
+                var response = await _aiService.TranslateBatchAsync(prompt, 2);
+                var candidates = ParseCandidateResponse(response);
+                return candidates.Take(count).ToArray();
+            }
+            catch (Exception ex)
+            {
+                RaiseLog($"⚠ Candidate generation failed: {ex.Message}");
+                return Array.Empty<string>();
+            }
+        }
+
+        private string BuildCandidatePrompt(string original, string targetLang, string context, int count)
+        {
+            return $@"You are a professional game localization translator. Generate {count} DIFFERENT translation candidates for the following text.
+
+Original ({targetLang}): {original}
+
+Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+
+The candidates should differ in wording/style but ALL preserve the exact meaning and fit gaming UI tone.
+
+Return in this exact JSON format:
+{{
+  ""candidates"": [
+    ""first candidate translation"",
+    ""second candidate translation""
+  ]
+}}
+
+Only return the JSON, no other text.";
+        }
+
+        private string[] ParseCandidateResponse(string response)
+        {
+            if (string.IsNullOrEmpty(response))
+                return Array.Empty<string>();
+
+            try
+            {
+                var clean = TrimCodeFence(response);
+                var json = JObject.Parse(clean);
+                var arr = json["candidates"] as JArray;
+                if (arr == null || arr.Count == 0)
+                    return Array.Empty<string>();
+
+                return arr
+                    .Select(t => t?.ToString()?.Trim())
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToArray();
+            }
+            catch
+            {
+                // Fallback: extract quoted strings
+                var regex = new System.Text.RegularExpressions.Regex("\"([^\"]{2,})\"");
+                var matches = regex.Matches(response);
+                return matches.Cast<System.Text.RegularExpressions.Match>()
+                    .Select(m => m.Groups[1].Value.Trim())
+                    .Where(t => !string.IsNullOrEmpty(t))
+                    .ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Evaluate MULTIPLE entries in a single API call (batch acceleration).
+        /// Items: (entryKey, originalText, translatedText).
+        /// </summary>
+        public async Task<List<EvaluationResult>> EvaluateBatchAsync(
+            List<(string Key, string Original, string Translated)> items,
+            string targetLanguage,
+            string context = "",
+            int batchSize = 20)
+        {
+            var allResults = new List<EvaluationResult>();
+            if (items == null || items.Count == 0)
+                return allResults;
+
+            foreach (var chunk in Chunk(items, batchSize))
+            {
+                var prompt = BuildBatchEvaluationPrompt(chunk, targetLanguage, context);
+                var response = await _aiService.TranslateBatchAsync(prompt, 2);
+                var parsed = ParseBatchEvaluationResponse(response, chunk);
+                allResults.AddRange(parsed);
+
+                if (parsed.Count == 0)
+                {
+                    RaiseLog("⚠ Batch evaluation parse failed, falling back to per-entry");
+                    foreach (var item in chunk)
+                    {
+                        var single = await EvaluateAsync(item.Original, item.Translated, targetLanguage, context);
+                        single.TranslatedText = item.Key;
+                        allResults.Add(single);
+                    }
+                }
+            }
+
+            return allResults;
+        }
+
+        /// <summary>
+        /// Vote MULTIPLE entries in a single API call (batch acceleration).
+        /// Items: (entryKey, originalText, candidateTranslations).
+        /// </summary>
+        public async Task<List<VotingResult>> VoteBatchAsync(
+            List<(string Key, string Original, string[] Candidates)> items,
+            string targetLanguage,
+            string context = "",
+            int batchSize = 10)
+        {
+            var allResults = new List<VotingResult>();
+            if (items == null || items.Count == 0)
+                return allResults;
+
+            foreach (var chunk in Chunk(items, batchSize))
+            {
+                var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
+                var response = await _aiService.TranslateBatchAsync(prompt, 2);
+                var parsed = ParseBatchVotingResponse(response, chunk);
+                allResults.AddRange(parsed);
+
+                if (parsed.Count == 0)
+                {
+                    RaiseLog("⚠ Batch voting parse failed, falling back to per-entry");
+                    foreach (var item in chunk)
+                    {
+                        var single = await VoteAsync(item.Original, item.Candidates, targetLanguage, context);
+                        single.EntryKey = item.Key;
+                        allResults.Add(single);
+                    }
+                }
+            }
+
+            return allResults;
+        }
+
+        private string BuildBatchEvaluationPrompt(List<(string Key, string Original, string Translated)> items, string targetLang, string context)
+        {
+            var lines = new System.Text.StringBuilder();
+            for (int i = 0; i < items.Count; i++)
+            {
+                lines.AppendLine($"### Entry {i + 1}");
+                lines.AppendLine($"Original ({targetLang}): {items[i].Original}");
+                lines.AppendLine($"Translation: {items[i].Translated}");
+                lines.AppendLine();
+            }
+
+            return $@"You are a professional game localization quality evaluator. Evaluate ALL {items.Count} translations below.
+
+Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+
+{lines}
+
+For EACH entry, rate 0-10 and provide brief explanation + improvement (if score < 8).
+
+Return in this exact JSON format:
+{{
+  ""evaluations"": [
+    {{ ""index"": 1, ""score"": 8.5, ""explanation"": ""brief reason"", ""improvement"": ""suggestion or empty"" }},
+    {{ ""index"": 2, ""score"": 6.0, ""explanation"": ""brief reason"", ""improvement"": ""suggestion or empty"" }}
+  ]
+}}
+
+Include ALL {items.Count} entries. Only return the JSON, no other text.";
+        }
+
+        private string BuildBatchVotingPrompt(List<(string Key, string Original, string[] Candidates)> items, string targetLang, string context)
+        {
+            var lines = new System.Text.StringBuilder();
+            for (int i = 0; i < items.Count; i++)
+            {
+                lines.AppendLine($"### Entry {i + 1}");
+                lines.AppendLine($"Original ({targetLang}): {items[i].Original}");
+                for (int c = 0; c < items[i].Candidates.Length; c++)
+                    lines.AppendLine($"  Candidate {c + 1}: \"{items[i].Candidates[c]}\"");
+                lines.AppendLine();
+            }
+
+            return $@"You are a multi-agent translation review panel. For EACH entry below, evaluate its candidates from 3 perspectives (Fluency, Accuracy, Style), then pick the BEST candidate.
+
+Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+
+{lines}
+
+Return in this exact JSON format:
+{{
+  ""votes"": [
+    {{
+      ""index"": 1,
+      ""scores"": [ {{ ""candidate"": 1, ""agent"": ""Fluency"", ""score"": 9.0, ""explanation"": ""brief"" }}, {{ ""candidate"": 1, ""agent"": ""Accuracy"", ""score"": 8.0 }} ],
+      ""best"": 1
+    }}
+  ]
+}}
+
+Include ALL {items.Count} entries. Only return the JSON, no other text.";
+        }
+
+        private List<EvaluationResult> ParseBatchEvaluationResponse(string response, List<(string Key, string Original, string Translated)> items)
+        {
+            var results = new List<EvaluationResult>();
+            if (string.IsNullOrEmpty(response))
+                return results;
+
+            try
+            {
+                var clean = TrimCodeFence(response);
+                var json = JObject.Parse(clean);
+                var evaluations = json["evaluations"] as JArray;
+                if (evaluations == null)
+                    return results;
+
+                foreach (var eval in evaluations)
+                {
+                    var index = eval["index"]?.ToObject<int>() ?? 0;
+                    if (index < 1 || index > items.Count)
+                        continue;
+
+                    var item = items[index - 1];
+                    results.Add(new EvaluationResult
+                    {
+                        TranslatedText = item.Key,
+                        Score = eval["score"]?.ToObject<double>() ?? 5.0,
+                        Explanation = eval["explanation"]?.ToString() ?? "",
+                        Improvement = eval["improvement"]?.ToString() ?? ""
+                    });
+                }
+            }
+            catch
+            {
+                return results;
+            }
+
+            return results;
+        }
+
+        private List<VotingResult> ParseBatchVotingResponse(string response, List<(string Key, string Original, string[] Candidates)> items)
+        {
+            var results = new List<VotingResult>();
+            if (string.IsNullOrEmpty(response))
+                return results;
+
+            try
+            {
+                var clean = TrimCodeFence(response);
+                var json = JObject.Parse(clean);
+                var votes = json["votes"] as JArray;
+                if (votes == null)
+                    return results;
+
+                foreach (var vote in votes)
+                {
+                    var index = vote["index"]?.ToObject<int>() ?? 0;
+                    if (index < 1 || index > items.Count)
+                        continue;
+
+                    var item = items[index - 1];
+                    var agentResults = new List<EvaluationResult>();
+
+                    var scores = vote["scores"] as JArray;
+                    if (scores != null)
+                    {
+                        foreach (var s in scores)
+                        {
+                            var candIdx = s["candidate"]?.ToObject<int>() ?? 0;
+                            if (candIdx < 1 || candIdx > item.Candidates.Length)
+                                continue;
+
+                            agentResults.Add(new EvaluationResult
+                            {
+                                TranslatedText = item.Candidates[candIdx - 1],
+                                Score = s["score"]?.ToObject<double>() ?? 5.0,
+                                Explanation = s["explanation"]?.ToString() ?? "",
+                                ProviderName = s["agent"]?.ToString() ?? "Agent"
+                            });
+                        }
+                    }
+
+                    var bestIdx = vote["best"]?.ToObject<int>() ?? 0;
+                    var best = bestIdx >= 1 && bestIdx <= item.Candidates.Length ? item.Candidates[bestIdx - 1] : item.Candidates.FirstOrDefault() ?? "";
+
+                    var avg = agentResults.Count > 0 ? agentResults.Average(r => r.Score) : 5.0;
+
+                    results.Add(new VotingResult
+                    {
+                        EntryKey = item.Key,
+                        OriginalText = item.Original,
+                        AgentResults = agentResults,
+                        AverageScore = Math.Round(avg, 1),
+                        BestTranslation = best,
+                        ConsensusSummary = $"Best: \"{best}\" (avg {avg:F1}/10 from {agentResults.Count} votes)"
+                    });
+                }
+            }
+            catch
+            {
+                return results;
+            }
+
+            return results;
+        }
+
+        private string TrimCodeFence(string response)
+        {
+            var clean = response.Trim();
+            if (clean.StartsWith("```json"))
+                clean = clean.Substring(7);
+            else if (clean.StartsWith("```"))
+                clean = clean.Substring(3);
+            if (clean.EndsWith("```"))
+                clean = clean.Substring(0, clean.Length - 3);
+            return clean.Trim();
+        }
+
+        private static IEnumerable<List<T>> Chunk<T>(List<T> source, int size)
+        {
+            for (int i = 0; i < source.Count; i += size)
+                yield return source.GetRange(i, Math.Min(size, source.Count - i));
         }
 
         private EvaluationResult ParseEvaluationResponse(string response, string original, string translated)

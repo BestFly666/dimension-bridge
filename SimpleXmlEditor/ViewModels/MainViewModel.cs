@@ -261,6 +261,56 @@ namespace SimpleXmlEditor.ViewModels
         private bool _isEvaluating = false;
         private string _lastEvaluationResult = "";
 
+        // ── Undo infrastructure ──
+        private readonly object _undoLock = new object();
+        private readonly Stack<Dictionary<string, string>> _undoStack = new Stack<Dictionary<string, string>>();
+
+        /// <summary>Record a snapshot of affected entries before a bulk mutation.</summary>
+        public void PushUndoSnapshot(IEnumerable<LocalizationEntry> affected)
+        {
+            var snapshot = new Dictionary<string, string>();
+            foreach (var entry in affected)
+            {
+                if (entry == null || string.IsNullOrEmpty(entry.Key)) continue;
+                snapshot[entry.Key] = entry.Translation ?? "";
+            }
+            if (snapshot.Count == 0) return;
+
+            lock (_undoLock)
+            {
+                _undoStack.Push(snapshot);
+                // Keep the latest 50 snapshots to bound memory usage.
+                if (_undoStack.Count > 50)
+                {
+                    var keep = _undoStack.Take(50).Reverse().ToList();
+                    _undoStack.Clear();
+                    foreach (var s in keep) _undoStack.Push(s);
+                }
+            }
+        }
+
+        /// <summary>Revert the most recent mutation. Returns the number of restored entries.</summary>
+        public int UndoLast()
+        {
+            Dictionary<string, string> snapshot;
+            lock (_undoLock)
+            {
+                if (_undoStack.Count == 0) return 0;
+                snapshot = _undoStack.Pop();
+            }
+
+            var restored = 0;
+            foreach (var entry in Entries)
+            {
+                if (snapshot.TryGetValue(entry.Key, out var original))
+                {
+                    entry.Translation = original;
+                    restored++;
+                }
+            }
+            return restored;
+        }
+
         public string StatusMessage
         {
             get => _statusMessage;
@@ -688,6 +738,9 @@ namespace SimpleXmlEditor.ViewModels
                     return;
                 }
 
+                // Record undo snapshot before mutating translations
+                PushUndoSnapshot(entriesToTranslate);
+
                 // Create batches based on token limits
                 var batches = _orchestrator.CreateBatches(entriesToTranslate, CustomPrompt, BatchSize);
 
@@ -854,6 +907,10 @@ namespace SimpleXmlEditor.ViewModels
                 return;
             }
 
+            var toClear = selected.Where(en => !string.IsNullOrEmpty(en.Translation)).ToList();
+            if (toClear.Count > 0)
+                PushUndoSnapshot(toClear);
+
             foreach (var entry in selected)
             {
                 entry.Translation = "";
@@ -925,26 +982,17 @@ namespace SimpleXmlEditor.ViewModels
                 return;
             }
 
-            // Batch evaluation for multiple entries
+            // Batch evaluation for multiple entries (batched API calls for speed)
             OnLogMessage($"🤖 {LocalizationManager.GetString("LogBatchEvaluating", entries.Count)}");
             EvaluationStatusText?.Invoke($"⏳ {LocalizationManager.GetString("EvalBatchProgress", entries.Count)}");
 
-            var results = new List<EvaluationResult>();
-            var completed = 0;
+            var context = GetEvaluationContext();
+            var items = entries
+                .Where(e => !string.IsNullOrEmpty(e.Translation))
+                .Select(e => (e.Key, e.Value, e.Translation))
+                .ToList();
 
-            foreach (var entry in entries)
-            {
-                if (string.IsNullOrEmpty(entry.Translation)) continue;
-
-                var result = await EvaluateEntry(entry);
-                if (result != null)
-                {
-                    result.TranslatedText = entry.Key;
-                    results.Add(result);
-                }
-                completed++;
-                EvaluationStatusText?.Invoke($"⏳ {completed}/{entries.Count}");
-            }
+            var results = await _evaluator.EvaluateBatchAsync(items, _aiTranslationService.TargetLanguage, context);
 
             if (results.Count == 0)
             {
@@ -976,22 +1024,51 @@ namespace SimpleXmlEditor.ViewModels
                 return;
             }
 
-            // Batch voting for multiple entries
+            // Batch voting for multiple entries (candidate generation + batched API calls)
             if (entries.Count > 1)
             {
                 OnLogMessage($"🗳 {LocalizationManager.GetString("LogBatchVoting", entries.Count)}");
                 VotingStatusText?.Invoke($"⏳ {LocalizationManager.GetString("VoteBatchProgress", entries.Count)}");
-                var completed = 0;
-                var bestCount = 0;
 
+                var context = GetEvaluationContext();
+                var targetLang = _aiTranslationService.TargetLanguage;
+
+                // Build candidate sets: current translation + AI-generated alternatives
+                var items = new List<(string Key, string Original, string[] Candidates)>();
                 foreach (var e in entries)
                 {
                     if (string.IsNullOrEmpty(e.Translation)) continue;
-                    var vr = await VoteEntry(e);
-                    completed++;
-                    if (vr != null && vr.BestTranslation == e.Translation) bestCount++;
-                    VotingStatusText?.Invoke($"⏳ {completed}/{entries.Count}");
+
+                    var candidates = new List<string> { e.Translation };
+                    var generated = await _evaluator.GenerateCandidatesAsync(e.Value, targetLang, context, 2);
+                    foreach (var g in generated)
+                    {
+                        if (!string.IsNullOrEmpty(g) && !candidates.Contains(g))
+                            candidates.Add(g);
+                    }
+                    items.Add((e.Key, e.Value, candidates.ToArray()));
                 }
+
+                var results = await _evaluator.VoteBatchAsync(items, targetLang, context);
+
+                var completed = 0;
+                var bestCount = 0;
+                var appliedBest = 0;
+                foreach (var vr in results)
+                {
+                    completed++;
+                    var match = Entries.FirstOrDefault(en => en.Key == vr.EntryKey);
+                    if (vr.BestTranslation == (match?.Translation ?? "")) bestCount++;
+                    if (match != null && !string.IsNullOrEmpty(vr.BestTranslation) && vr.BestTranslation != match.Translation)
+                    {
+                        PushUndoSnapshot(new[] { match });
+                        match.Translation = vr.BestTranslation;
+                        appliedBest++;
+                    }
+                }
+
+                if (appliedBest > 0)
+                    OnLogMessage($"✅ {LocalizationManager.GetString("VoteAppliedBest", appliedBest)}");
 
                 VotingCompleted?.Invoke(new VotingOutcome { Completed = completed, BestCount = bestCount });
                 return;
@@ -1034,6 +1111,10 @@ namespace SimpleXmlEditor.ViewModels
 
             var glossaryFilled = 0;
             var cacheFilled = 0;
+
+            // Record undo snapshot before mutating translations
+            var toFill = entries.Where(en => string.IsNullOrEmpty(en.Translation)).ToList();
+            PushUndoSnapshot(toFill);
 
             foreach (var entry in entries)
             {
@@ -1106,7 +1187,8 @@ namespace SimpleXmlEditor.ViewModels
             try
             {
                 var targetLang = _aiTranslationService.TargetLanguage;
-                var result = await _evaluator.EvaluateAsync(entry.Value, entry.Translation, targetLang);
+                var context = GetEvaluationContext();
+                var result = await _evaluator.EvaluateAsync(entry.Value, entry.Translation, targetLang, context);
                 LastEvaluationResult = $"{entry.Key}: Score {result.Score:F1}/10 — {result.Explanation}";
                 OnLogMessage($"📊 Evaluation: {entry.Key} → {result.Score:F1}/10");
                 return result;
@@ -1119,6 +1201,7 @@ namespace SimpleXmlEditor.ViewModels
 
         /// <summary>
         /// Run multi-agent voting on a single entry to find the best translation.
+        /// Generates AI candidate alternatives first, then votes (candidate generation + context).
         /// </summary>
         public async Task<VotingResult> VoteEntry(LocalizationEntry entry)
         {
@@ -1128,24 +1211,72 @@ namespace SimpleXmlEditor.ViewModels
             IsEvaluating = true;
             try
             {
-                var candidates = new[] { entry.Translation ?? entry.Value };
-                // Also try re-translating to get alternative candidates for comparison
-                if (!string.IsNullOrEmpty(entry.Translation))
-                {
-                    // Include the original as well for comparison
-                    candidates = new[] { entry.Translation, entry.Value };
-                }
-
                 var targetLang = _aiTranslationService.TargetLanguage;
-                var result = await _evaluator.VoteAsync(entry.Value, candidates, targetLang);
+                var context = GetEvaluationContext();
+
+                // Build candidate set: current translation + AI-generated alternatives
+                var candidates = new List<string>();
+                if (!string.IsNullOrEmpty(entry.Translation))
+                    candidates.Add(entry.Translation);
+
+                var generated = await _evaluator.GenerateCandidatesAsync(entry.Value, targetLang, context, 2);
+                foreach (var g in generated)
+                {
+                    if (!string.IsNullOrEmpty(g) && !candidates.Contains(g))
+                        candidates.Add(g);
+                }
+                if (candidates.Count == 0)
+                    candidates.Add(entry.Value);
+
+                var result = await _evaluator.VoteAsync(entry.Value, candidates.ToArray(), targetLang, context);
                 LastEvaluationResult = result.ConsensusSummary;
                 OnLogMessage($"🗳 Vote: {entry.Key} → {result.ConsensusSummary}");
+
+                // Apply best translation if it differs from current
+                if (!string.IsNullOrEmpty(result.BestTranslation) && result.BestTranslation != entry.Translation)
+                {
+                    var confirmed = await (ConfirmationRequested?.Invoke(
+                        LocalizationManager.GetString("VoteApplyPrompt", entry.Key, result.BestTranslation),
+                        LocalizationManager.GetString("VoteApplyTitle")) ?? Task.FromResult(false));
+
+                    if (confirmed)
+                    {
+                        PushUndoSnapshot(new[] { entry });
+                        entry.Translation = result.BestTranslation;
+                        OnLogMessage($"✅ {LocalizationManager.GetString("VoteApplied", entry.Key)}");
+                    }
+                }
+
                 return result;
             }
             finally
             {
                 IsEvaluating = false;
             }
+        }
+
+        /// <summary>
+        /// Builds evaluation/voting context from the active expert profile.
+        /// </summary>
+        private string GetEvaluationContext()
+        {
+            try
+            {
+                var profile = _profileManager.ActiveProfile;
+                if (profile != null)
+                {
+                    var parts = new List<string>();
+                    if (!string.IsNullOrEmpty(profile.Description))
+                        parts.Add(profile.Description);
+                    if (!string.IsNullOrEmpty(profile.Context))
+                        parts.Add(profile.Context);
+                    if (parts.Count > 0)
+                        return string.Join("\n", parts);
+                }
+            }
+            catch { /* profile manager may be uninitialized; fall through to empty context */ }
+
+            return "";
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -27,12 +28,17 @@ namespace SimpleXmlEditor
     public partial class MainWindow : Window
     {
         private MainViewModel _viewModel;
-        private Stack<Dictionary<string, string>> _undoStack = new Stack<Dictionary<string, string>>();
         private ReviewExporter _reviewExporter = new ReviewExporter();
         private System.Windows.Threading.DispatcherTimer _filterTimer;
 
         private bool _isDarkMode = false;
         private bool _showUntranslatedOnly = false;
+        // Suppresses checkbox→row selection sync while bulk-selecting a whole column.
+        private bool _suppressSelectionSync = false;
+        // Column-select mode: >= 0 means a whole column was selected via its letter strip.
+        private int _selectedColumnIndex = -1;
+        private bool _logCollapsed = false;
+        private const double LogPanelDefaultWidth = 380;
 
         public MainWindow()
         {
@@ -395,7 +401,6 @@ namespace SimpleXmlEditor
             MenuTranslateAll.Header = $"🚀 {L("TranslateAll")}";
             MenuSmartPreTrans.Header = $"🔮 {L("MenuSmartPre")}";
             MenuSmartPreTrans.ToolTip = L("PreTranslateTip");
-            MenuBatchSize.Header = $"{L("BatchLabel")}: {_viewModel.BatchSize}";
             MenuConsistency.Header = $"🔍 {L("MenuConsistency")}";
             MenuShortcuts.Header = $"⌨ {L("MenuShortcuts")}";
             MenuAbout.Header = $"ℹ️ {L("MenuAbout")}";
@@ -413,15 +418,14 @@ namespace SimpleXmlEditor
             // Update batch label
             BatchLabelText.Text = $"{L("BatchLabel")}:";
 
-            // Update DataGrid headers
-            if (EntriesGrid.Columns.Count >= 6)
+            // Update DataGrid headers (columns: ✓, Status, Key, Original, Translation)
+            if (EntriesGrid.Columns.Count >= 5)
             {
-                EntriesGrid.Columns[0].Header = "#";
-                EntriesGrid.Columns[1].Header = "✓";
-                EntriesGrid.Columns[2].Header = L("Status");
-                EntriesGrid.Columns[3].Header = L("Key");
-                EntriesGrid.Columns[4].Header = L("Original");
-                EntriesGrid.Columns[5].Header = L("Translation");
+                EntriesGrid.Columns[0].Header = "✓";
+                EntriesGrid.Columns[1].Header = L("Status");
+                EntriesGrid.Columns[2].Header = L("Key");
+                EntriesGrid.Columns[3].Header = L("Original");
+                EntriesGrid.Columns[4].Header = L("Translation");
             }
 
             // Update filter tooltips
@@ -477,14 +481,6 @@ namespace SimpleXmlEditor
                 // ── Dark mode ──
                 this.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
 
-                foreach (var item in new[] { "MenuFile", "MenuEdit", "MenuView", "MenuTranslate", "MenuQuality", "MenuTools", "MenuHelp" })
-                {
-                    if (FindName(item) is MenuItem mi)
-                    {
-                        mi.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#11111B"));
-                    }
-                }
-
                 EntriesGrid.AlternatingRowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#27273A"));
                 EntriesGrid.RowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
                 EntriesGrid.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CDD6F4"));
@@ -500,14 +496,6 @@ namespace SimpleXmlEditor
             {
                 // ── Light mode (defaults) ──
                 this.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F0F2F5"));
-
-                foreach (var item in new[] { "MenuFile", "MenuEdit", "MenuView", "MenuTranslate", "MenuQuality", "MenuTools", "MenuHelp" })
-                {
-                    if (FindName(item) is MenuItem mi)
-                    {
-                        mi.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#37474F"));
-                    }
-                }
 
                 EntriesGrid.AlternatingRowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F8FAFB"));
                 EntriesGrid.RowBackground = new SolidColorBrush(Colors.White);
@@ -551,21 +539,45 @@ namespace SimpleXmlEditor
 
         private List<LocalizationEntry> GetSelectedEntries()
         {
+            // Column-select mode: the whole column = every visible row.
+            if (_selectedColumnIndex >= 0 && _selectedColumnIndex < EntriesGrid.Columns.Count)
+            {
+                var all = new List<LocalizationEntry>();
+                foreach (var item in EntriesGrid.Items)
+                {
+                    if (item is LocalizationEntry entry) all.Add(entry);
+                }
+                return all;
+            }
+
             var list = new List<LocalizationEntry>();
             foreach (var item in EntriesGrid.SelectedItems)
             {
-                if (item is LocalizationEntry entry)
+                if (GetEntryFromSelectionItem(item) is LocalizationEntry entry && !list.Contains(entry))
                     list.Add(entry);
             }
             return list;
         }
 
-        private void EntriesGrid_Loaded(object sender, RoutedEventArgs e)
+        // With SelectionUnit=Cell, selection items can be DataGridCell (or the row item itself).
+        private static LocalizationEntry GetEntryFromSelectionItem(object item)
         {
-            AttachColumnHeaderDoubleClick();
+            return item switch
+            {
+                LocalizationEntry entry => entry,
+                System.Windows.Controls.DataGridCell cell => cell.DataContext as LocalizationEntry,
+                _ => null
+            };
         }
 
-        private void AttachColumnHeaderDoubleClick()
+        private void EntriesGrid_Loaded(object sender, RoutedEventArgs e)
+        {
+            AttachColumnHeaderEvents();
+        }
+
+        // Excel-style column header: double click auto-sizes the column.
+        // (Whole-column selection happens via the letter strip button in the header template.)
+        private void AttachColumnHeaderEvents()
         {
             if (VisualTreeHelper.GetChildrenCount(EntriesGrid) == 0) return;
 
@@ -592,6 +604,37 @@ namespace SimpleXmlEditor
             }
         }
 
+        // Clicking a column letter strip selects the whole column.
+        private void ColumnLetterBtn_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true; // prevent the column header sort from firing
+            if (sender is Button btn && btn.Tag is System.Windows.Controls.Primitives.DataGridColumnHeader header && header.Column != null)
+            {
+                SelectEntireColumn(header.Column);
+            }
+        }
+
+        // Select the whole column (Excel-style) without materializing thousands of
+        // DataGrid cells — check every row's checkbox instead and track the column
+        // index for GetSelectedEntries.
+        private void SelectEntireColumn(DataGridColumn column)
+        {
+            _selectedColumnIndex = column.DisplayIndex;
+            _suppressSelectionSync = true;
+            try
+            {
+                EntriesGrid.SelectedCells.Clear();
+                foreach (var item in EntriesGrid.Items)
+                {
+                    if (item is LocalizationEntry entry) entry.IsSelected = true;
+                }
+            }
+            finally
+            {
+                _suppressSelectionSync = false;
+            }
+        }
+
         private static T FindVisualChild<T>(DependencyObject obj) where T : DependencyObject
         {
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(obj); i++)
@@ -606,34 +649,38 @@ namespace SimpleXmlEditor
 
         private void EntriesGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            // Sync DataGrid selection with IsSelected property
-            foreach (LocalizationEntry entry in e.AddedItems)
+            // A manual selection (cell / row / checkbox) exits column-select mode.
+            if (!_suppressSelectionSync)
             {
-                entry.IsSelected = true;
+                _selectedColumnIndex = -1;
             }
 
-            foreach (LocalizationEntry entry in e.RemovedItems)
+            // Sync DataGrid selection with IsSelected property
+            // (selection items are DataGridCells when SelectionUnit=Cell)
+            foreach (var item in e.AddedItems)
             {
-                entry.IsSelected = false;
+                if (GetEntryFromSelectionItem(item) is LocalizationEntry entry)
+                    entry.IsSelected = true;
+            }
+
+            foreach (var item in e.RemovedItems)
+            {
+                if (GetEntryFromSelectionItem(item) is LocalizationEntry entry)
+                    entry.IsSelected = false;
             }
         }
 
         // Handle checkbox changes to sync with DataGrid selection
         private void OnEntrySelectionChanged(LocalizationEntry entry, bool isSelected)
         {
-            if (isSelected)
+            // Skip while bulk-selecting a whole column to avoid an event storm.
+            if (_suppressSelectionSync) return;
+
+            // In cell-selection mode rows cannot be added to SelectedItems directly;
+            // toggle the row container instead (selects/deselects all cells in the row).
+            if (EntriesGrid.ItemContainerGenerator.ContainerFromItem(entry) is System.Windows.Controls.DataGridRow row)
             {
-                if (!EntriesGrid.SelectedItems.Contains(entry))
-                {
-                    EntriesGrid.SelectedItems.Add(entry);
-                }
-            }
-            else
-            {
-                if (EntriesGrid.SelectedItems.Contains(entry))
-                {
-                    EntriesGrid.SelectedItems.Remove(entry);
-                }
+                row.IsSelected = isSelected;
             }
         }
 
@@ -826,11 +873,6 @@ namespace SimpleXmlEditor
             }
         }
 
-        private void QuickSaveBtn_Click(object sender, RoutedEventArgs e)
-        {
-            QuickSave();
-        }
-
         private void QuickSave()
         {
             try
@@ -923,6 +965,9 @@ namespace SimpleXmlEditor
                 MessageBox.Show(LocalizationManager.GetString("SelectFirstToTranslate"), LocalizationManager.GetString("MsgPrompt"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            var toClear = entries.Where(en => !string.IsNullOrEmpty(en.Translation)).ToList();
+            if (toClear.Count > 0)
+                _viewModel.PushUndoSnapshot(toClear);
             foreach (var entry in entries)
             {
                 entry.Translation = "";
@@ -1012,6 +1057,7 @@ namespace SimpleXmlEditor
                 var entry = _viewModel.Entries.FirstOrDefault(e => e.Key == key);
                 if (entry != null)
                 {
+                    _viewModel.PushUndoSnapshot(new[] { entry });
                     entry.Translation = suggestion;
                     AddLog($"📝 {Localization.LocalizationManager.GetString("LogAppliedSuggestion", key)}");
                     EntriesGrid.Items.Refresh();
@@ -1060,11 +1106,14 @@ namespace SimpleXmlEditor
         {
             var entries = GetSelectedEntries();
             if (entries.Count == 0) return;
-            foreach (var entry in entries)
+            var toClear = entries.Where(en => !string.IsNullOrEmpty(en.Translation)).ToList();
+            if (toClear.Count == 0) return;
+            _viewModel.PushUndoSnapshot(toClear);
+            foreach (var entry in toClear)
             {
                 entry.Translation = "";
             }
-            AddLog($"🗑️ {LocalizationManager.GetString("LogClearedTranslation", entries.Count)}");
+            AddLog($"🗑️ {LocalizationManager.GetString("LogClearedTranslation", toClear.Count)}");
         }
 
         private void CtxSelectAll_Click(object sender, RoutedEventArgs e)
@@ -1250,8 +1299,11 @@ namespace SimpleXmlEditor
             };
             window.ShowDialog();
             // Re-apply glossary to entries
+            var candidates = _viewModel.Entries.Where(en => string.IsNullOrEmpty(en.Translation)).ToList();
+            if (candidates.Count > 0)
+                _viewModel.PushUndoSnapshot(candidates);
             int applied = 0;
-            foreach (var entry in _viewModel.Entries)
+            foreach (var entry in candidates)
             {
                 if (_viewModel.TryApplyDictionary(entry))
                     applied++;
@@ -1388,19 +1440,19 @@ namespace SimpleXmlEditor
                 }
 
                 // Save state for undo before replacing
-                var backup = new Dictionary<string, string>();
+                var affected = new List<LocalizationEntry>();
                 foreach (var entry in _viewModel.Entries)
                 {
                     if (!string.IsNullOrEmpty(entry.Translation) &&
                         entry.Translation.Contains(searchText))
                     {
-                        backup[entry.Key] = entry.Translation;
+                        affected.Add(entry);
                     }
                 }
 
-                if (backup.Count > 0)
+                if (affected.Count > 0)
                 {
-                    _undoStack.Push(backup);
+                    _viewModel.PushUndoSnapshot(affected);
                 }
 
                 var matchCount = 0;
@@ -1425,26 +1477,18 @@ namespace SimpleXmlEditor
 
         private void UndoBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_undoStack.Count == 0)
+            var restored = _viewModel.UndoLast();
+            if (restored == 0)
             {
                 MessageBox.Show(LocalizationManager.GetString("NothingToUndo"), LocalizationManager.GetString("MsgTip"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
-            }
-
-            var backup = _undoStack.Pop();
-            foreach (var entry in _viewModel.Entries)
-            {
-                if (backup.TryGetValue(entry.Key, out var originalTranslation))
-                {
-                    entry.Translation = originalTranslation;
-                }
             }
 
             var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
             view?.Refresh();
 
             AddLog($"↩️ {LocalizationManager.GetString("LogUndo")}");
-            MessageBox.Show(LocalizationManager.GetString("UndoComplete", backup.Count), LocalizationManager.GetString("Undo"),
+            MessageBox.Show(LocalizationManager.GetString("UndoComplete", restored), LocalizationManager.GetString("Undo"),
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -1504,6 +1548,16 @@ namespace SimpleXmlEditor
         {
             LogTextBox.Text = "";
             AddLog($"🗑️ {LocalizationManager.GetString("LogCleared")}");
+        }
+
+        // Collapse / expand the right-side activity log panel.
+        private void ToggleLogBtn_Click(object sender, RoutedEventArgs e)
+        {
+            _logCollapsed = !_logCollapsed;
+            LogColumn.Width = _logCollapsed ? new GridLength(0) : new GridLength(LogPanelDefaultWidth);
+            LogPanel.Visibility = _logCollapsed ? Visibility.Collapsed : Visibility.Visible;
+            ToggleLogBtn.Content = _logCollapsed ? "▶" : "◀";
+            ToggleLogBtn.ToolTip = _logCollapsed ? "Expand log" : "Collapse log";
         }
 
         private void RefreshExpertProfileCombo()
@@ -1601,6 +1655,24 @@ namespace SimpleXmlEditor
             UpdateCacheInfo();
             UpdateGlossaryInfo();
             AddLog($"📂 {LocalizationManager.GetString("LogFileClosed")}");
+        }
+    }
+
+    /// <summary>Converts a DataGrid column display index to an Excel-style letter (0 → A, 1 → B, ...).</summary>
+    public class IndexToLetterConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is int index && index >= 0 && index < 26)
+            {
+                return ((char)('A' + index)).ToString();
+            }
+            return value?.ToString() ?? "";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
         }
     }
 }
