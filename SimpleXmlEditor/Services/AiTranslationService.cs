@@ -97,13 +97,13 @@ namespace SimpleXmlEditor.Services
 
         public AiTranslationService(IConfigService configService = null)
         {
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
             _configService = configService;
         }
 
         public AiTranslationService(HttpClient httpClient, IConfigService configService = null)
         {
-            _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(120) };
             _configService = configService;
         }
 
@@ -152,7 +152,7 @@ namespace SimpleXmlEditor.Services
 
         public static readonly Dictionary<AIProvider, List<string>> StaticModels = new()
         {
-            { AIProvider.DeepSeek, new List<string> { "deepseek-flash", "deepseek-pro" } },
+            { AIProvider.DeepSeek, new List<string> { "deepseek-v4-flash", "deepseek-v4-pro" } },
             { AIProvider.Doubao, new List<string> { "doubao-pro-32k", "doubao-pro-128k", "doubao-lite-32k", "doubao-lite-128k", "doubao-thinking-pro" } },
             { AIProvider.Qianwen, new List<string> { "qwen-plus", "qwen-max", "qwen-turbo", "qwen-long", "qwen2.5-7b", "qwen2.5-72b" } },
             { AIProvider.Zhipu, new List<string> { "glm-4", "glm-4-flash", "glm-4-air", "glm-4-long", "glm-4-plus", "glm-4.5" } },
@@ -163,7 +163,7 @@ namespace SimpleXmlEditor.Services
 
         public static readonly Dictionary<AIProvider, Dictionary<string, (int rpm, int rpd, int tpm)>> ProviderRateLimits = new()
         {
-            { AIProvider.DeepSeek, new Dictionary<string, (int, int, int)> { ["deepseek-flash"] = (100, -1, -1), ["deepseek-pro"] = (100, -1, -1) } },
+            { AIProvider.DeepSeek, new Dictionary<string, (int, int, int)> { ["deepseek-v4-flash"] = (100, -1, -1), ["deepseek-v4-pro"] = (100, -1, -1) } },
             { AIProvider.Doubao, new Dictionary<string, (int, int, int)> { ["doubao-pro-32k"] = (30, -1, -1), ["doubao-pro-128k"] = (30, -1, -1), ["doubao-lite-32k"] = (60, -1, -1), ["doubao-lite-128k"] = (60, -1, -1), ["doubao-thinking-pro"] = (20, -1, -1) } },
             { AIProvider.Qianwen, new Dictionary<string, (int, int, int)> { ["qwen-plus"] = (50, -1, -1), ["qwen-max"] = (30, -1, -1), ["qwen-turbo"] = (100, -1, -1), ["qwen-long"] = (20, -1, -1), ["qwen2.5-7b"] = (100, -1, -1), ["qwen2.5-72b"] = (30, -1, -1) } },
             { AIProvider.Zhipu, new Dictionary<string, (int, int, int)> { ["glm-4"] = (50, -1, -1), ["glm-4-flash"] = (100, -1, -1), ["glm-4-air"] = (100, -1, -1), ["glm-4-long"] = (20, -1, -1), ["glm-4-plus"] = (50, -1, -1), ["glm-4.5"] = (50, -1, -1) } },
@@ -190,24 +190,92 @@ namespace SimpleXmlEditor.Services
                 }
             }
 
+            // 优先尝试从厂商 API 动态拉取模型列表（OpenAI 兼容接口 GET /models）
+            // 失败时回退到 StaticModels，保证离线或接口异常时仍可用
+            if (ProviderConfig.UsesOpenAiFormat.ContainsKey(currentProvider)
+                && ProviderConfig.UsesOpenAiFormat[currentProvider])
+            {
+                try
+                {
+                    var dynamicModels = await FetchOpenAiCompatModelsAsync(apiKey, currentProvider);
+                    if (dynamicModels.Count > 0)
+                    {
+                        ModelPricing.Clear();
+                        ModelLimits.Clear();
+                        EnsureRateLimitsFromStatic(currentProvider);
+                        return dynamicModels;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"Dynamic model fetch failed for {currentProvider}: {ex.Message}. Falling back to static list.");
+                }
+            }
+
+            // 回退到静态列表
             if (StaticModels.ContainsKey(currentProvider))
             {
                 var models = StaticModels[currentProvider];
                 ModelPricing.Clear();
                 ModelLimits.Clear();
-
-                if (ProviderRateLimits.ContainsKey(currentProvider))
-                {
-                    foreach (var kvp in ProviderRateLimits[currentProvider])
-                    {
-                        ModelLimits[kvp.Key] = kvp.Value;
-                    }
-                }
-
+                EnsureRateLimitsFromStatic(currentProvider);
                 return models;
             }
 
             return new List<string>();
+        }
+
+        /// <summary>
+        /// 从 OpenAI 兼容厂商的 GET /models 接口动态拉取可用模型列表。
+        /// 适用于 DeepSeek / 智谱 / Moonshot / 千问 / 豆包 / 文心 / 讯飞 等厂商。
+        /// </summary>
+        private async Task<List<string>> FetchOpenAiCompatModelsAsync(string apiKey, AIProvider provider)
+        {
+            if (string.IsNullOrEmpty(apiKey))
+                return new List<string>();
+
+            var baseUrl = ProviderConfig.ApiBaseUrls[provider];
+            var url = $"{baseUrl}/models";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Remove("Authorization");
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var responseText = await response.Content.ReadAsStringAsync();
+            var json = JObject.Parse(responseText);
+
+            var models = new List<string>();
+            var data = json["data"] as JArray;
+            if (data != null)
+            {
+                foreach (var item in data)
+                {
+                    var id = item["id"]?.ToString();
+                    if (!string.IsNullOrEmpty(id))
+                        models.Add(id);
+                }
+            }
+
+            return models;
+        }
+
+        /// <summary>
+        /// 将 StaticModels 中的速率限制信息填充到 ModelLimits 缓存，
+        /// 作为动态获取模型时的默认速率限制兜底。
+        /// </summary>
+        private void EnsureRateLimitsFromStatic(AIProvider provider)
+        {
+            if (ProviderRateLimits.ContainsKey(provider))
+            {
+                foreach (var kvp in ProviderRateLimits[provider])
+                {
+                    ModelLimits[kvp.Key] = kvp.Value;
+                }
+            }
         }
 
         private async Task<List<string>> GetGeminiModelsAsync()

@@ -35,6 +35,8 @@ namespace SimpleXmlEditor.ViewModels
         public bool HasSingleResult { get; set; }
         public int Completed { get; set; }
         public int BestCount { get; set; }
+        public int AppliedCount { get; set; }
+        public List<VotingResult> Results { get; set; } = new();
     }
 
     /// <summary>Outcome of the smart pre-translate (glossary + cache fill).</summary>
@@ -92,7 +94,7 @@ namespace SimpleXmlEditor.ViewModels
         public event Action<string> VotingStatusText;
         public event Action<VotingOutcome> VotingCompleted;
         public event Action<PreTranslateOutcome> PreTranslateCompleted;
-        public event Action<List<string>> ConsistencyScanCompleted;
+        public event Action<List<ConsistencyIssue>> ConsistencyScanCompleted;
         public event Func<string, string, Task<bool>> ConfirmationRequested;
         public event Action<string, string> MessageRequested;
 
@@ -289,23 +291,23 @@ namespace SimpleXmlEditor.ViewModels
             }
         }
 
-        /// <summary>Revert the most recent mutation. Returns the number of restored entries.</summary>
-        public int UndoLast()
+        /// <summary>Revert the most recent mutation. Returns the list of restored entries (empty if nothing to undo).</summary>
+        public List<LocalizationEntry> UndoLast()
         {
             Dictionary<string, string> snapshot;
             lock (_undoLock)
             {
-                if (_undoStack.Count == 0) return 0;
+                if (_undoStack.Count == 0) return new List<LocalizationEntry>();
                 snapshot = _undoStack.Pop();
             }
 
-            var restored = 0;
+            var restored = new List<LocalizationEntry>();
             foreach (var entry in Entries)
             {
                 if (snapshot.TryGetValue(entry.Key, out var original))
                 {
                     entry.Translation = original;
-                    restored++;
+                    restored.Add(entry);
                 }
             }
             return restored;
@@ -383,7 +385,7 @@ namespace SimpleXmlEditor.ViewModels
             _configService = configService ?? new ConfigService();
             _aiTranslationService = aiTranslationService ?? new AiTranslationService(_configService);
             _xmlRepository = xmlRepository ?? new XmlRepository();
-            _evaluator = evaluator ?? new TranslationEvaluator(_aiTranslationService);
+            _evaluator = evaluator ?? new TranslationEvaluator(_aiTranslationService, _configService);
             _orchestrator = orchestrator ?? new TranslationOrchestrator(
                 _aiTranslationService, _configService, _glossary, _profileManager,
                 msg => OnLogMessage(msg));
@@ -565,6 +567,21 @@ namespace SimpleXmlEditor.ViewModels
         public void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries)
         {
             _configService.SyncEntriesToCache(entries);
+        }
+
+        public void SyncScoresToCache(IEnumerable<LocalizationEntry> entries)
+        {
+            _configService.SyncScoresToCache(entries);
+        }
+
+        public void SaveScoreCache()
+        {
+            _configService.SaveScoreCache();
+        }
+
+        public int RestoreScores(IEnumerable<LocalizationEntry> entries)
+        {
+            return _configService.RestoreScores(entries);
         }
 
         public Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries)
@@ -992,7 +1009,17 @@ namespace SimpleXmlEditor.ViewModels
                 .Select(e => (e.Key, e.Value, e.Translation))
                 .ToList();
 
-            var results = await _evaluator.EvaluateBatchAsync(items, _aiTranslationService.TargetLanguage, context);
+            List<EvaluationResult> results;
+            try
+            {
+                results = await _evaluator.EvaluateBatchAsync(items, _aiTranslationService.TargetLanguage, context);
+            }
+            catch (Exception ex)
+            {
+                OnLogMessage($"❌ {LocalizationManager.GetString("TranslationError", ex.Message)}");
+                EvaluationCompleted?.Invoke(new EvaluationOutcome { Failed = true });
+                return;
+            }
 
             if (results.Count == 0)
             {
@@ -1000,10 +1027,19 @@ namespace SimpleXmlEditor.ViewModels
                 return;
             }
 
+            // 安全构建 ResultMap：遇到重复键时后者覆盖前者，避免 ToDictionary 抛异常崩溃
+            // 重复键来源：AI 返回 JSON 中 index 重复/错乱、fallback 路径默认值、XML 重复 Key
+            var resultMap = new Dictionary<string, EvaluationResult>();
+            foreach (var r in results)
+            {
+                var key = r.TranslatedText ?? "";
+                resultMap[key] = r;
+            }
+
             EvaluationCompleted?.Invoke(new EvaluationOutcome
             {
                 Results = results,
-                ResultMap = results.ToDictionary(r => r.TranslatedText, r => r),
+                ResultMap = resultMap,
                 AverageScore = results.Where(r => r.Score > 0).Select(r => r.Score).DefaultIfEmpty(0).Average(),
                 HighCount = results.Count(r => r.Score >= 8),
                 LowCount = results.Count(r => r.Score > 0 && r.Score < 5)
@@ -1035,21 +1071,46 @@ namespace SimpleXmlEditor.ViewModels
 
                 // Build candidate sets: current translation + AI-generated alternatives
                 var items = new List<(string Key, string Original, string[] Candidates)>();
+                var totalForCandidates = entries.Count(e => !string.IsNullOrEmpty(e.Translation));
+                var candidateIdx = 0;
                 foreach (var e in entries)
                 {
                     if (string.IsNullOrEmpty(e.Translation)) continue;
+                    candidateIdx++;
+                    OnLogMessage($"📝 {LocalizationManager.GetString("LogGeneratingCandidate", candidateIdx, totalForCandidates, e.Key)}");
+                    VotingStatusText?.Invoke($"📝 {LocalizationManager.GetString("VoteCandidateProgress", candidateIdx, totalForCandidates)}");
 
                     var candidates = new List<string> { e.Translation };
-                    var generated = await _evaluator.GenerateCandidatesAsync(e.Value, targetLang, context, 2);
-                    foreach (var g in generated)
+                    try
                     {
-                        if (!string.IsNullOrEmpty(g) && !candidates.Contains(g))
-                            candidates.Add(g);
+                        var generated = await _evaluator.GenerateCandidatesAsync(e.Value, targetLang, context, 2);
+                        foreach (var g in generated)
+                        {
+                            if (!string.IsNullOrEmpty(g) && !candidates.Contains(g))
+                                candidates.Add(g);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        OnLogMessage($"⚠ {LocalizationManager.GetString("TranslationError", ex.Message)}");
                     }
                     items.Add((e.Key, e.Value, candidates.ToArray()));
                 }
 
-                var results = await _evaluator.VoteBatchAsync(items, targetLang, context);
+                OnLogMessage($"🗳 {LocalizationManager.GetString("LogVotingStart", items.Count)}");
+                VotingStatusText?.Invoke($"🗳 {LocalizationManager.GetString("VoteVotingProgress", items.Count)}");
+
+                List<VotingResult> results;
+                try
+                {
+                    results = await _evaluator.VoteBatchAsync(items, targetLang, context);
+                }
+                catch (Exception ex)
+                {
+                    OnLogMessage($"❌ {LocalizationManager.GetString("TranslationError", ex.Message)}");
+                    VotingCompleted?.Invoke(new VotingOutcome { Failed = true });
+                    return;
+                }
 
                 var completed = 0;
                 var bestCount = 0;
@@ -1070,7 +1131,13 @@ namespace SimpleXmlEditor.ViewModels
                 if (appliedBest > 0)
                     OnLogMessage($"✅ {LocalizationManager.GetString("VoteAppliedBest", appliedBest)}");
 
-                VotingCompleted?.Invoke(new VotingOutcome { Completed = completed, BestCount = bestCount });
+                VotingCompleted?.Invoke(new VotingOutcome
+                {
+                    Completed = completed,
+                    BestCount = bestCount,
+                    AppliedCount = appliedBest,
+                    Results = results
+                });
                 return;
             }
 
@@ -1148,9 +1215,9 @@ namespace SimpleXmlEditor.ViewModels
         }
 
         /// <summary>Consistency scan: check same source text translated differently.</summary>
-        public List<string> ScanConsistencyIssues()
+        public List<ConsistencyIssue> ScanConsistencyIssues()
         {
-            var issues = new List<string>();
+            var issues = new List<ConsistencyIssue>();
             var groups = Entries
                 .Where(en => !string.IsNullOrEmpty(en.Value) && !string.IsNullOrEmpty(en.Translation))
                 .GroupBy(en => en.Value)
@@ -1158,14 +1225,12 @@ namespace SimpleXmlEditor.ViewModels
 
             foreach (var group in groups)
             {
-                var translations = group.Select(en => en.Translation).Distinct().ToList();
-                for (int i = 0; i < translations.Count - 1; i++)
+                issues.Add(new ConsistencyIssue
                 {
-                    for (int j = i + 1; j < translations.Count; j++)
-                    {
-                        issues.Add(LocalizationManager.GetString("ConsistencyIssueDesc", group.Key, translations[i], translations[j]));
-                    }
-                }
+                    Source = group.Key,
+                    Translations = group.Select(en => en.Translation).Distinct().ToList(),
+                    Keys = group.Select(en => en.Key).Distinct().ToList()
+                });
             }
 
             return issues;

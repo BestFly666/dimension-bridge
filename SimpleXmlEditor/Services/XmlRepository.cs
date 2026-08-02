@@ -23,14 +23,14 @@ namespace SimpleXmlEditor.Services
 
     public class LocalizationEntry : INotifyPropertyChanged
     {
-        public static bool BulkUpdateSuppression = false;
-
         private int _rowNumber;
         private string _key = "";
         private string _value = "";
         private string _translation = "";
         private bool _isSelected;
         private ReviewStatus _reviewStatus = ReviewStatus.NotReviewed;
+        private double _evaluationScore = -1; // -1 表示未评估
+        private string _evaluationImprovement = "";
 
         public int RowNumber
         {
@@ -53,9 +53,9 @@ namespace SimpleXmlEditor.Services
         public string Translation
         {
             get => _translation;
-            set 
-            { 
-                _translation = value; 
+            set
+            {
+                _translation = value;
                 OnPropertyChanged(nameof(Translation));
                 OnPropertyChanged(nameof(StatusIcon));
             }
@@ -64,7 +64,13 @@ namespace SimpleXmlEditor.Services
         public bool IsSelected
         {
             get => _isSelected;
-            set { _isSelected = value; if (!BulkUpdateSuppression) OnPropertyChanged(nameof(IsSelected)); }
+            set { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); }
+        }
+
+        /// <summary>静默设置 IsSelected（不触发 PropertyChanged），用于批量操作性能优化。</summary>
+        public void SetIsSelectedSilent(bool value)
+        {
+            _isSelected = value;
         }
 
         public ReviewStatus ReviewStatus
@@ -76,6 +82,40 @@ namespace SimpleXmlEditor.Services
                 OnPropertyChanged(nameof(ReviewStatus));
                 OnPropertyChanged(nameof(StatusIcon));
             }
+        }
+
+        /// <summary>
+        /// AI 评估分数（0-10），-1 表示未评估。绑定到 DataGrid 的 Score 列。
+        /// </summary>
+        public double EvaluationScore
+        {
+            get => _evaluationScore;
+            set
+            {
+                _evaluationScore = value;
+                OnPropertyChanged(nameof(EvaluationScore));
+                OnPropertyChanged(nameof(EvaluationScoreDisplay));
+                OnPropertyChanged(nameof(EvaluationScoreColor));
+            }
+        }
+
+        /// <summary>用于显示的分数文本，-1 显示空字符串。</summary>
+        public string EvaluationScoreDisplay => _evaluationScore < 0 ? "" : $"{_evaluationScore:F1}";
+
+        /// <summary>分数颜色：高分绿、中分黄、低分红、未评估灰。</summary>
+        public string EvaluationScoreColor => _evaluationScore switch
+        {
+            >= 8 => "#2E7D32",
+            >= 5 => "#F57F17",
+            >= 0 => "#C62828",
+            _ => "#9E9E9E"
+        };
+
+        /// <summary>AI 评估的改进建议，留空表示无建议。tooltip 显示。</summary>
+        public string EvaluationImprovement
+        {
+            get => _evaluationImprovement;
+            set { _evaluationImprovement = value; OnPropertyChanged(nameof(EvaluationImprovement)); }
         }
 
         public string StatusIcon => _reviewStatus switch

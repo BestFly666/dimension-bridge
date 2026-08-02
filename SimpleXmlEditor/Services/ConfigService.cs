@@ -21,6 +21,18 @@ namespace SimpleXmlEditor.Services
         public string AiProvider { get; set; } = "GoogleGemini";
         public string LastLoadedFilePath { get; set; } = "";
         public int BatchSize { get; set; } = 50;
+
+        // 评估/投票专用模型配置（留空则使用翻译模型）
+        public string EvaluationAiProvider { get; set; } = "";
+        public string EvaluationModel { get; set; } = "";
+        public string EncryptedEvaluationApiKey { get; set; } = "";
+    }
+
+    /// <summary>评分缓存条目：分数 + 改进建议（按条目 Key 关联）。</summary>
+    public class ScoreCacheItem
+    {
+        public double Score { get; set; }
+        public string Improvement { get; set; } = "";
     }
 
     public class ConfigService : IConfigService
@@ -28,9 +40,11 @@ namespace SimpleXmlEditor.Services
         private readonly string _appDataDir;
         private readonly string _configPath;
         private readonly string _cachePath;
+        private readonly string _scoreCachePath;
         private readonly object _cacheLock = new object();
 
         public ConcurrentDictionary<string, string> Cache { get; private set; } = new();
+        public ConcurrentDictionary<string, ScoreCacheItem> ScoreCache { get; private set; } = new();
         public AppConfig Config { get; private set; } = new();
 
         public event Action<string> LogMessage;
@@ -43,6 +57,7 @@ namespace SimpleXmlEditor.Services
             Directory.CreateDirectory(_appDataDir);
             _configPath = Path.Combine(_appDataDir, "config.json");
             _cachePath = Path.Combine(_appDataDir, "translation_cache.json");
+            _scoreCachePath = Path.Combine(_appDataDir, "score_cache.json");
         }
 
         private void RaiseLog(string message)
@@ -67,6 +82,15 @@ namespace SimpleXmlEditor.Services
                     var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(cacheJson) ?? new Dictionary<string, string>();
                     Cache = new ConcurrentDictionary<string, string>(dict);
                     RaiseLog($"Cache loaded - {Cache.Count} entries");
+                }
+
+                if (File.Exists(_scoreCachePath))
+                {
+                    var scoreJson = File.ReadAllText(_scoreCachePath);
+                    var scoreDict = JsonConvert.DeserializeObject<Dictionary<string, ScoreCacheItem>>(scoreJson)
+                                    ?? new Dictionary<string, ScoreCacheItem>();
+                    ScoreCache = new ConcurrentDictionary<string, ScoreCacheItem>(scoreDict);
+                    RaiseLog($"Score cache loaded - {ScoreCache.Count} entries");
                 }
             }
             catch (Exception ex)
@@ -115,8 +139,6 @@ namespace SimpleXmlEditor.Services
         {
             if (string.IsNullOrEmpty(Config.EncryptedApiKey))
                 return "";
-
-            // Non-Windows fallback or legacy migration path
             if (Config.EncryptedApiKey.StartsWith("LEGACY:", StringComparison.Ordinal))
                 return Config.EncryptedApiKey.Substring(7);
 
@@ -129,6 +151,43 @@ namespace SimpleXmlEditor.Services
             catch (Exception ex)
             {
                 RaiseLog($"API key decryption failed: {ex.Message}");
+                return "";
+            }
+        }
+
+        public void SetEvaluationApiKey(string apiKey)
+        {
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Config.EncryptedEvaluationApiKey = "";
+                return;
+            }
+            try
+            {
+                byte[] encrypted = ProtectedData.Protect(
+                    Encoding.UTF8.GetBytes(apiKey), null, DataProtectionScope.CurrentUser);
+                Config.EncryptedEvaluationApiKey = Convert.ToBase64String(encrypted);
+            }
+            catch
+            {
+                Config.EncryptedEvaluationApiKey = "LEGACY:" + apiKey;
+            }
+        }
+
+        public string GetEvaluationApiKey()
+        {
+            if (string.IsNullOrEmpty(Config.EncryptedEvaluationApiKey))
+                return "";
+            if (Config.EncryptedEvaluationApiKey.StartsWith("LEGACY:", StringComparison.Ordinal))
+                return Config.EncryptedEvaluationApiKey.Substring(7);
+            try
+            {
+                byte[] encryptedBytes = Convert.FromBase64String(Config.EncryptedEvaluationApiKey);
+                byte[] decrypted = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(decrypted);
+            }
+            catch
+            {
                 return "";
             }
         }
@@ -186,6 +245,58 @@ namespace SimpleXmlEditor.Services
             {
                 RaiseLog($"Cache write error: {ex.Message}");
             }
+        }
+
+        public void SaveScoreCache()
+        {
+            try
+            {
+                File.WriteAllText(_scoreCachePath, JsonConvert.SerializeObject(ScoreCache, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                RaiseLog($"Score cache write error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 把已评估条目的评分与改进建议同步到评分缓存（仅 Key 非空 + 已评估）。
+        /// 按条目 Key 关联，重新打开文件后可通过 RestoreScores 恢复。
+        /// </summary>
+        public void SyncScoresToCache(IEnumerable<LocalizationEntry> entries)
+        {
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.Key) || entry.EvaluationScore < 0) continue;
+                ScoreCache[entry.Key] = new ScoreCacheItem
+                {
+                    Score = entry.EvaluationScore,
+                    Improvement = entry.EvaluationImprovement ?? ""
+                };
+            }
+        }
+
+        /// <summary>
+        /// 按条目 Key 恢复缓存的评分与改进建议（仅恢复未评估的条目）。
+        /// 返回恢复的条目数。
+        /// </summary>
+        public int RestoreScores(IEnumerable<LocalizationEntry> entries)
+        {
+            if (ScoreCache.Count == 0) return 0;
+            int restored = 0;
+            foreach (var entry in entries)
+            {
+                if (string.IsNullOrEmpty(entry.Key) || entry.EvaluationScore >= 0) continue;
+                if (ScoreCache.TryGetValue(entry.Key, out var item))
+                {
+                    entry.EvaluationScore = item.Score;
+                    entry.EvaluationImprovement = item.Improvement;
+                    restored++;
+                }
+            }
+            if (restored > 0)
+                RaiseLog($"Restored {restored} scores from cache");
+            return restored;
         }
 
         public void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries)

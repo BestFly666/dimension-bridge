@@ -578,12 +578,24 @@ namespace SimpleXmlEditor.Dictionary
         /// A conflict is when a glossary term's English appears in the source text,
         /// but its Chinese translation does NOT appear in the translated text.
         /// </summary>
-        public List<GlossaryConflict> DetectConflicts(IEnumerable<(string key, string source, string translation)> entries)
+        public List<GlossaryConflict> DetectConflicts(
+            IEnumerable<(string key, string source, string translation)> entries,
+            Action<int, int> onProgress = null)
         {
             var conflicts = new List<GlossaryConflict>();
+            var entryList = entries.ToList();
+            int total = entryList.Count;
+            int processed = 0;
+            int step = Math.Max(1, total / 20); // 自适应步长：全程约上报 20 次，避免日志刷屏
 
-            foreach (var (key, source, translation) in entries)
+            foreach (var (key, source, translation) in entryList)
             {
+                processed++;
+
+                // 按步长周期性上报进度
+                if (onProgress != null && (processed % step == 0 || processed == total))
+                    onProgress(processed, total);
+
                 if (string.IsNullOrEmpty(translation))
                     continue;
 

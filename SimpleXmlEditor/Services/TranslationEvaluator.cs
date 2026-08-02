@@ -39,12 +39,48 @@ namespace SimpleXmlEditor.Services
     public class TranslationEvaluator : ITranslationEvaluator
     {
         private readonly IAiTranslationService _aiService;
+        private readonly IConfigService _configService;
+        private AiTranslationService _evalAiService;
 
         public event Action<string> LogMessage;
 
-        public TranslationEvaluator(IAiTranslationService aiService)
+        public TranslationEvaluator(IAiTranslationService aiService, IConfigService configService = null)
         {
             _aiService = aiService;
+            _configService = configService;
+        }
+
+        /// <summary>
+        /// 返回评估专用 API 实例（如果配置了不同厂商），否则回退到翻译 API。
+        /// </summary>
+        private IAiTranslationService GetActiveAiService()
+        {
+            if (_configService == null)
+                return _aiService;
+
+            var cfg = _configService.Config;
+            if (string.IsNullOrEmpty(cfg.EvaluationAiProvider) || string.IsNullOrEmpty(cfg.EvaluationModel))
+                return _aiService;
+
+            var evalKey = _configService.GetEvaluationApiKey();
+            if (string.IsNullOrEmpty(evalKey))
+                return _aiService;
+
+            // 懒初始化评估专用服务实例
+            if (_evalAiService == null)
+            {
+                _evalAiService = new AiTranslationService(_configService);
+                _evalAiService.LogMessage += msg => LogMessage?.Invoke(msg);
+            }
+
+            // 每次调用时同步配置（用户可能随时改设置）
+            if (Enum.TryParse<AIProvider>(cfg.EvaluationAiProvider, out var provider))
+            {
+                _evalAiService.SetConfiguration(provider, evalKey, cfg.EvaluationModel, _aiService.TargetLanguage);
+                return _evalAiService;
+            }
+
+            return _aiService;
         }
 
         private void RaiseLog(string message)
@@ -62,7 +98,7 @@ namespace SimpleXmlEditor.Services
             string context = "")
         {
             var prompt = BuildEvaluationPrompt(originalText, translatedText, targetLanguage, context);
-            var response = await _aiService.TranslateBatchAsync(prompt, 2);
+            var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
 
             return ParseEvaluationResponse(response, originalText, translatedText);
         }
@@ -84,7 +120,7 @@ namespace SimpleXmlEditor.Services
             try
             {
                 var prompt = BuildBatchedVotingPrompt(originalText, candidateTranslations, targetLanguage, context);
-                var response = await _aiService.TranslateBatchAsync(prompt, 2);
+                var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
 
                 var results = ParseBatchedVotingResponse(response, originalText, candidateTranslations);
 
@@ -214,7 +250,7 @@ Only return the JSON, no other text.";
             try
             {
                 var prompt = BuildCandidatePrompt(originalText, targetLanguage, context, count);
-                var response = await _aiService.TranslateBatchAsync(prompt, 2);
+                var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
                 var candidates = ParseCandidateResponse(response);
                 return candidates.Take(count).ToArray();
             }
@@ -227,19 +263,20 @@ Only return the JSON, no other text.";
 
         private string BuildCandidatePrompt(string original, string targetLang, string context, int count)
         {
-            return $@"You are a professional game localization translator. Generate {count} DIFFERENT translation candidates for the following text.
+            return $@"You are a professional game localization translator. Translate the following English text to {targetLang} and generate {count} DIFFERENT translation candidates.
 
-Original ({targetLang}): {original}
+Original (English): {original}
+Target language: {targetLang}
 
 Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
 
-The candidates should differ in wording/style but ALL preserve the exact meaning and fit gaming UI tone.
+All candidates MUST be in {targetLang}, NOT in English. The candidates should differ in wording/style but ALL preserve the exact meaning and fit gaming UI tone.
 
 Return in this exact JSON format:
 {{
   ""candidates"": [
-    ""first candidate translation"",
-    ""second candidate translation""
+    ""first candidate translation in {targetLang}"",
+    ""second candidate translation in {targetLang}""
   ]
 }}
 
@@ -292,20 +329,37 @@ Only return the JSON, no other text.";
 
             foreach (var chunk in Chunk(items, batchSize))
             {
-                var prompt = BuildBatchEvaluationPrompt(chunk, targetLanguage, context);
-                var response = await _aiService.TranslateBatchAsync(prompt, 2);
-                var parsed = ParseBatchEvaluationResponse(response, chunk);
-                allResults.AddRange(parsed);
-
-                if (parsed.Count == 0)
+                try
                 {
-                    RaiseLog("⚠ Batch evaluation parse failed, falling back to per-entry");
-                    foreach (var item in chunk)
+                    var prompt = BuildBatchEvaluationPrompt(chunk, targetLanguage, context);
+                    var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
+                    var parsed = ParseBatchEvaluationResponse(response, chunk);
+                    allResults.AddRange(parsed);
+
+                    if (parsed.Count == 0)
                     {
-                        var single = await EvaluateAsync(item.Original, item.Translated, targetLanguage, context);
-                        single.TranslatedText = item.Key;
-                        allResults.Add(single);
+                        RaiseLog("⚠ Batch evaluation parse failed, falling back to per-entry");
+                        foreach (var item in chunk)
+                        {
+                            try
+                            {
+                                var single = await EvaluateAsync(item.Original, item.Translated, targetLanguage, context);
+                                if (single != null)
+                                {
+                                    single.TranslatedText = item.Key;
+                                    allResults.Add(single);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                RaiseLog($"⚠ Per-entry evaluation failed for {item.Key}: {ex.Message}");
+                            }
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    RaiseLog($"⚠ Batch evaluation chunk failed: {ex.Message}");
                 }
             }
 
@@ -328,20 +382,37 @@ Only return the JSON, no other text.";
 
             foreach (var chunk in Chunk(items, batchSize))
             {
-                var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
-                var response = await _aiService.TranslateBatchAsync(prompt, 2);
-                var parsed = ParseBatchVotingResponse(response, chunk);
-                allResults.AddRange(parsed);
-
-                if (parsed.Count == 0)
+                try
                 {
-                    RaiseLog("⚠ Batch voting parse failed, falling back to per-entry");
-                    foreach (var item in chunk)
+                    var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
+                    var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
+                    var parsed = ParseBatchVotingResponse(response, chunk);
+                    allResults.AddRange(parsed);
+
+                    if (parsed.Count == 0)
                     {
-                        var single = await VoteAsync(item.Original, item.Candidates, targetLanguage, context);
-                        single.EntryKey = item.Key;
-                        allResults.Add(single);
+                        RaiseLog("⚠ Batch voting parse failed, falling back to per-entry");
+                        foreach (var item in chunk)
+                        {
+                            try
+                            {
+                                var single = await VoteAsync(item.Original, item.Candidates, targetLanguage, context);
+                                if (single != null)
+                                {
+                                    single.EntryKey = item.Key;
+                                    allResults.Add(single);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                RaiseLog($"⚠ Per-entry voting failed for {item.Key}: {ex.Message}");
+                            }
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    RaiseLog($"⚠ Batch voting chunk failed: {ex.Message}");
                 }
             }
 
@@ -384,13 +455,14 @@ Include ALL {items.Count} entries. Only return the JSON, no other text.";
             for (int i = 0; i < items.Count; i++)
             {
                 lines.AppendLine($"### Entry {i + 1}");
-                lines.AppendLine($"Original ({targetLang}): {items[i].Original}");
+                lines.AppendLine($"Original (English): {items[i].Original}");
+                lines.AppendLine($"Target language: {targetLang}");
                 for (int c = 0; c < items[i].Candidates.Length; c++)
                     lines.AppendLine($"  Candidate {c + 1}: \"{items[i].Candidates[c]}\"");
                 lines.AppendLine();
             }
 
-            return $@"You are a multi-agent translation review panel. For EACH entry below, evaluate its candidates from 3 perspectives (Fluency, Accuracy, Style), then pick the BEST candidate.
+            return $@"You are a multi-agent translation review panel. For EACH entry below, evaluate its candidates from 3 perspectives (Fluency, Accuracy, Style), then pick the BEST candidate. All candidates are {targetLang} translations of the English original.
 
 Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
 

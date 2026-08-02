@@ -56,6 +56,9 @@ namespace SimpleXmlEditor.Services
         void LoadConfig();
         void SaveConfig();
         void SaveCache();
+        void SaveScoreCache();
+        void SyncScoresToCache(IEnumerable<LocalizationEntry> entries);
+        int RestoreScores(IEnumerable<LocalizationEntry> entries);
         void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries);
         void SaveTranslationProgress(IEnumerable<LocalizationEntry> entries);
         Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries);
@@ -67,6 +70,8 @@ namespace SimpleXmlEditor.Services
         // Secure API key management
         void SetApiKey(string apiKey);
         string GetApiKey();
+        void SetEvaluationApiKey(string apiKey);
+        string GetEvaluationApiKey();
         bool MigrateLegacyApiKey();
     }
 
@@ -88,7 +93,9 @@ namespace SimpleXmlEditor.Services
         void ExportCsv(string filePath);
         void ExportJson(string filePath);
         (int added, int updated) MergeFromProfile(string profileName, Dictionary<string, string> profileGlossary);
-        List<GlossaryConflict> DetectConflicts(IEnumerable<(string key, string source, string translation)> entries);
+        List<GlossaryConflict> DetectConflicts(
+            IEnumerable<(string key, string source, string translation)> entries,
+            Action<int, int> onProgress = null);
     }
 
     public interface IExpertProfileManager
