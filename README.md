@@ -201,6 +201,9 @@ project-root/
 │   ├── GlossaryManagerTests.cs
 │   └── SimpleXmlEditor.Tests.csproj
 ├── .github/workflows/ci.yml             # GitHub Actions CI/CD
+├── scripts/                             # 附加工具脚本（参考示例）
+│   ├── 4.0_添加换行写入DAT.py           # 4.0 译文换行处理并写回 DAT 的完整示例
+│   └── datlib.py                        # DAT 文件读写库（read_dat / write_dat）
 ├── DEVELOPMENT_LOG.md                   # 开发日志
 ├── HANDOVER.md                          # 交接文档
 ├── PRODUCT_PLAN.md                      # 产品规划
