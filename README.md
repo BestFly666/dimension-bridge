@@ -9,6 +9,9 @@
 ![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
 ![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
 
+> [!IMPORTANT]
+> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与文件格式尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
+
 ---
 
 ## 为什么选择这个工具？
@@ -117,6 +120,20 @@
 
 ---
 
+## 已知问题与限制
+
+- **已验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏上实测通过；**其他游戏、XML 结构或二进制格式未验证**，请先用副本测试。
+- **数据安全**：Ctrl+S / 自动保存只更新本地缓存（`translation_cache.json`），**不会覆盖源 XML**；写入源文件的操作会要求手动确认。仍建议定期备份源文件。
+- **游戏内断行适配**：中文在游戏引擎内的断行处理（如 4.0 的 79 字符强制换行）是**引擎专用**的，由独立脚本维护（`scripts/` 目录，不在本工具内），换行参数需按游戏自行调整。
+- **语音/界面文本**：`TEXT_SPEECH` 等语音文本与单位描述类条目不支持手动换行，游戏使用自动换行。
+
+## 反馈与支持
+
+- 报告 Bug / 建议功能：前往 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 创建 Issue
+- 反馈前请提供：使用的 AI 提供商/模型、XML 样例片段、操作步骤、预期结果与实际结果
+
+---
+
 ## 构建（开发者）
 
 ```bash
@@ -169,6 +186,7 @@ project-root/
 │   ├── MainWindow.Grid.cs               # DataGrid 交互（选中/列字母/行拖拽）
 │   ├── MainWindow.Helpers.cs            # UI 辅助方法
 │   ├── MainWindow.Events.cs             # UI 事件处理
+│   ├── VotingReviewWindow.xaml/.cs      # 多代理投票候选译文审查窗口
 │   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口
 │   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
 │   ├── InputDialog.xaml/.cs             # 通用双输入对话框
