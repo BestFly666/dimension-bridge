@@ -27,10 +27,26 @@ jobs:
       run: dotnet test SimpleXmlEditor.Tests\SimpleXmlEditor.Tests.csproj --configuration Release --no-build --verbosity normal
 
     - name: Publish
-      run: dotnet publish SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true --output publish
+      run: dotnet publish SimpleXmlEditor\SimpleXmlEditor.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true -p:DebugType=None -p:DebugSymbols=false --output publish
+
+    - name: Stage release folder
+      shell: pwsh
+      run: |
+        # 0) 只保留中文语言资源，删除其他语言卫星程序集（缩小体积）
+        Get-ChildItem publish -Directory | Where-Object { $_.Name -notin @('zh-Hans','zh-Hant') } | Remove-Item -Recurse -Force
+        # 1) 清理构建输出中可能残留的用户数据文件（CI 干净环境下本不存在，本地构建时防止泄漏）
+        Get-ChildItem publish -Recurse -File | Where-Object { $_.Name -match '^(config|expert_profiles|glossary_terms|translation_dictionary|translation_cache|translation_progress|score_cache)\.json$|^stable_us\.xml$|\.dat$' } | Remove-Item -Force
+        # 2) 放入独立文件夹，解压后文件不散乱
+        New-Item -ItemType Directory -Path release\XmlAiTranslator -Force | Out-Null
+        Copy-Item publish\* release\XmlAiTranslator\ -Recurse -Force
+        Copy-Item LICENSE release\XmlAiTranslator\LICENSE.txt
+        Copy-Item README.md release\XmlAiTranslator\README.txt
+        # 3) 隐私检查：发布包中不允许出现任何用户数据文件，否则构建失败
+        $leaks = Get-ChildItem release\XmlAiTranslator -Recurse -File | Where-Object { $_.Name -match 'config\.json|expert_profiles|glossary_terms|translation_|score_cache|\.dat$|stable_us' }
+        if ($leaks) { Write-Error ("隐私数据被包含在发布包中: " + ($leaks.Name -join ', ')); exit 1 }
 
     - name: Zip artifact
-      run: Compress-Archive -Path publish\* -DestinationPath XmlAiTranslator-win-x64.zip
+      run: Compress-Archive -Path release\XmlAiTranslator -DestinationPath XmlAiTranslator-win-x64.zip
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
@@ -42,11 +58,11 @@ jobs:
           ## 使用说明
 
           1. 下载 `XmlAiTranslator-win-x64.zip`
-          2. 解压到任意目录
+          2. 解压，进入 `XmlAiTranslator` 文件夹
           3. 双击 `SimpleXmlEditor.exe` 运行
           4. 在设置中配置 AI 提供商和 API Key 即可使用
 
-          > 无需安装 .NET 运行时，单文件便携版。
+          > 无需安装 .NET 运行时，便携版。发布包已内置隐私数据检查，不含任何个人配置或翻译数据。
         files: XmlAiTranslator-win-x64.zip
         draft: false
         prerelease: true
