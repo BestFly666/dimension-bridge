@@ -14,7 +14,7 @@ namespace SimpleXmlEditor.ExpertProfiles
     public class ExpertProfileManager : IExpertProfileManager
     {
         private static readonly string ProfilesFile = Path.Combine(
-            Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location),
+            AppContext.BaseDirectory,
             "expert_profiles.json");
 
         public List<ExpertProfile> Profiles { get; private set; } = new();
