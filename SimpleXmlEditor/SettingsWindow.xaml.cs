@@ -22,13 +22,17 @@ namespace SimpleXmlEditor
         public string EvalAiProvider { get; private set; } = "";
         public string EvalApiKey { get; private set; } = "";
         public string EvalModel { get; private set; } = "";
+        /// <summary>评估/投票模型列表（明文 Key，由 ConfigService 负责加密存储）。</summary>
+        public List<(string Provider, string Model, string ApiKey)> EvalModels { get; private set; } = new();
+        private readonly List<EvalModelItem> _evalModels = new();
         private readonly MainWindow _mainWindow;
         private readonly IExpertProfileManager _profileManager;
 
         public SettingsWindow(string currentApiKey, string currentModel, string currentTargetLanguage,
             string currentProgramLanguage, string currentCustomPrompt, string currentActiveExpertProfile,
             AIProvider currentAiProvider, MainWindow mainWindow, IExpertProfileManager profileManager,
-            string currentEvalProvider = "", string currentEvalApiKey = "", string currentEvalModel = "")
+            string currentEvalProvider = "", string currentEvalApiKey = "", string currentEvalModel = "",
+            List<EvaluationModelConfig> currentEvalModels = null)
         {
             InitializeComponent();
             
@@ -60,7 +64,7 @@ namespace SimpleXmlEditor
 
             // 评估模型配置
             EvalApiKeyTextBox.Text = currentEvalApiKey;
-            EvalModelTextBox.Text = currentEvalModel;
+            EvalModelComboBox.Text = currentEvalModel;
             foreach (System.Windows.Controls.ComboBoxItem item in EvalProviderComboBox.Items)
             {
                 if (item.Tag?.ToString() == currentEvalProvider)
@@ -71,6 +75,23 @@ namespace SimpleXmlEditor
             }
             if (EvalProviderComboBox.SelectedItem == null && EvalProviderComboBox.Items.Count > 0)
                 EvalProviderComboBox.SelectedIndex = 0;
+
+            // 加载已配置的评估模型列表（解密 Key 用于再次编辑）
+            if (currentEvalModels != null)
+            {
+                foreach (var m in currentEvalModels)
+                {
+                    if (string.IsNullOrEmpty(m.Provider) || string.IsNullOrEmpty(m.Model)) continue;
+                    _evalModels.Add(new EvalModelItem
+                    {
+                        Provider = m.Provider,
+                        Model = m.Model,
+                        ApiKey = _mainWindow.ConfigService.GetEvaluationModelKey(m)
+                    });
+                }
+            }
+            EvalModelsListBox.ItemsSource = _evalModels;
+            UpdateEvalListEmptyState();
             
             // Set current model
             foreach (System.Windows.Controls.ComboBoxItem item in ModelComboBox.Items)
@@ -185,7 +206,12 @@ namespace SimpleXmlEditor
             EvalApiKeyHeader.Text = $"🔑 {L("EvalApiKeyLabel")}";
             HandyControl.Controls.InfoElement.SetPlaceholder(EvalApiKeyTextBox, L("EvalApiKeyPlaceholder"));
             EvalModelHeader.Text = $"🤖 {L("EvalModelNameLabel")}";
-            HandyControl.Controls.InfoElement.SetPlaceholder(EvalModelTextBox, L("EvalModelPlaceholder"));
+            HandyControl.Controls.InfoElement.SetPlaceholder(EvalModelComboBox, L("EvalModelPlaceholder"));
+            EvalRefreshModelsBtn.Content = $"🔄 {L("EvalRefreshModels")}";
+            EvalAddedModelsLabel.Text = $"📋 {L("EvalAddedModels")}";
+            EvalAddModelBtn.Content = $"➕ {L("EvalAddModel")}";
+            EvalModelListEmptyText.Text = L("EvalModelListEmpty");
+            EvalUseSameKeyHintText.Text = L("EvalUseSameKeyHint");
             OkButton.Content = L("SaveApply");
 
             // Expert profiles tab
@@ -504,7 +530,8 @@ namespace SimpleXmlEditor
             if (EvalProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem evalItem)
                 EvalAiProvider = evalItem.Tag?.ToString() ?? "";
             EvalApiKey = EvalApiKeyTextBox.Text.Trim();
-            EvalModel = EvalModelTextBox.Text.Trim();
+            EvalModel = EvalModelComboBox.Text.Trim();
+            EvalModels = _evalModels.Select(m => (m.Provider, m.Model, m.ApiKey)).ToList();
 
             DialogResult = true;
             Close();
@@ -524,6 +551,125 @@ namespace SimpleXmlEditor
         private string GetDefaultPrompt()
         {
             return PromptTemplates.DefaultBatchPrompt;
+        }
+
+        #endregion
+
+        #region Evaluation Models
+
+        private string GetSelectedEvalProvider()
+        {
+            if (EvalProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem item)
+                return item.Tag?.ToString() ?? "";
+            return "";
+        }
+
+        /// <summary>拉取当前厂商的模型列表填充评估模型下拉（与翻译模型一致）。</summary>
+        private async void EvalRefreshModelsBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var providerStr = GetSelectedEvalProvider();
+            if (string.IsNullOrEmpty(providerStr) || !Enum.TryParse<AIProvider>(providerStr, out var provider))
+            {
+                MessageBox.Show(LocalizationManager.GetString("EvalSelectModelFirst"), LocalizationManager.GetString("MsgWarning"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var apiKey = EvalApiKeyTextBox.Text.Trim();
+            if (string.IsNullOrEmpty(apiKey))
+                apiKey = ApiKeyTextBox.Text.Trim();
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                MessageBox.Show(LocalizationManager.GetString("EnterAPIKeyFirst"), LocalizationManager.GetString("MsgError"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            EvalRefreshModelsBtn.IsEnabled = false;
+            EvalRefreshModelsBtn.Content = LocalizationManager.GetString("Loading");
+            try
+            {
+                var models = await _mainWindow.FetchAvailableModelsAsync(apiKey, provider);
+                if (models.Count > 0)
+                {
+                    EvalModelComboBox.Items.Clear();
+                    foreach (var model in models)
+                    {
+                        EvalModelComboBox.Items.Add(new System.Windows.Controls.ComboBoxItem
+                        {
+                            Content = model,
+                            Tag = model
+                        });
+                    }
+                    EvalModelComboBox.SelectedIndex = 0;
+                    MessageBox.Show(LocalizationManager.GetString("ModelsFoundSuccess", models.Count),
+                        LocalizationManager.GetString("MsgSuccess"), MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    MessageBox.Show(LocalizationManager.GetString("NoModelsFound"), LocalizationManager.GetString("MsgError"),
+                        MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(LocalizationManager.GetString("ErrorFetchingModels", ex.Message), LocalizationManager.GetString("MsgError"),
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                EvalRefreshModelsBtn.IsEnabled = true;
+                EvalRefreshModelsBtn.Content = $"🔄 {LocalizationManager.GetString("EvalRefreshModels")}";
+            }
+        }
+
+        /// <summary>把当前 (厂商 + 模型 + Key) 加入已配置评估模型列表。</summary>
+        private void EvalAddModelBtn_Click(object sender, RoutedEventArgs e)
+        {
+            var provider = GetSelectedEvalProvider();
+            if (string.IsNullOrEmpty(provider))
+            {
+                MessageBox.Show(LocalizationManager.GetString("EvalSelectModelFirst"), LocalizationManager.GetString("MsgWarning"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var model = EvalModelComboBox.Text.Trim();
+            if (string.IsNullOrEmpty(model))
+            {
+                MessageBox.Show(LocalizationManager.GetString("EvalSelectModelFirst"), LocalizationManager.GetString("MsgWarning"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            _evalModels.Add(new EvalModelItem
+            {
+                Provider = provider,
+                Model = model,
+                ApiKey = EvalApiKeyTextBox.Text.Trim()
+            });
+            EvalModelsListBox.ItemsSource = null;
+            EvalModelsListBox.ItemsSource = _evalModels;
+            UpdateEvalListEmptyState();
+            EvalModelComboBox.SelectedIndex = -1;
+        }
+
+        private void EvalRemoveModelBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as System.Windows.Controls.Button)?.DataContext is EvalModelItem item)
+            {
+                _evalModels.Remove(item);
+                EvalModelsListBox.ItemsSource = null;
+                EvalModelsListBox.ItemsSource = _evalModels;
+                UpdateEvalListEmptyState();
+            }
+        }
+
+        private void UpdateEvalListEmptyState()
+        {
+            EvalModelListEmptyText.Visibility = _evalModels.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         #endregion
@@ -668,5 +814,27 @@ namespace SimpleXmlEditor
         }
 
         #endregion
+    }
+
+    /// <summary>设置窗口中"已配置评估模型"列表项。</summary>
+    public class EvalModelItem
+    {
+        public string Provider { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string ApiKey { get; set; } = "";
+        public string Display => $"{FormatProviderName(Provider)} | {Model}";
+
+        private static string FormatProviderName(string provider) => provider switch
+        {
+            "GoogleGemini" => "Gemini",
+            "DeepSeek" => "DeepSeek",
+            "Doubao" => "豆包",
+            "Qianwen" => "千问",
+            "Zhipu" => "智谱",
+            "Moonshot" => "Kimi",
+            "Wenxin" => "文心一言",
+            "Xunfei" => "讯飞星火",
+            _ => provider
+        };
     }
 }

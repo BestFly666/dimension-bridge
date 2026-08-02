@@ -72,6 +72,8 @@ namespace SimpleXmlEditor.Services
         string GetApiKey();
         void SetEvaluationApiKey(string apiKey);
         string GetEvaluationApiKey();
+        void SaveEvaluationModels(List<(string Provider, string Model, string ApiKey)> models);
+        string GetEvaluationModelKey(EvaluationModelConfig model);
         bool MigrateLegacyApiKey();
     }
 

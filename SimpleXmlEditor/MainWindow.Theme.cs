@@ -1,41 +1,50 @@
-using System.Windows.Media;
+using System;
+using System.Windows;
 
 namespace SimpleXmlEditor
 {
     public partial class MainWindow
     {
+        // App accent palettes (light-purple personality colors only;
+        // generic chrome comes from the HandyControl skin dictionaries).
+        private static readonly Uri LightAccentUri = new Uri("pack://application:,,,/Themes/LightColors.xaml");
+        private static readonly Uri DarkAccentUri = new Uri("pack://application:,,,/Themes/DarkColors.xaml");
+
+        private static readonly Uri HcDefaultSkinUri = new Uri("pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml");
+        private static readonly Uri HcDarkSkinUri = new Uri("pack://application:,,,/HandyControl;component/Themes/SkinDark.xaml");
+
         private void ApplyTheme()
         {
-            if (_isDarkMode)
+            // 1) Switch the HandyControl skin (official theme dictionaries) —
+            //    all HandyControl-styled controls & semantic brushes adapt automatically.
+            ReplaceMergedDictionary(
+                _isDarkMode ? HcDarkSkinUri : HcDefaultSkinUri,
+                d => d.Source?.OriginalString.Contains("/HandyControl;component/Themes/Skin") == true);
+
+            // 2) Switch the app accent palette (toolbar/column-header/chip tints).
+            ReplaceMergedDictionary(
+                _isDarkMode ? DarkAccentUri : LightAccentUri,
+                d => d.Source == LightAccentUri || d.Source == DarkAccentUri);
+        }
+
+        /// <summary>
+        /// Replace (or insert) a merged resource dictionary while keeping its original
+        /// position, so StaticResource resolution order inside Theme.xaml stays intact.
+        /// </summary>
+        private static void ReplaceMergedDictionary(Uri source, Func<ResourceDictionary, bool> match)
+        {
+            var merged = Application.Current.Resources.MergedDictionaries;
+            var index = merged.Count;
+            for (var i = 0; i < merged.Count; i++)
             {
-                this.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
-
-                EntriesGrid.AlternatingRowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#27273A"));
-                EntriesGrid.RowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#1E1E2E"));
-                EntriesGrid.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CDD6F4"));
-
-                FilterKeyBox.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#313244"));
-                FilterKeyBox.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CDD6F4"));
-                FilterBox.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#313244"));
-                FilterBox.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CDD6F4"));
-                FilterTranslationBox.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#313244"));
-                FilterTranslationBox.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CDD6F4"));
+                if (match(merged[i]))
+                {
+                    index = i;
+                    merged.RemoveAt(i);
+                    break;
+                }
             }
-            else
-            {
-                this.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F0F2F5"));
-
-                EntriesGrid.AlternatingRowBackground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F8FAFB"));
-                EntriesGrid.RowBackground = new SolidColorBrush(Colors.White);
-                EntriesGrid.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#37474F"));
-
-                FilterKeyBox.Background = new SolidColorBrush(Colors.White);
-                FilterKeyBox.Foreground = new SolidColorBrush(Colors.Black);
-                FilterBox.Background = new SolidColorBrush(Colors.White);
-                FilterBox.Foreground = new SolidColorBrush(Colors.Black);
-                FilterTranslationBox.Background = new SolidColorBrush(Colors.White);
-                FilterTranslationBox.Foreground = new SolidColorBrush(Colors.Black);
-            }
+            merged.Insert(Math.Min(index, merged.Count), new ResourceDictionary { Source = source });
         }
     }
 }

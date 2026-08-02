@@ -245,6 +245,12 @@ namespace SimpleXmlEditor
 
                 // 同步更新 DataGrid 评分列（用投票平均分）
                 UpdateEntryScore(result.EntryKey, result.AverageScore, result.ConsensusSummary, "");
+
+                // 若 AI 建议改动译文 → 弹出候选对比窗口由用户决定
+                var currentTranslation = _viewModel.Entries
+                    .FirstOrDefault(en => en.Key == result.EntryKey)?.Translation ?? "";
+                if (!string.IsNullOrEmpty(result.BestTranslation) && result.BestTranslation != currentTranslation)
+                    OpenVotingReview(new List<VotingResult> { result });
                 return;
             }
 
@@ -274,10 +280,43 @@ namespace SimpleXmlEditor
                 }
             }
 
-            EvalResult.Text = $"🗳 {LocalizationManager.GetString("VoteBatchResultDetail", outcome.Completed, outcome.BestCount, outcome.AppliedCount)}";
+            EvalResult.Text = $"🗳 {LocalizationManager.GetString("VoteBatchResultDetail", outcome.Completed, outcome.BestCount, outcome.NeedsReview.Count)}";
             AddLog($"🗳 {LocalizationManager.GetString("LogBatchVoteComplete", outcome.Completed, outcome.BestCount)}");
-            if (outcome.AppliedCount > 0)
-                AddLog($"✅ {LocalizationManager.GetString("VoteAppliedBest", outcome.AppliedCount)}");
+            if (outcome.NeedsReview.Count > 0)
+                OpenVotingReview(outcome.NeedsReview);
+        }
+
+        /// <summary>
+        /// 弹出投票候选对比窗口：列出 AI 建议改动的条目及其候选译文（带评分），
+        /// 用户确认所选后批量应用到条目。
+        /// </summary>
+        private void OpenVotingReview(List<VotingResult> results)
+        {
+            if (results == null || results.Count == 0) return;
+
+            var currentMap = new Dictionary<string, string>();
+            foreach (var en in _viewModel.Entries)
+            {
+                if (results.Any(r => r.EntryKey == en.Key))
+                    currentMap[en.Key] = en.Translation ?? "";
+            }
+
+            var window = new VotingReviewWindow(results, currentMap) { Owner = this };
+            if (window.ShowDialog() == true)
+            {
+                var selections = window.GetSelections();
+                if (selections.Count > 0)
+                {
+                    var applied = _viewModel.ApplyVotingSelections(selections);
+                    if (applied > 0)
+                    {
+                        EntriesGrid.Items.Refresh();
+                        _viewModel.SyncScoresToCache(_viewModel.Entries);
+                        _viewModel.SaveScoreCache();
+                        AddLog($"✅ {LocalizationManager.GetString("VoteAppliedBest", applied)}");
+                    }
+                }
+            }
         }
 
         private void RenderPreTranslateOutcome(PreTranslateOutcome outcome)
@@ -464,6 +503,8 @@ namespace SimpleXmlEditor
         {
             return await _viewModel.AiTranslationService.FetchAvailableModelsAsync(apiKey, provider ?? _viewModel.AiProvider);
         }
+
+        public IConfigService ConfigService => _viewModel.ConfigService;
 
         public Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> GetModelLimits(AIProvider? provider = null)
         {

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -26,6 +27,17 @@ namespace SimpleXmlEditor.Services
         public string EvaluationAiProvider { get; set; } = "";
         public string EvaluationModel { get; set; } = "";
         public string EncryptedEvaluationApiKey { get; set; } = "";
+
+        // 评估/投票专用模型列表（支持多模型投票；为空则回退到上方单组配置）
+        public List<EvaluationModelConfig> EvaluationModels { get; set; } = new();
+    }
+
+    /// <summary>评估/投票专用模型配置条目（支持多模型投票）。</summary>
+    public class EvaluationModelConfig
+    {
+        public string Provider { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string EncryptedApiKey { get; set; } = "";
     }
 
     /// <summary>评分缓存条目：分数 + 改进建议（按条目 Key 关联）。</summary>
@@ -73,7 +85,7 @@ namespace SimpleXmlEditor.Services
                 {
                     var json = File.ReadAllText(_configPath);
                     Config = JsonConvert.DeserializeObject<AppConfig>(json) ?? new AppConfig();
-                    RaiseLog("Config loaded");
+                    RaiseLog(LocalizationManager.GetString("LogConfigLoaded"));
                 }
 
                 if (File.Exists(_cachePath))
@@ -81,7 +93,7 @@ namespace SimpleXmlEditor.Services
                     var cacheJson = File.ReadAllText(_cachePath);
                     var dict = JsonConvert.DeserializeObject<Dictionary<string, string>>(cacheJson) ?? new Dictionary<string, string>();
                     Cache = new ConcurrentDictionary<string, string>(dict);
-                    RaiseLog($"Cache loaded - {Cache.Count} entries");
+                    RaiseLog(LocalizationManager.GetString("LogCacheLoaded", Cache.Count));
                 }
 
                 if (File.Exists(_scoreCachePath))
@@ -90,12 +102,12 @@ namespace SimpleXmlEditor.Services
                     var scoreDict = JsonConvert.DeserializeObject<Dictionary<string, ScoreCacheItem>>(scoreJson)
                                     ?? new Dictionary<string, ScoreCacheItem>();
                     ScoreCache = new ConcurrentDictionary<string, ScoreCacheItem>(scoreDict);
-                    RaiseLog($"Score cache loaded - {ScoreCache.Count} entries");
+                    RaiseLog(LocalizationManager.GetString("LogScoreCacheLoaded", ScoreCache.Count));
                 }
             }
             catch (Exception ex)
             {
-                RaiseLog($"Config load error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("ConfigLoadError", ex.Message));
                 Config = new AppConfig();
                 Cache = new ConcurrentDictionary<string, string>();
             }
@@ -123,10 +135,10 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"API key encryption failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogApiKeyEncryptFailed", ex.Message));
                 // Fallback: store plaintext with a LEGACY prefix so GetApiKey can detect it
                 Config.EncryptedApiKey = "LEGACY:" + apiKey;
-                RaiseLog("WARNING: API key stored in plaintext due to DPAPI failure (non-Windows environment?)");
+                RaiseLog(LocalizationManager.GetString("LogApiKeyPlaintextWarning"));
             }
         }
 
@@ -150,7 +162,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"API key decryption failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogApiKeyDecryptFailed", ex.Message));
                 return "";
             }
         }
@@ -193,6 +205,63 @@ namespace SimpleXmlEditor.Services
         }
 
         /// <summary>
+        /// 批量保存评估/投票模型列表（明文 API Key 加密后存储）。
+        /// 空的 Provider/Model 条目会被过滤；Key 为空时保持空（表示使用翻译模型 Key）。
+        /// </summary>
+        public void SaveEvaluationModels(List<(string Provider, string Model, string ApiKey)> models)
+        {
+            Config.EvaluationModels = (models ?? new List<(string, string, string)>())
+                .Where(m => !string.IsNullOrEmpty(m.Provider) && !string.IsNullOrEmpty(m.Model))
+                .Select(m => new EvaluationModelConfig
+                {
+                    Provider = m.Provider,
+                    Model = m.Model,
+                    EncryptedApiKey = EncryptSecret(m.ApiKey)
+                })
+                .ToList();
+        }
+
+        /// <summary>解密读取评估/投票模型的 API Key。</summary>
+        public string GetEvaluationModelKey(EvaluationModelConfig model)
+        {
+            return DecryptSecret(model?.EncryptedApiKey ?? "");
+        }
+
+        private static string EncryptSecret(string plain)
+        {
+            if (string.IsNullOrEmpty(plain))
+                return "";
+            try
+            {
+                byte[] encrypted = ProtectedData.Protect(
+                    Encoding.UTF8.GetBytes(plain), null, DataProtectionScope.CurrentUser);
+                return Convert.ToBase64String(encrypted);
+            }
+            catch
+            {
+                return "LEGACY:" + plain;
+            }
+        }
+
+        private static string DecryptSecret(string encrypted)
+        {
+            if (string.IsNullOrEmpty(encrypted))
+                return "";
+            if (encrypted.StartsWith("LEGACY:", StringComparison.Ordinal))
+                return encrypted.Substring(7);
+            try
+            {
+                byte[] encryptedBytes = Convert.FromBase64String(encrypted);
+                byte[] decrypted = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+                return Encoding.UTF8.GetString(decrypted);
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        /// <summary>
         /// Migrates old config.json with plaintext GeminiApiKey to encrypted format.
         /// </summary>
         public bool MigrateLegacyApiKey()
@@ -209,13 +278,13 @@ namespace SimpleXmlEditor.Services
                     var legacyKey = tempConfig.GeminiApiKey;
                     SetApiKey(legacyKey);
                     SaveConfig();
-                    RaiseLog("Migrated legacy plaintext API key to encrypted storage");
+                    RaiseLog(LocalizationManager.GetString("LogMigratedLegacyKey"));
                     return true;
                 }
             }
             catch (Exception ex)
             {
-                RaiseLog($"Migration failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogMigrationFailed", ex.Message));
             }
 
             return false;
@@ -227,11 +296,11 @@ namespace SimpleXmlEditor.Services
             {
                 var json = JsonConvert.SerializeObject(Config, Formatting.Indented);
                 File.WriteAllText(_configPath, json);
-                RaiseLog("Config saved");
+                RaiseLog(LocalizationManager.GetString("LogConfigSaved"));
             }
             catch (Exception ex)
             {
-                RaiseLog($"Config save error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("ConfigSaveError", ex.Message));
             }
         }
 
@@ -243,7 +312,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Cache write error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogCacheWriteError", ex.Message));
             }
         }
 
@@ -255,7 +324,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Score cache write error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogScoreCacheWriteError", ex.Message));
             }
         }
 
@@ -295,7 +364,7 @@ namespace SimpleXmlEditor.Services
                 }
             }
             if (restored > 0)
-                RaiseLog($"Restored {restored} scores from cache");
+                RaiseLog(LocalizationManager.GetString("LogScoresRestored", restored));
             return restored;
         }
 
@@ -347,7 +416,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Progress save failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogProgressSaveError", ex.Message));
             }
         }
 
@@ -378,14 +447,14 @@ namespace SimpleXmlEditor.Services
 
                 if (restoredCount > 0)
                 {
-                    RaiseLog($"Restored {restoredCount} translations from crash recovery file");
+                    RaiseLog(LocalizationManager.GetString("LogCrashRecovery", restoredCount));
                 }
 
                 return restoredCount;
             }
             catch (Exception ex)
             {
-                RaiseLog($"Recovery file error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogRecoveryError", ex.Message));
                 return 0;
             }
         }
@@ -402,7 +471,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Progress file delete failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogProgressDeleteError", ex.Message));
             }
         }
 

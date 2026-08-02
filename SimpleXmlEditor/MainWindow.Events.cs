@@ -314,7 +314,8 @@ namespace SimpleXmlEditor
                 _viewModel.ProfileManager,
                 cfg.EvaluationAiProvider,
                 _viewModel.ConfigService.GetEvaluationApiKey(),
-                cfg.EvaluationModel);
+                cfg.EvaluationModel,
+                cfg.EvaluationModels);
             if (settings.ShowDialog() == true)
             {
                 _viewModel.AiTranslationService.ApiKey = settings.ApiKey;
@@ -329,6 +330,7 @@ namespace SimpleXmlEditor
                     c.EvaluationModel = settings.EvalModel;
                 });
                 _viewModel.ConfigService.SetEvaluationApiKey(settings.EvalApiKey);
+                _viewModel.ConfigService.SaveEvaluationModels(settings.EvalModels);
 
                 if (_viewModel.ProgramLanguage != settings.ProgramLanguage)
                 {

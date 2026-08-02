@@ -4,7 +4,7 @@
         xmlns:hc="https://handyorg.github.io/handycontrol"
         Title="InputDialog" Height="180" Width="380"
         WindowStyle="ToolWindow" ResizeMode="NoResize"
-        Background="#F7F6FB" WindowStartupLocation="CenterOwner">
+        Background="{DynamicResource AppBackgroundBrush}" WindowStartupLocation="CenterOwner">
     <Window.Resources>
     </Window.Resources>
     <Grid Margin="20">

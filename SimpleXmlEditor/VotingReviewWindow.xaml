@@ -1,0 +1,70 @@
+<Window x:Class="SimpleXmlEditor.VotingReviewWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Review Voting Candidates" Height="540" Width="860"
+        Background="#F0EEF6" WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip">
+    <Window.Resources>
+        <Style x:Key="ReviewListBox" TargetType="ListBox">
+            <Setter Property="Background" Value="#F7F6FB"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+        </Style>
+        <DataTemplate x:Key="ReviewItemTemplate">
+            <Border BorderBrush="#E8ECF0" BorderThickness="0,0,0,1" Padding="10,8">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="170"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Key + original -->
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="{Binding EntryKey}" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="#37474F" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding OriginalText}" FontSize="10" Foreground="#78909C"
+                                   TextWrapping="Wrap" MaxHeight="38"/>
+                    </StackPanel>
+
+                    <!-- Current translation -->
+                    <TextBlock Grid.Column="1" Text="{Binding CurrentTranslation}" FontSize="10"
+                               Foreground="#546E7A" TextWrapping="Wrap" VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+
+                    <!-- Candidate picker -->
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding Options}"
+                              SelectedIndex="{Binding SelectedIndex}" FontSize="11"
+                              VerticalAlignment="Center" MaxDropDownHeight="360"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,10">
+            <TextBlock x:Name="WindowTitle" Text="Review Voting Candidates" FontSize="16"
+                       FontWeight="Bold" Foreground="#1E88E5"/>
+            <TextBlock x:Name="HintText" FontSize="11" Foreground="#78909C" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Review list -->
+        <ListBox Grid.Row="1" x:Name="ReviewList" ItemTemplate="{StaticResource ReviewItemTemplate}"
+                 Style="{StaticResource ReviewListBox}"/>
+
+        <!-- Bottom buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="ApplyBtn" Content="Apply Selected" Click="Apply_Click" FontSize="11"
+                    Padding="16,6" Margin="0,0,8,0" Style="{StaticResource SuccessBtn}"/>
+            <Button x:Name="CancelBtn" Content="Cancel" Click="Cancel_Click" FontSize="11"
+                    Padding="16,6" Style="{StaticResource GreyBtn}"/>
+        </StackPanel>
+    </Grid>
+</Window>

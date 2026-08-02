@@ -6,7 +6,7 @@
         Title="Glossary Manager" Height="700" Width="950"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize"
         MinHeight="500" MinWidth="800"
-        Background="#F0EEF6" Loaded="Window_Loaded">
+        Background="{DynamicResource AppBackgroundBrush}" Loaded="Window_Loaded">
 
     <Window.Resources>
     </Window.Resources>
@@ -19,7 +19,7 @@
         </Grid.RowDefinitions>
 
         <!-- ═══ Row 0: Toolbar ═══ -->
-        <Border Grid.Row="0" Background="#EAE8F4" BorderBrush="#DDD9EA" BorderThickness="0,0,0,1" Padding="10,8">
+        <Border Grid.Row="0" Background="{DynamicResource HeaderBackgroundBrush}" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="0,0,0,1" Padding="10,8">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -39,7 +39,7 @@
                         <Button Name="EditBtn" Content="Edit" Click="EditBtn_Click" Style="{StaticResource PrimaryBtn}" FontSize="12"/>
                         <Button Name="DeleteBtn" Content="Delete" Click="DeleteBtn_Click" Style="{StaticResource DangerBtn}" FontSize="12"/>
 
-                        <Separator Width="2" Background="#E0E0E0" Margin="8,0"/>
+                        <Separator Width="2" Background="{DynamicResource BorderBrush}" Margin="8,0"/>
 
                         <Button Name="ImportBtn" Content="Import" Click="ImportBtn_Click" Style="{StaticResource PrimaryBtn}" FontSize="12"/>
                         <Button Name="ExportBtn" Content="Export" Click="ExportBtn_Click" Style="{StaticResource PrimaryBtn}" FontSize="12"/>
@@ -47,7 +47,7 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Name="StatsTxt" Text="0 terms" Foreground="#666" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Name="StatsTxt" Text="0 terms" Foreground="{DynamicResource HeaderForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <Button Name="RefreshBtn" Content="Refresh" Click="RefreshBtn_Click" Style="{StaticResource CyanBtn}" FontSize="12"/>
                         <Button Name="CloseBtn" Content="Close" Click="CloseBtn_Click" Style="{StaticResource PrimaryBtn}" FontSize="12"/>
                     </StackPanel>
@@ -81,6 +81,7 @@
 
         <!-- ═══ Row 1: DataGrid ═══ -->
         <DataGrid Grid.Row="1" Name="TermsGrid" Style="{StaticResource DataGridStyle}" Margin="0"
+                  AutoGenerateColumns="False"
                   MouseDoubleClick="TermsGrid_MouseDoubleClick">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="English (Source)" Binding="{Binding English}" Width="2*" MinWidth="100">
@@ -110,16 +111,16 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Tags" Binding="{Binding Tags}" Width="*" MinWidth="80"/>
+                <DataGridTextColumn Header="Tags" Binding="{Binding Tags}" Width="Auto" MinWidth="50" MaxWidth="240"/>
             </DataGrid.Columns>
         </DataGrid>
 
         <!-- ═══ Row 2: Bottom bar ═══ -->
-        <Border Grid.Row="2" Background="#EAE8F4" BorderBrush="#DDD9EA" BorderThickness="0,1,0,0" Padding="10,6">
+        <Border Grid.Row="2" Background="{DynamicResource HeaderBackgroundBrush}" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="0,1,0,0" Padding="10,6">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Name="BottomStatsTxt" Text="0 confirmed, 0 pending, 0 rejected" 
-                          Foreground="#888" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock Name="BottomCategoryTxt" Text="" Foreground="#888" FontSize="11" 
+                          Foreground="{DynamicResource HeaderForegroundBrush}" FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Name="BottomCategoryTxt" Text="" Foreground="{DynamicResource HeaderForegroundBrush}" FontSize="11" 
                           VerticalAlignment="Center" Margin="20,0,0,0"/>
             </StackPanel>
         </Border>

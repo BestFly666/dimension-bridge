@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using System.Xml.Linq;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -153,7 +154,7 @@ namespace SimpleXmlEditor.Services
             {
                 if (!File.Exists(fileName))
                 {
-                    RaiseLog($"File not found: {fileName}");
+                    RaiseLog(LocalizationManager.GetString("LogFileNotFound", fileName));
                     return entries;
                 }
 
@@ -187,7 +188,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Error loading XML: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("ErrorLoadingXml", ex.Message));
                 throw;
             }
         }
@@ -270,7 +271,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Error saving XML: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("ErrorSavingXml", ex.Message));
                 throw;
             }
         }

@@ -37,6 +37,8 @@ namespace SimpleXmlEditor.ViewModels
         public int BestCount { get; set; }
         public int AppliedCount { get; set; }
         public List<VotingResult> Results { get; set; } = new();
+        /// <summary>Entries where the AI suggests a translation different from the current one — need manual review.</summary>
+        public List<VotingResult> NeedsReview { get; set; } = new();
     }
 
     /// <summary>Outcome of the smart pre-translate (glossary + cache fill).</summary>
@@ -1114,28 +1116,29 @@ namespace SimpleXmlEditor.ViewModels
 
                 var completed = 0;
                 var bestCount = 0;
-                var appliedBest = 0;
+                var needsReview = new List<VotingResult>();
                 foreach (var vr in results)
                 {
                     completed++;
                     var match = Entries.FirstOrDefault(en => en.Key == vr.EntryKey);
-                    if (vr.BestTranslation == (match?.Translation ?? "")) bestCount++;
-                    if (match != null && !string.IsNullOrEmpty(vr.BestTranslation) && vr.BestTranslation != match.Translation)
+                    if (vr.BestTranslation == (match?.Translation ?? ""))
                     {
-                        PushUndoSnapshot(new[] { match });
-                        match.Translation = vr.BestTranslation;
-                        appliedBest++;
+                        bestCount++;
+                        continue;
                     }
+                    if (match != null && !string.IsNullOrEmpty(vr.BestTranslation))
+                        needsReview.Add(vr);
                 }
 
-                if (appliedBest > 0)
-                    OnLogMessage($"✅ {LocalizationManager.GetString("VoteAppliedBest", appliedBest)}");
+                if (needsReview.Count > 0)
+                    OnLogMessage($"🤝 {LocalizationManager.GetString("VoteNeedsReview", needsReview.Count)}");
 
+                // 不自动覆盖译文：需人工确认的条目由 UI 弹出候选对比窗口，用户选定后调用 ApplyVotingSelections
                 VotingCompleted?.Invoke(new VotingOutcome
                 {
                     Completed = completed,
                     BestCount = bestCount,
-                    AppliedCount = appliedBest,
+                    NeedsReview = needsReview,
                     Results = results
                 });
                 return;
@@ -1297,27 +1300,41 @@ namespace SimpleXmlEditor.ViewModels
                 LastEvaluationResult = result.ConsensusSummary;
                 OnLogMessage($"🗳 Vote: {entry.Key} → {result.ConsensusSummary}");
 
-                // Apply best translation if it differs from current
-                if (!string.IsNullOrEmpty(result.BestTranslation) && result.BestTranslation != entry.Translation)
-                {
-                    var confirmed = await (ConfirmationRequested?.Invoke(
-                        LocalizationManager.GetString("VoteApplyPrompt", entry.Key, result.BestTranslation),
-                        LocalizationManager.GetString("VoteApplyTitle")) ?? Task.FromResult(false));
-
-                    if (confirmed)
-                    {
-                        PushUndoSnapshot(new[] { entry });
-                        entry.Translation = result.BestTranslation;
-                        OnLogMessage($"✅ {LocalizationManager.GetString("VoteApplied", entry.Key)}");
-                    }
-                }
-
+                // 不在此处自动应用：若 AI 建议的译文与当前不同，由 UI 弹出候选对比窗口供用户选择
                 return result;
             }
             finally
             {
                 IsEvaluating = false;
             }
+        }
+
+        /// <summary>
+        /// 应用用户在投票候选确认窗口中选定的译文（key → 选中的译文文本）。
+        /// 值为空或与当前译文相同时跳过。
+        /// </summary>
+        public int ApplyVotingSelections(Dictionary<string, string> selections)
+        {
+            if (selections == null || selections.Count == 0)
+                return 0;
+
+            var applied = 0;
+            foreach (var pair in selections)
+            {
+                var match = Entries.FirstOrDefault(en => en.Key == pair.Key);
+                if (match == null || string.IsNullOrEmpty(pair.Value))
+                    continue;
+                if (match.Translation == pair.Value)
+                    continue;
+
+                PushUndoSnapshot(new[] { match });
+                match.Translation = pair.Value;
+                applied++;
+            }
+
+            if (applied > 0)
+                OnLogMessage($"✅ {LocalizationManager.GetString("VoteAppliedBest", applied)}");
+            return applied;
         }
 
         /// <summary>

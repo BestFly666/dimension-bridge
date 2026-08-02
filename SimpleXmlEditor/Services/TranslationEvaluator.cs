@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -41,6 +42,7 @@ namespace SimpleXmlEditor.Services
         private readonly IAiTranslationService _aiService;
         private readonly IConfigService _configService;
         private AiTranslationService _evalAiService;
+        private readonly Dictionary<string, AiTranslationService> _evalServices = new();
 
         public event Action<string> LogMessage;
 
@@ -51,7 +53,7 @@ namespace SimpleXmlEditor.Services
         }
 
         /// <summary>
-        /// 返回评估专用 API 实例（如果配置了不同厂商），否则回退到翻译 API。
+        /// 返回评估专用 API 实例（优先多模型列表第一组；否则单组配置；否则翻译 API）。
         /// </summary>
         private IAiTranslationService GetActiveAiService()
         {
@@ -59,6 +61,20 @@ namespace SimpleXmlEditor.Services
                 return _aiService;
 
             var cfg = _configService.Config;
+
+            // 多模型列表优先：返回第一组有效配置
+            if (cfg.EvaluationModels != null && cfg.EvaluationModels.Count > 0)
+            {
+                foreach (var m in cfg.EvaluationModels)
+                {
+                    var key = _configService.GetEvaluationModelKey(m);
+                    if (string.IsNullOrEmpty(m.Provider) || string.IsNullOrEmpty(m.Model))
+                        continue;
+                    if (Enum.TryParse<AIProvider>(m.Provider, out var provider))
+                        return GetOrCreateEvalService(provider, key, m.Model);
+                }
+            }
+
             if (string.IsNullOrEmpty(cfg.EvaluationAiProvider) || string.IsNullOrEmpty(cfg.EvaluationModel))
                 return _aiService;
 
@@ -74,13 +90,55 @@ namespace SimpleXmlEditor.Services
             }
 
             // 每次调用时同步配置（用户可能随时改设置）
-            if (Enum.TryParse<AIProvider>(cfg.EvaluationAiProvider, out var provider))
+            if (Enum.TryParse<AIProvider>(cfg.EvaluationAiProvider, out var provider2))
             {
-                _evalAiService.SetConfiguration(provider, evalKey, cfg.EvaluationModel, _aiService.TargetLanguage);
+                _evalAiService.SetConfiguration(provider2, evalKey, cfg.EvaluationModel, _aiService.TargetLanguage);
                 return _evalAiService;
             }
 
             return _aiService;
+        }
+
+        /// <summary>
+        /// 返回评估专用 API 实例列表（多模型投票：每个配置一个实例）。
+        /// 无有效配置时回退为单个翻译 API 实例，保证行为与未配置评估模型时一致。
+        /// </summary>
+        private List<IAiTranslationService> GetActiveAiServices()
+        {
+            var services = new List<IAiTranslationService>();
+            if (_configService != null)
+            {
+                var cfg = _configService.Config;
+                if (cfg.EvaluationModels != null && cfg.EvaluationModels.Count > 0)
+                {
+                    foreach (var m in cfg.EvaluationModels)
+                    {
+                        var key = _configService.GetEvaluationModelKey(m);
+                        if (string.IsNullOrEmpty(m.Provider) || string.IsNullOrEmpty(m.Model))
+                            continue;
+                        if (Enum.TryParse<AIProvider>(m.Provider, out var provider))
+                            services.Add(GetOrCreateEvalService(provider, key, m.Model));
+                    }
+                    if (services.Count > 0)
+                        return services;
+                }
+            }
+            services.Add(GetActiveAiService());
+            return services;
+        }
+
+        /// <summary>按 (厂商, 模型) 缓存并返回评估专用服务实例。</summary>
+        private AiTranslationService GetOrCreateEvalService(AIProvider provider, string apiKey, string model)
+        {
+            var cacheKey = $"{provider}|{model}";
+            if (!_evalServices.TryGetValue(cacheKey, out var svc))
+            {
+                svc = new AiTranslationService(_configService);
+                svc.LogMessage += msg => LogMessage?.Invoke(msg);
+                _evalServices[cacheKey] = svc;
+            }
+            svc.SetConfiguration(provider, apiKey, model, _aiService.TargetLanguage);
+            return svc;
         }
 
         private void RaiseLog(string message)
@@ -119,42 +177,68 @@ namespace SimpleXmlEditor.Services
 
             try
             {
-                var prompt = BuildBatchedVotingPrompt(originalText, candidateTranslations, targetLanguage, context);
-                var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
+                var allResults = new List<EvaluationResult>();
+                foreach (var service in GetActiveAiServices())
+                {
+                    var prompt = BuildBatchedVotingPrompt(originalText, candidateTranslations, targetLanguage, context);
+                    var response = await service.TranslateBatchAsync(prompt, 2);
+                    allResults.AddRange(ParseBatchedVotingResponse(response, originalText, candidateTranslations));
+                }
 
-                var results = ParseBatchedVotingResponse(response, originalText, candidateTranslations);
-
-                if (results.Count == 0)
+                if (allResults.Count == 0)
                     return new VotingResult { OriginalText = originalText };
 
-                var grouped = results
-                    .GroupBy(r => r.TranslatedText)
-                    .Select(g => new
-                    {
-                        Translation = g.Key,
-                        AvgScore = g.Average(r => r.Score),
-                        Count = g.Count()
-                    })
-                    .OrderByDescending(g => g.AvgScore)
-                    .ToList();
-
-                var best = grouped.First();
-                var avgScore = results.Average(r => r.Score);
-
-                return new VotingResult
-                {
-                    OriginalText = originalText,
-                    AgentResults = results,
-                    AverageScore = Math.Round(avgScore, 1),
-                    BestTranslation = best.Translation,
-                    ConsensusSummary = $"Best: \"{best.Translation}\" (avg {best.AvgScore:F1}/10 from {best.Count} votes)"
-                };
+                return BuildVotingResult(originalText, allResults);
             }
             catch (Exception ex)
             {
-                RaiseLog($"⚠ Voting failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogVotingFailed", ex.Message));
                 return new VotingResult { OriginalText = originalText };
             }
+        }
+
+        /// <summary>按候选译文分组聚合投票评分，均分最高者为 best。</summary>
+        private static VotingResult BuildVotingResult(string originalText, List<EvaluationResult> results)
+        {
+            var grouped = results
+                .GroupBy(r => r.TranslatedText)
+                .Select(g => new
+                {
+                    Translation = g.Key,
+                    AvgScore = g.Average(r => r.Score),
+                    Count = g.Count()
+                })
+                .OrderByDescending(g => g.AvgScore)
+                .ToList();
+
+            var best = grouped.First();
+            var avgScore = results.Average(r => r.Score);
+
+            return new VotingResult
+            {
+                OriginalText = originalText,
+                AgentResults = results,
+                AverageScore = Math.Round(avgScore, 1),
+                BestTranslation = best.Translation,
+                ConsensusSummary = $"Best: \"{best.Translation}\" (avg {best.AvgScore:F1}/10 from {best.Count} votes)"
+            };
+        }
+
+        /// <summary>合并同一条目的多模型投票结果（各模型评分一起参与分组均分）。</summary>
+        private static VotingResult MergeVotingResults(IEnumerable<VotingResult> results)
+        {
+            var list = results.ToList();
+            if (list.Count == 0)
+                return null;
+
+            var allAgents = list.SelectMany(r => r.AgentResults).ToList();
+            if (allAgents.Count == 0)
+                return list.First();
+
+            var first = list.First();
+            var merged = BuildVotingResult(first.OriginalText, allAgents);
+            merged.EntryKey = first.EntryKey;
+            return merged;
         }
 
         private string BuildBatchedVotingPrompt(string original, string[] candidates, string targetLang, string context)
@@ -256,7 +340,7 @@ Only return the JSON, no other text.";
             }
             catch (Exception ex)
             {
-                RaiseLog($"⚠ Candidate generation failed: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("LogCandidateGenFailed", ex.Message));
                 return Array.Empty<string>();
             }
         }
@@ -338,7 +422,7 @@ Only return the JSON, no other text.";
 
                     if (parsed.Count == 0)
                     {
-                        RaiseLog("⚠ Batch evaluation parse failed, falling back to per-entry");
+                        RaiseLog(LocalizationManager.GetString("LogEvalParseFallback"));
                         foreach (var item in chunk)
                         {
                             try
@@ -352,14 +436,14 @@ Only return the JSON, no other text.";
                             }
                             catch (Exception ex)
                             {
-                                RaiseLog($"⚠ Per-entry evaluation failed for {item.Key}: {ex.Message}");
+                                RaiseLog(LocalizationManager.GetString("LogPerEntryEvalFailed", item.Key, ex.Message));
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    RaiseLog($"⚠ Batch evaluation chunk failed: {ex.Message}");
+                    RaiseLog(LocalizationManager.GetString("LogEvalChunkFailed", ex.Message));
                 }
             }
 
@@ -384,14 +468,26 @@ Only return the JSON, no other text.";
             {
                 try
                 {
-                    var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
-                    var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
-                    var parsed = ParseBatchVotingResponse(response, chunk);
-                    allResults.AddRange(parsed);
-
-                    if (parsed.Count == 0)
+                    var parsedList = new List<VotingResult>();
+                    foreach (var service in GetActiveAiServices())
                     {
-                        RaiseLog("⚠ Batch voting parse failed, falling back to per-entry");
+                        var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
+                        var response = await service.TranslateBatchAsync(prompt, 2);
+                        parsedList.AddRange(ParseBatchVotingResponse(response, chunk));
+                    }
+
+                    // 按条目合并多模型结果；单模型（每条目仅一份）保留 AI 返回的 best 原样
+                    var merged = new List<VotingResult>();
+                    foreach (var g in parsedList.GroupBy(v => v.EntryKey))
+                    {
+                        var group = g.ToList();
+                        merged.Add(group.Count == 1 ? group[0] : MergeVotingResults(group));
+                    }
+                    allResults.AddRange(merged);
+
+                    if (merged.Count == 0)
+                    {
+                        RaiseLog(LocalizationManager.GetString("LogVotingParseFallback"));
                         foreach (var item in chunk)
                         {
                             try
@@ -405,14 +501,14 @@ Only return the JSON, no other text.";
                             }
                             catch (Exception ex)
                             {
-                                RaiseLog($"⚠ Per-entry voting failed for {item.Key}: {ex.Message}");
+                                RaiseLog(LocalizationManager.GetString("LogPerEntryVotingFailed", item.Key, ex.Message));
                             }
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    RaiseLog($"⚠ Batch voting chunk failed: {ex.Message}");
+                    RaiseLog(LocalizationManager.GetString("LogVotingChunkFailed", ex.Message));
                 }
             }
 
@@ -685,14 +781,14 @@ Include ALL {items.Count} entries. Only return the JSON, no other text.";
                                 ProviderName = agent,
                                 Improvement = ""
                             });
-                            RaiseLog($"🗳 {agent} scored {score:F1}/10 for: {candidates[candidateIdx - 1]}");
+                            RaiseLog(LocalizationManager.GetString("LogAgentScored", agent, score, candidates[candidateIdx - 1]));
                         }
                     }
                 }
             }
             catch
             {
-                RaiseLog("⚠ Batch voting parse failed, trying regex fallback");
+                RaiseLog(LocalizationManager.GetString("LogVotingRegexFallback"));
                 // Fallback: try to extract individual scores
                 var regex = new System.Text.RegularExpressions.Regex(
                     @"(\w+)\s*[:：]\s*(\d+(?:\.\d+)?)\s*/\s*10",

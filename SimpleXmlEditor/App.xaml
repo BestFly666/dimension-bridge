@@ -7,6 +7,8 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml"/>
+                <!-- Theme colors (light/dark switched at runtime) -->
+                <ResourceDictionary x:Name="ThemeColors" Source="Themes/LightColors.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Global accent color: Material Blue, matching the toolbar gradient.
@@ -73,10 +75,10 @@
 
             <!-- ===== Glossary window DataGrid ===== -->
             <Style x:Key="DataGridStyle" TargetType="DataGrid">
-                <Setter Property="Background" Value="#F7F6FB"/>
-                <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                <Setter Property="Background" Value="{DynamicResource RegionBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
                 <Setter Property="GridLinesVisibility" Value="Horizontal"/>
-                <Setter Property="HorizontalGridLinesBrush" Value="#F0F0F0"/>
+                <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource ThirdlyBorderBrush}"/>
                 <Setter Property="HeadersVisibility" Value="Column"/>
                 <Setter Property="AutoGenerateColumns" Value="False"/>
                 <Setter Property="CanUserAddRows" Value="False"/>
@@ -84,21 +86,24 @@
                 <Setter Property="SelectionMode" Value="Single"/>
                 <Setter Property="RowHeight" Value="32"/>
                 <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                <Setter Property="RowBackground" Value="{DynamicResource RegionBrush}"/>
+                <Setter Property="AlternatingRowBackground" Value="{DynamicResource SecondaryRegionBrush}"/>
                 <Setter Property="CellStyle">
                     <Setter.Value>
                         <Style TargetType="DataGridCell">
-                            <Setter Property="Foreground" Value="#37474F"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                             <Setter Property="Background" Value="Transparent"/>
                             <Setter Property="BorderThickness" Value="0"/>
                             <Setter Property="VerticalContentAlignment" Value="Center"/>
                             <Style.Triggers>
                                 <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#BBDEFB"/>
-                                    <Setter Property="Foreground" Value="#263238"/>
+                                    <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource WhiteBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsEditing" Value="True">
-                                    <Setter Property="Background" Value="#FDFDFE"/>
-                                    <Setter Property="Foreground" Value="#263238"/>
+                                    <Setter Property="Background" Value="{DynamicResource DefaultBrush}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                 </Trigger>
                             </Style.Triggers>
                         </Style>

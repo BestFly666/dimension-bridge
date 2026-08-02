@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="选择文件类型" Height="160" Width="350"
         WindowStyle="ToolWindow" ResizeMode="NoResize"
-        Background="#F7F6FB" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        Background="{DynamicResource AppBackgroundBrush}" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <Window.Resources>
     </Window.Resources>
     <Grid Margin="20">

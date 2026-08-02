@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.Localization;
@@ -15,19 +17,29 @@ namespace SimpleXmlEditor
     public partial class GlossaryWindow : Window
     {
         private readonly IGlossaryManager _glossary;
-        private List<GlossaryTerm> _displayedTerms = new();
+        private readonly ObservableCollection<GlossaryTerm> _displayedTerms = new();
         private bool _suppressFilterEvents = false;
+        private readonly DispatcherTimer _searchTimer;
         public event Action<List<GlossaryConflict>> ConflictsDetected;
 
         public GlossaryWindow(IGlossaryManager glossary)
         {
             InitializeComponent();
             _glossary = glossary;
+
+            // 搜索防抖：停止输入 250ms 后才执行搜索，避免每次按键全量刷新卡顿
+            _searchTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _searchTimer.Tick += (_, _) =>
+            {
+                _searchTimer.Stop();
+                RefreshAll();
+            };
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             ApplyLocalization();
+            TermsGrid.ItemsSource = _displayedTerms;
             RefreshAll();
         }
 
@@ -56,8 +68,11 @@ namespace SimpleXmlEditor
 
         private void RefreshAll()
         {
-            _displayedTerms = GetFilteredTerms();
-            TermsGrid.ItemsSource = _displayedTerms;
+            // 增量更新同一 ObservableCollection：DataGrid 复用同一个 ItemsSource，
+            // 避免每次重建列表导致卡顿与滚动位置丢失
+            _displayedTerms.Clear();
+            foreach (var term in GetFilteredTerms())
+                _displayedTerms.Add(term);
             UpdateStats();
         }
 
@@ -103,6 +118,17 @@ namespace SimpleXmlEditor
 
         private void PopulateFilterCombos()
         {
+            var cats = _glossary.GetAllCategories();
+
+            // 分类集合未变化时跳过重建（搜索/过滤不改变分类，避免每次刷新重建下拉框）
+            var currentCats = CategoryFilter.Items
+                .Cast<ComboBoxItem>()
+                .Skip(1) // 跳过"全部"项
+                .Select(i => i.Content?.ToString() ?? "")
+                .ToList();
+            if (currentCats.SequenceEqual(cats))
+                return;
+
             _suppressFilterEvents = true;
             try
             {
@@ -112,7 +138,7 @@ namespace SimpleXmlEditor
                 var prevCat = (CategoryFilter.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? allLabel;
                 CategoryFilter.Items.Clear();
                 CategoryFilter.Items.Add(new ComboBoxItem { Content = allLabel, IsSelected = prevCat == allLabel });
-                foreach (var cat in _glossary.GetAllCategories())
+                foreach (var cat in cats)
                 {
                     CategoryFilter.Items.Add(new ComboBoxItem { Content = cat, IsSelected = prevCat == cat });
                 }
@@ -140,7 +166,9 @@ namespace SimpleXmlEditor
 
         private void SearchTxt_TextChanged(object sender, TextChangedEventArgs e)
         {
-            RefreshAll();
+            // 防抖：停止上一个定时器重新计时，输入停顿后才刷新
+            _searchTimer.Stop();
+            _searchTimer.Start();
         }
 
         private void Filter_Changed(object sender, SelectionChangedEventArgs e)

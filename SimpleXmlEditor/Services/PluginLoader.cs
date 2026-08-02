@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -45,11 +46,11 @@ namespace SimpleXmlEditor.Services
                 {
                     var asm = Assembly.LoadFrom(dllPath);
                     DiscoverInAssembly(asm);
-                    Log($"Loaded plugin DLL: {Path.GetFileName(dllPath)}");
+                    Log(LocalizationManager.GetString("LogPluginLoaded", Path.GetFileName(dllPath)));
                 }
                 catch (Exception ex)
                 {
-                    Log($"Failed to load plugin {Path.GetFileName(dllPath)}: {ex.Message}");
+                    Log(LocalizationManager.GetString("LogPluginLoadFailed", Path.GetFileName(dllPath), ex.Message));
                 }
             }
         }
@@ -68,11 +69,11 @@ namespace SimpleXmlEditor.Services
                     {
                         var plugin = (IFileFormatPlugin)Activator.CreateInstance(type)!;
                         _formatPlugins.Add(plugin);
-                        Log($"Discovered format plugin: {plugin.FormatName} ({string.Join(", ", plugin.FileExtensions)})");
+                        Log(LocalizationManager.GetString("LogPluginFormatDiscovered", plugin.FormatName, string.Join(", ", plugin.FileExtensions)));
                     }
                     catch (Exception ex)
                     {
-                        Log($"Failed to instantiate format plugin {type.Name}: {ex.Message}");
+                        Log(LocalizationManager.GetString("LogPluginFormatFailed", type.Name, ex.Message));
                     }
                 }
 
@@ -83,11 +84,11 @@ namespace SimpleXmlEditor.Services
                     {
                         var plugin = (IPostProcessPlugin)Activator.CreateInstance(type)!;
                         _postPlugins.Add(plugin);
-                        Log($"Discovered post-process plugin: {plugin.Name}");
+                        Log(LocalizationManager.GetString("LogPluginPostDiscovered", plugin.Name));
                     }
                     catch (Exception ex)
                     {
-                        Log($"Failed to instantiate post-process plugin {type.Name}: {ex.Message}");
+                        Log(LocalizationManager.GetString("LogPluginPostFailed", type.Name, ex.Message));
                     }
                 }
             }

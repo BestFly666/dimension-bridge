@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -514,7 +515,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                RaiseLog($"Translation error: {ex.Message}");
+                RaiseLog(LocalizationManager.GetString("TranslationError", ex.Message));
                 return null;
             }
         }
@@ -599,7 +600,7 @@ namespace SimpleXmlEditor.Services
                 if (statusCode == 429)
                 {
                     var delay = (attempt + 1) * 3000;
-                    RaiseLog($"Rate limited (HTTP 429), retry {attempt + 1}/{maxRetries} after {delay / 1000}s");
+                    RaiseLog(LocalizationManager.GetString("LogRateLimitedRetry", attempt + 1, maxRetries, delay / 1000));
                     await Task.Delay(delay);
                     continue;
                 }
@@ -694,7 +695,7 @@ namespace SimpleXmlEditor.Services
                     if (attempt < maxRetries - 1)
                     {
                         var delay = CalculateOptimalDelay() * (attempt + 2);
-                        RaiseLog($"Rate limit (HTTP 429), waiting {delay / 1000}s before retry {attempt + 1}/{maxRetries}");
+                        RaiseLog(LocalizationManager.GetString("LogRateLimit429", delay / 1000, attempt + 1, maxRetries));
                         await Task.Delay(delay);
                         continue;
                     }

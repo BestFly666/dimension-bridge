@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.ExpertProfiles;
+using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
@@ -97,12 +98,12 @@ namespace SimpleXmlEditor.Services
 
             if (string.IsNullOrEmpty(_aiService.ApiKey))
             {
-                Log("API Key not set");
+                Log(LocalizationManager.GetString("LogApiKeyNotSet"));
                 return results;
             }
             if (string.IsNullOrEmpty(_aiService.Model))
             {
-                Log("Model not selected");
+                Log(LocalizationManager.GetString("LogModelNotSelected"));
                 return results;
             }
             if (!batch.Any())
@@ -174,7 +175,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                Log($"Translation error: {ex.Message}");
+                Log(LocalizationManager.GetString("TranslationError", ex.Message));
                 return results;
             }
         }
@@ -312,7 +313,7 @@ namespace SimpleXmlEditor.Services
             }
             catch (Exception ex)
             {
-                Log($"Parse error: {ex.Message} — trying fallback");
+                Log(LocalizationManager.GetString("LogParseError", ex.Message));
                 ParseFallback(response, entries, results);
             }
 

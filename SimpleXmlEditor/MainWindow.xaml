@@ -5,7 +5,7 @@
         xmlns:local="clr-namespace:SimpleXmlEditor"
         Title="" Height="800" Width="1400"
         MinWidth="1100" MinHeight="640"
-        WindowStartupLocation="CenterScreen" Background="#F0EEF6" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource AppBackgroundBrush}" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
 
     <Window.Resources>
         <!-- Convert DataGrid column DisplayIndex to an Excel-style letter (A, B, C, ...) -->
@@ -80,7 +80,7 @@
         </Menu>
 
         <!-- ═══════════ SIMPLIFIED HEADER TOOLBAR ═══════════ -->
-        <Border Grid.Row="1" Background="#EAE8F4" BorderBrush="#DDD9EA" BorderThickness="0,0,0,1" Padding="14,10">
+        <Border Grid.Row="1" Background="{DynamicResource HeaderBackgroundBrush}" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="0,0,0,1" Padding="14,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -91,8 +91,8 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <TextBlock Text="🌐" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="#37474F"/>
-                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="#78909C"/>
+                        <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}"/>
+                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="{DynamicResource AppSubForegroundBrush}"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -115,11 +115,11 @@
         </Border>
 
         <!-- ═══════════ FILE TABS PANEL ═══════════ -->
-        <Border Grid.Row="2" Name="FileTabsPanel" Background="#E5E3F0" Padding="8,4"
-                BorderBrush="#DDD9EA" BorderThickness="0,0,0,1" Visibility="Visible">
+        <Border Grid.Row="2" Name="FileTabsPanel" Background="{DynamicResource TabHeaderBackgroundBrush}" Padding="8,4"
+                BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="0,0,0,1" Visibility="Visible">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Name="ProjectFiles" Text="📄 Project" FontSize="13" FontWeight="SemiBold"
-                           Foreground="#546E7A" VerticalAlignment="Center" Margin="8,0,12,0"/>
+                           Foreground="{DynamicResource AppSubForegroundBrush}" VerticalAlignment="Center" Margin="8,0,12,0"/>
                 <Border Background="#1E88E5" CornerRadius="3,3,0,0" Padding="14,7">
                     <TextBlock Name="CurrentFileTab" Text="No file loaded" Foreground="White" FontSize="12"/>
                 </Border>
@@ -131,7 +131,7 @@
         </Border>
 
         <!-- ═══════════ AI TRANSLATION PANEL ═══════════ -->
-        <Border Grid.Row="3" Background="#E8F5E9" Margin="8,8,8,4" BorderBrush="#C8E6C9"
+        <Border Grid.Row="3" Background="{DynamicResource SuccessChipBgBrush}" Margin="8,8,8,4" BorderBrush="{DynamicResource SuccessChipFgBrush}"
                 CornerRadius="8" Padding="16" BorderThickness="1">
             <Grid>
                 <Grid.RowDefinitions>
@@ -140,7 +140,7 @@
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Name="AITranslationTitle" Text="🤖 AI Translation Center"
-                          FontSize="15" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,10"/>
+                          FontSize="15" FontWeight="Bold" Foreground="{DynamicResource SuccessChipFgBrush}" Margin="0,0,0,10"/>
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
@@ -154,9 +154,9 @@
                                 Click="TranslateSelectedBtn_Click" Style="{StaticResource PrimaryBtn}"/>
 
                         <!-- Batch Settings -->
-                        <Border Background="#FDFDFE" CornerRadius="6" Padding="10,6" Margin="8,0" BorderBrush="#DDD9EA" BorderThickness="1">
+                        <Border Background="{DynamicResource BatchPanelBackgroundBrush}" CornerRadius="6" Padding="10,6" Margin="8,0" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Name="BatchLabelText" Text="Batch:" Foreground="#78909C" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Name="BatchLabelText" Text="Batch:" Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <hc:TextBox Name="BatchSizeTxt" Text="50" Width="42" FontSize="13"
                                             VerticalAlignment="Center" TextChanged="BatchSizeTxt_TextChanged" TextAlignment="Center"/>
                             </StackPanel>
@@ -175,26 +175,26 @@
 
                     <!-- Right: Info Pills only (no clear buttons) -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#E8F5E9">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="{DynamicResource SuccessChipBgBrush}">
                             <TextBlock Name="EvalResult" Text=""
                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
-                                      Foreground="#2E7D32"
+                                      Foreground="{DynamicResource SuccessChipFgBrush}"
                                       ToolTip="Last evaluation result"/>
                         </Border>
-                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#E3F2FD">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="{DynamicResource InfoChipBgBrush}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Name="CacheInfo" Text="💾 Cache: 0"
                                           FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
-                                          Foreground="#1565C0"/>
+                                          Foreground="{DynamicResource InfoChipFgBrush}"/>
                                 <Button Name="ClearCacheBtn" Content="🗑 清空缓存"
                                         Click="ClearCacheBtn_Click" Style="{StaticResource GreyBtn}"
                                         FontSize="11" Padding="8,4" Margin="8,0,0,0"/>
                             </StackPanel>
                         </Border>
-                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#F3E5F5">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="{DynamicResource AccentChipBgBrush}">
                             <TextBlock Name="GlossaryInfo" Text="📖 Glossary: 0"
                                       FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
-                                      Foreground="#7B1FA2"/>
+                                      Foreground="{DynamicResource AccentChipFgBrush}"/>
                         </Border>
                     </StackPanel>
                 </Grid>
@@ -209,7 +209,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- ===== LEFT: DataGrid ===== -->
-            <Border Grid.Column="0" Background="White" Margin="0,0,4,0" BorderBrush="#DDD9EA"
+            <Border Grid.Column="0" Background="{DynamicResource BatchPanelBackgroundBrush}" Margin="0,0,4,0" BorderBrush="{DynamicResource HeaderBorderBrush}"
                     BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -225,9 +225,9 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Name="TranslationDataTitle" Text="📋 Translation Data"
-                                  FontSize="15" FontWeight="Bold" Foreground="#37474F" Margin="0"/>
+                                  FontSize="15" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}" Margin="0"/>
                         <TextBlock Grid.Column="1" Name="FilterCountText" Text="0"
-                                  Foreground="#78909C" FontSize="12" VerticalAlignment="Center"/>
+                                  Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center"/>
                     </Grid>
 
                     <!-- Filter Row -->
@@ -264,13 +264,20 @@
                              SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
                              HeadersVisibility="All"
                              GridLinesVisibility="All"
-                             HorizontalGridLinesBrush="#E0E0E0" VerticalGridLinesBrush="#E0E0E0"
+                             Background="{DynamicResource RegionBrush}"
+                             RowBackground="{DynamicResource RegionBrush}"
+                             AlternatingRowBackground="{DynamicResource SecondaryRegionBrush}"
+                             Foreground="{DynamicResource TextBrush}"
+                             BorderBrush="{DynamicResource BorderBrush}"
+                             HorizontalGridLinesBrush="{DynamicResource ThirdlyBorderBrush}" VerticalGridLinesBrush="{DynamicResource ThirdlyBorderBrush}"
                              RowHeaderWidth="52"
                              BorderThickness="0"
                              Loaded="EntriesGrid_Loaded"
                              BeginningEdit="EntriesGrid_BeginningEdit"
                              PreviewKeyDown="EntriesGrid_PreviewKeyDown"
-                             ScrollViewer.ScrollChanged="EntriesGrid_ScrollChanged"
+                             PreviewMouseLeftButtonDown="EntriesGrid_PreviewMouseLeftButtonDown"
+                             PreviewMouseMove="EntriesGrid_PreviewMouseMove"
+                             PreviewMouseLeftButtonUp="EntriesGrid_PreviewMouseLeftButtonUp"
                              EnableRowVirtualization="True"
                              EnableColumnVirtualization="True"
                              FontSize="12.5">
@@ -297,13 +304,13 @@
                         </DataGrid.ContextMenu>
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="#E5E3F0"/>
-                                <Setter Property="Foreground" Value="#455A64"/>
+                                <Setter Property="Background" Value="{DynamicResource ColHeaderBackgroundBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ColHeaderForegroundBrush}"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Setter Property="FontSize" Value="12"/>
                                 <Setter Property="Padding" Value="10,6"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,2"/>
-                                <Setter Property="BorderBrush" Value="#CFD8DC"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource ColHeaderBorderBrush}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="DataGridColumnHeader">
@@ -316,8 +323,8 @@
                                                      letter centered inside; click anywhere in this row = select the whole column -->
                                                 <Button Grid.Row="0" Padding="0" Cursor="Hand"
                                                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                                        Foreground="#607D8B" FontWeight="Bold" FontSize="10"
-                                                        Background="#DDD9EA" BorderBrush="#B0BEC5" BorderThickness="0,0,0,1"
+                                                        Foreground="{DynamicResource ColHeaderLetterForegroundBrush}" FontWeight="Bold" FontSize="10"
+                                                        Background="{DynamicResource ColHeaderLetterBackgroundBrush}" BorderBrush="{DynamicResource ColHeaderLetterBorderBrush}" BorderThickness="0,0,0,1"
                                                         Content="{Binding Column.DisplayIndex, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource IndexToLetter}}"
                                                         Click="ColumnLetterBtn_Click"
                                                         Tag="{Binding RelativeSource={RelativeSource TemplatedParent}}">
@@ -331,7 +338,7 @@
                                                             </Border>
                                                             <ControlTemplate.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter TargetName="bd" Property="Background" Value="#B3E5FC"/>
+                                                                    <Setter TargetName="bd" Property="Background" Value="{DynamicResource ColHeaderLetterHoverBackgroundBrush}"/>
                                                                 </Trigger>
                                                             </ControlTemplate.Triggers>
                                                         </ControlTemplate>
@@ -344,7 +351,7 @@
                                                             Margin="{TemplateBinding Padding}">
                                                     <ContentPresenter/>
                                                     <TextBlock x:Name="SortArrow" Text="▲" FontSize="9"
-                                                               Foreground="#546E7A" Margin="4,0,0,0" Visibility="Collapsed"/>
+                                                               Foreground="{DynamicResource ColHeaderSortArrowBrush}" Margin="4,0,0,0" Visibility="Collapsed"/>
                                                 </StackPanel>
                                             </Grid>
                                             <ControlTemplate.Triggers>
@@ -364,11 +371,11 @@
                         </DataGrid.ColumnHeaderStyle>
                         <DataGrid.RowHeaderStyle>
                             <Style TargetType="DataGridRowHeader">
-                                <Setter Property="Background" Value="#E5E3F0"/>
-                                <Setter Property="Foreground" Value="#78909C"/>
+                                <Setter Property="Background" Value="{DynamicResource RowHeaderBackgroundBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource RowHeaderForegroundBrush}"/>
                                 <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="BorderThickness" Value="0,0,1,1"/>
-                                <Setter Property="BorderBrush" Value="#CFD8DC"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource ColHeaderBorderBrush}"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="DataGridRowHeader">
@@ -407,11 +414,11 @@
                             <Style TargetType="DataGridRow">
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#E3F2FD"/>
+                                        <Setter Property="Background" Value="{DynamicResource SecondaryRegionBrush}"/>
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource WhiteBrush}"/>
                                         <Setter Property="FontWeight" Value="SemiBold"/>
                                     </Trigger>
                                 </Style.Triggers>
@@ -419,17 +426,17 @@
                         </DataGrid.RowStyle>
                         <DataGrid.CellStyle>
                             <Style TargetType="DataGridCell">
-                                <Setter Property="Foreground" Value="#37474F"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                 <Setter Property="Background" Value="Transparent"/>
                                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                                 <Style.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource WhiteBrush}"/>
                                     </Trigger>
                                     <Trigger Property="IsEditing" Value="True">
-                                        <Setter Property="Background" Value="#FDFDFE"/>
-                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="Background" Value="{DynamicResource DefaultBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
@@ -450,9 +457,9 @@
                                         <Setter Property="Padding" Value="6,2"/>
                                         <Setter Property="VerticalContentAlignment" Value="Center"/>
                                         <Setter Property="BorderThickness" Value="0"/>
-                                        <Setter Property="Background" Value="#FDFDFE"/>
-                                        <Setter Property="Foreground" Value="#263238"/>
-                                        <Setter Property="CaretBrush" Value="#263238"/>
+                                        <Setter Property="Background" Value="{DynamicResource DefaultBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                        <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
                                     </Style>
                                 </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
@@ -469,13 +476,13 @@
                                         <Setter Property="Padding" Value="6,2"/>
                                         <Setter Property="VerticalContentAlignment" Value="Center"/>
                                         <Setter Property="BorderThickness" Value="0"/>
-                                        <Setter Property="Background" Value="#FDFDFE"/>
-                                        <Setter Property="Foreground" Value="#263238"/>
-                                        <Setter Property="CaretBrush" Value="#263238"/>
+                                        <Setter Property="Background" Value="{DynamicResource DefaultBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+                                        <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/>
                                     </Style>
                                 </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTemplateColumn Header="Translation" SortMemberPath="Translation" Width="360" MinWidth="150">
+                            <DataGridTemplateColumn Header="Translation" SortMemberPath="Translation" Width="*" MinWidth="200">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Translation}" TextWrapping="Wrap" VerticalAlignment="Center" Padding="8,4"/>
@@ -486,7 +493,9 @@
                                         <TextBox Text="{Binding Translation, UpdateSourceTrigger=PropertyChanged}"
                                                 TextWrapping="Wrap" AcceptsReturn="True"
                                                 BorderThickness="0" Padding="8,4"
-                                                Background="#FDFDFE" Foreground="#263238" CaretBrush="#263238"/>
+                                                Background="{DynamicResource DefaultBrush}"
+                                                Foreground="{DynamicResource TextBrush}"
+                                                CaretBrush="{DynamicResource TextBrush}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
@@ -511,15 +520,15 @@
             <!-- ===== RIGHT: Activity Log ===== -->
             <Grid Grid.Column="1">
                 <!-- Collapsed-state expand bar (always reachable) -->
-                <Border x:Name="LogExpandBar" Background="#EAE8F4" Margin="4,0,0,0"
-                        BorderBrush="#DDD9EA" BorderThickness="1" CornerRadius="8"
+                <Border x:Name="LogExpandBar" Background="{DynamicResource HeaderBackgroundBrush}" Margin="4,0,0,0"
+                        BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1" CornerRadius="8"
                         HorizontalAlignment="Left" Width="26" Visibility="Collapsed">
                     <Button Content="▶" Click="ToggleLogBtn_Click" Style="{StaticResource GreyBtn}"
                             Padding="0" FontSize="10" Margin="2,0,2,0"
                             ToolTip="Expand log"/>
                 </Border>
-                <Border x:Name="LogPanel" Background="#F7F6FB" Margin="4,0,0,0"
-                        BorderBrush="#DDD9EA" BorderThickness="1" CornerRadius="8" Padding="16">
+                <Border x:Name="LogPanel" Background="{DynamicResource LogPanelBackgroundBrush}" Margin="4,0,0,0"
+                        BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -534,7 +543,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Name="ActivityLogTitle" Text="📋 Activity Log"
-                                  FontSize="15" FontWeight="Bold" Foreground="#37474F" Margin="0"/>
+                                  FontSize="15" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}" Margin="0"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <Button Name="ToggleLogBtn" Content="◀" Click="ToggleLogBtn_Click"
                                     Style="{StaticResource GreyBtn}" Width="30" Padding="4,4" FontSize="10"
@@ -558,12 +567,12 @@
                     </Border>
 
                     <!-- Log Stats -->
-                    <Border Grid.Row="2" Background="#E5E3F0" CornerRadius="4" Padding="8,6" Margin="0,8,0,0">
+                    <Border Grid.Row="2" Background="{DynamicResource TabHeaderBackgroundBrush}" CornerRadius="4" Padding="8,6" Margin="0,8,0,0">
                         <Grid>
                             <TextBlock Name="RealTimeLabel" Text="🕒 Real-time" FontSize="10"
-                                      Foreground="#78909C" HorizontalAlignment="Left"/>
+                                      Foreground="{DynamicResource AppSubForegroundBrush}" HorizontalAlignment="Left"/>
                             <TextBlock Name="AutoScrollLabel" Text="🔄 Auto-scroll" FontSize="10"
-                                      Foreground="#78909C" HorizontalAlignment="Right"/>
+                                      Foreground="{DynamicResource AppSubForegroundBrush}" HorizontalAlignment="Right"/>
                         </Grid>
                     </Border>
                 </Grid>
@@ -572,8 +581,8 @@
         </Grid>
 
         <!-- ═══════════ BOTTOM BAR ═══════════ -->
-        <Border Grid.Row="5" Background="#EAE8F4" CornerRadius="4" Padding="10,6"
-                Margin="8,0,8,8" BorderBrush="#DDD9EA" BorderThickness="1">
+        <Border Grid.Row="5" Background="{DynamicResource HeaderBackgroundBrush}" CornerRadius="4" Padding="10,6"
+                Margin="8,0,8,8" BorderBrush="{DynamicResource HeaderBorderBrush}" BorderThickness="1">
             <Border.Effect>
                 <DropShadowEffect Color="#263238" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.08"/>
             </Border.Effect>
@@ -587,20 +596,20 @@
                 <!-- Status Indicator -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
                     <TextBlock Name="StatusIndicator" Text="⚪" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                    <TextBlock Name="ProgressText" Text="" FontSize="11" Foreground="#546E7A" VerticalAlignment="Center"/>
+                    <TextBlock Name="ProgressText" Text="" FontSize="11" Foreground="{DynamicResource AppSubForegroundBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Progress Bar -->
                 <ProgressBar Grid.Column="1" Name="ProgressBar" Height="8"
                             IsIndeterminate="False" Visibility="Collapsed"
-                            Foreground="#2196F3" Background="#DDD9EA" BorderThickness="0"
+                            Foreground="{DynamicResource PrimaryBrush}" Background="{DynamicResource HeaderBorderBrush}" BorderThickness="0"
                             VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                 <!-- Speed / ETA / Cost -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Name="SpeedText" Text="" FontSize="10" Foreground="#78909C"
+                    <TextBlock Name="SpeedText" Text="" FontSize="10" Foreground="{DynamicResource AppSubForegroundBrush}"
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <TextBlock Name="EtaText" Text="" FontSize="10" Foreground="#78909C"
+                    <TextBlock Name="EtaText" Text="" FontSize="10" Foreground="{DynamicResource AppSubForegroundBrush}"
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <TextBlock Name="CostText" Text="" FontSize="10" FontWeight="SemiBold"
                               Foreground="#43A047" VerticalAlignment="Center"/>

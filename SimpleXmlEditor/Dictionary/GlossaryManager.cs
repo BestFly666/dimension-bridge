@@ -520,12 +520,19 @@ namespace SimpleXmlEditor.Dictionary
             if (string.IsNullOrWhiteSpace(query))
                 return Terms.Values.OrderBy(t => t.English).ToList();
 
-            var q = query.Trim();
+            // 支持多关键词：空格/全角空格分隔，所有关键词命中才显示（AND）
+            var keywords = query.Trim()
+                .Split(new[] { ' ', '\u3000' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(k => k.Trim())
+                .Where(k => k.Length > 0)
+                .ToList();
+
             return Terms.Values
-                .Where(t => t.English.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0
-                         || t.Chinese.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0
-                         || t.Tags.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0
-                         || t.Category.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                .Where(t => keywords.All(k =>
+                    (t.English ?? "").IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0
+                    || (t.Chinese ?? "").IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0
+                    || (t.Tags ?? "").IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0
+                    || (t.Category ?? "").IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0))
                 .OrderBy(t => t.English)
                 .ToList();
         }

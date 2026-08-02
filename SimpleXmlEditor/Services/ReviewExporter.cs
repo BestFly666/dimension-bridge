@@ -48,7 +48,11 @@ namespace SimpleXmlEditor.Services
             };
 
             using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
-            writer.WriteLine("Status,Key,Original,Translation");
+            writer.WriteLine(string.Join(",",
+                LocalizationManager.GetString("ColStatus"),
+                LocalizationManager.GetString("ColKey"),
+                LocalizationManager.GetString("ColOriginal"),
+                LocalizationManager.GetString("ColTranslation")));
 
             foreach (var entry in entryList)
             {
@@ -71,7 +75,13 @@ namespace SimpleXmlEditor.Services
         public void ExportConflicts(string filePath, IEnumerable<GlossaryConflict> conflicts)
         {
             using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
-            writer.WriteLine("EntryKey,Source,Translation,TermEnglish,Expected,Category");
+            writer.WriteLine(string.Join(",",
+                LocalizationManager.GetString("ColEntryKey"),
+                LocalizationManager.GetString("ColSource"),
+                LocalizationManager.GetString("ColTranslation"),
+                LocalizationManager.GetString("ColTermEnglish"),
+                LocalizationManager.GetString("ColExpectedTranslation"),
+                LocalizationManager.GetString("ColCategory")));
 
             foreach (var c in conflicts ?? new List<GlossaryConflict>())
             {
@@ -88,7 +98,10 @@ namespace SimpleXmlEditor.Services
         public void ExportConsistency(string filePath, IEnumerable<ConsistencyIssue> issues)
         {
             using var writer = new StreamWriter(filePath, false, Encoding.UTF8);
-            writer.WriteLine("Original,Translations,EntryKeys");
+            writer.WriteLine(string.Join(",",
+                LocalizationManager.GetString("ColOriginal"),
+                LocalizationManager.GetString("ColTranslations"),
+                LocalizationManager.GetString("ColEntryKeys")));
 
             foreach (var issue in issues ?? new List<ConsistencyIssue>())
             {
