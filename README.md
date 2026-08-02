@@ -31,7 +31,7 @@
 | 提供商 | 可用模型示例 |
 |--------|------------|
 | **Google Gemini** | gemini-2.5-flash、gemini-2.5-pro（动态获取全部） |
-| **DeepSeek（深度求索）** | deepseek-flash、deepseek-pro |
+| **DeepSeek（深度求索）** | deepseek-v4-flash、deepseek-v4-pro |
 | **豆包（火山引擎）** | doubao-pro、doubao-lite、doubao-thinking-pro |
 | **千问（阿里云）** | qwen-plus、qwen-max、qwen-turbo、qwen-long |
 | **智谱 AI** | glm-4、glm-4-flash、glm-4-air、glm-4.5 |
@@ -39,7 +39,7 @@
 | **文心一言（百度）** | ernie-4.0-turbo、ernie-4.0、ernie-3.5、ernie-speed |
 | **讯飞星火** | general-v3.5、general-v3、general-v2 |
 
-在设置中点击"刷新模型"即可获取完整模型列表，并显示各模型的速率限制和价格信息。
+在设置中点击"刷新模型"即可从厂商服务器在线拉取完整模型列表，并显示各模型的速率限制和价格信息（厂商升级模型名也不会失效）。
 
 ---
 
@@ -64,14 +64,20 @@
 - 内置星球大战、漫威等游戏本地化示例配置
 
 ### 质量保障
-- AI 评估：对单条翻译进行 0-10 分评分，附带改进建议
-- 多代理投票：从流畅度、准确度、风格三个维度评估，选出最佳译文
+- AI 评估：对翻译进行 0-10 分评分，附带改进建议，**评分直接显示在表格"评分"列**（颜色编码 + 点击列头排序）
+- 多代理投票：从流畅度、准确度、风格三个维度评估，自动应用最佳译文（可撤销）
+- 独立评估模型：可配置与翻译不同的厂商/模型用于评估和投票，打破"AI 自己检查自己"的同源偏差
+- **评分持久化**：评分与改进建议自动缓存到本地（score_cache.json），重新打开文件后评分列保留，可分批校对
+- **检测结果导出**：术语冲突检测、一致性检测结果可一键导出 CSV，方便在 Excel 中对照修改
 
 ### 用户体验
 - Material Design 现代界面，中英文双语切换
+- Excel 式选择：单元格/整行/整列/全选（Ctrl+A），大文件毫秒级响应
 - 实时翻译进度、支持暂停/继续/停止
 - 崩溃恢复：意外退出后重启可继续翻译
+- **自动保存**：每 5 分钟自动保存缓存与配置（不覆盖源 XML），类似 Excel 的 AutoRecover
 - 批量替换：支持正则搜索替换
+- 撤销：批量替换、AI 应用、手动编辑均可 Ctrl+Z 撤销，撤销后自动跳转到对应行
 - Ctrl+S 快速保存缓存
 
 ---
@@ -87,6 +93,8 @@
 1. **获取 API Key**：前往任一支持的大模型平台注册并获取 API 密钥
 2. **配置工具**：点击右上角 ⚙️ → 选择提供商 → 填入 API Key → 刷新模型 → 选择模型
 3. **开始翻译**：加载 XML 文件 → 选中条目或全部翻译 → 导出译文
+
+> **可选**：设置 → "评估模型"Tab 可配置与翻译不同的厂商/模型（如用 DeepSeek 翻译、用智谱评估），打破"AI 自己检查自己"的同源偏差；留空则评估复用翻译模型。
 
 ### 支持的 XML 格式
 
@@ -155,7 +163,12 @@ project-root/
 │   ├── ExpertProfiles/
 │   │   ├── ExpertProfile.cs             # 专家配置数据模型
 │   │   └── ExpertProfileManager.cs      # IExpertProfileManager — 专家配置生命周期管理
-│   ├── MainWindow.xaml/.cs              # 主界面
+│   ├── MainWindow.xaml/.cs              # 主界面（partial class，拆分为 6 个文件）
+│   ├── MainWindow.Localization.cs       # 本地化（ApplyLocalization）
+│   ├── MainWindow.Theme.cs              # 主题（ApplyTheme）
+│   ├── MainWindow.Grid.cs               # DataGrid 交互（选中/列字母/行拖拽）
+│   ├── MainWindow.Helpers.cs            # UI 辅助方法
+│   ├── MainWindow.Events.cs             # UI 事件处理
 │   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口
 │   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
 │   ├── InputDialog.xaml/.cs             # 通用双输入对话框
@@ -190,9 +203,10 @@ project-root/
 
 ## 许可
 
-MIT License — 详见 [LICENSE](LICENSE)
+MIT License — 详见 [LICENSE](LICENSE)  
+*基于 Veloxcity 的原始项目扩展维护*
 
 ---
 
-**Made with ❤️ By Veloxcity**  
+**Made with ❤️ By Veloxcity & BestFly666**  
 *为中文游戏本地化社区打造*

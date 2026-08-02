@@ -1,10 +1,10 @@
 # 项目交接文档 — XML AI Translator
 
-> **最后更新**：2026-07-30  
-> **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪、运行时修复完成）  
-> **维护者**：Veloxcity  
-> **技术栈**：C# / .NET 8.0 / WPF / Newtonsoft.Json / Microsoft.Extensions.DI / xUnit / GitHub Actions  
-> **最近变更**：Phase 1+2 完成 + CI 构建修复 + dotnet run 修复 + .sln 补全 + 三分支同步
+> **最后更新**：2026-08-02  
+> **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪、MainWindow 拆分完成、DataGrid 全面对齐 Excel、Excel 式选择模型、评估换厂商落地、评分持久化 + 自动保存）  
+> **维护者**：Veloxcity、BestFly666  
+> **技术栈**：C# / .NET 8.0 / WPF / HandyControl 3.5.1 / Newtonsoft.Json / Microsoft.Extensions.DI / xUnit / GitHub Actions  
+> **最近变更**：术语表体验完善（冲突检测进度 + 布局优化）+ 冲突/一致性检测结果导出 CSV + 评分持久化缓存（score_cache.json）+ Excel 式 5 分钟自动保存
 
 ---
 
@@ -116,7 +116,8 @@ foreach batch in CreateBatches():
 | 关键方法 | `TranslateBatchAsync`、`TranslateSingleAsync`、`FetchAvailableModelsAsync` |
 | 线程安全 | `RecentRequests` 为 `ConcurrentQueue<DateTime>` ✅ |
 | 资源管理 | `HttpRequestMessage` 使用 `using` 声明 ✅ |
-| 配置文件 | `StaticModels` / `ProviderRateLimits` / `ProviderConfig` 硬编码在类中 |
+| 配置文件 | `StaticModels` / `ProviderRateLimits` / `ProviderConfig` 硬编码在类中；模型列表支持从厂商 `GET /models` 动态拉取（`FetchOpenAiCompatModelsAsync`），失败回退静态列表 |
+| 模型动态获取 | `FetchOpenAiCompatModelsAsync` — OpenAI 兼容厂商在线拉取；`EnsureRateLimitsFromStatic` — 动态模型速率限制兜底（2026-08-01，DeepSeek 模型升级后新增） |
 
 ### 3.2 ConfigService [IConfigService]
 
@@ -152,6 +153,8 @@ foreach batch in CreateBatches():
 |------|------|
 | 评估模式 | 单条 `EvaluateAsync` → 返回 0-10 评分+解释+改进建议 |
 | 投票模式 | `VoteAsync` → 多候选译文 × 3 代理（Fluency/Accuracy/Style）× 单次 API 调用 |
+| 批量模式 | `EvaluateBatchAsync`（20 条/批）+ `VoteBatchAsync`（10 条/批），chunk 级 + 逐条级异常兜底，失败跳过不崩溃 |
+| 独立评估模型 | 注入 `IConfigService`，配置 `EvaluationAiProvider`/`EvaluationModel`/`EncryptedEvaluationApiKey` 时惰性创建**评估专用 AiTranslationService 实例**（打破同源偏差）；留空回退翻译模型 |
 
 ### 3.6 XmlRepository [IXmlRepository]
 
@@ -174,6 +177,11 @@ foreach batch in CreateBatches():
 | Translation | string | 中文译文（用户可编辑） |
 | IsSelected | bool | 复选框状态 |
 | StatusIcon | string(计算) | "✅" 或 "❌"（是否有译文） |
+| EvaluationScore | double | AI 评估分数（-1 = 未评估） |
+| EvaluationScoreDisplay | string(计算) | 评分列显示文本（如 "8.5"，未评估为空） |
+| EvaluationScoreColor | string(计算) | 评分颜色（≥8 绿 / ≥5 黄 / <5 红 / 未评估灰） |
+| EvaluationImprovement | string | AI 改进建议（评分列 tooltip 显示） |
+| `SetIsSelectedSilent(bool)` | 方法 | 静默设置选择状态，不触发 PropertyChanged（用于批量选择防卡顿） |
 
 ### 4.2 GlossaryTerm
 
@@ -202,7 +210,7 @@ foreach batch in CreateBatches():
 
 | 文件 | 路径 | 格式 | 作用 |
 |------|------|------|------|
-| `config.json` | 程序目录 | JSON | AI 提供商、模型、API Key、语言、批次大小等 |
+| `config.json` | 程序目录 | JSON | AI 提供商、模型、API Key、语言、批次大小、**评估模型配置**（`EvaluationAiProvider`/`EvaluationModel`/`EncryptedEvaluationApiKey`）等 |
 | `translation_cache.json` | 程序目录 | JSON | `{ hash: translation }` 翻译缓存 |
 | `translation_progress.json` | 程序目录 | JSON | 崩溃恢复临时文件 |
 | `glossary_terms.json` | `Environment.CurrentDirectory` | JSON | 术语表（数组格式） |
@@ -244,6 +252,7 @@ dotnet publish SimpleXmlEditor/SimpleXmlEditor.csproj -c Release -r win-x64 --se
 
 - `Newtonsoft.Json`：JSON 序列化/反序列化
 - `Microsoft.Extensions.DependencyInjection`：DI 容器
+- `HandyControl 3.5.1`：UI 组件库（全局主题 + 控件样式）
 - .NET 内置：WPF、System.Xml.Linq、System.Net.Http
 
 ### 6.4 测试
@@ -282,6 +291,7 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 | **P2** | HttpRequestMessage 未 Dispose | ✅ 已修复 | 2026-07-30 |
 | **P3** | 空 catch 块 | ✅ 已验证 | 2026-07-30 |
 | **P3** | 死代码 LoadConfig() | ✅ 已清理 | 2026-07-30 |
+| **P3** | 手动编辑翻译无撤销（审计 #30） | ✅ 已修复（BeginningEdit 入栈） | 2026-08-01 |
 
 ---
 
@@ -339,6 +349,83 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
   - 匹配从 O(G×E) 降到 O(W×C)，**1000 倍加速**
   - `MAX_GLOSSARY_CONTEXT_TERMS = 50`：每批最多注入 50 条术语，防止 prompt 超 Token 上限
 
+### 8.10 全选/取消全选卡顿
+- **现象**：大文件点击全选/取消全选时 UI 明显卡顿
+- **原因**：`EntriesGrid.Items.Refresh()` 重建整个视图 + 复选框勾选联动整行选中产生 SelectionChanged 事件风暴
+- **修复**（2026-08-01）：改用 `_suppressSelectionSync` 防抖，去掉 `Refresh()`，复选框状态靠 PropertyChanged 增量更新
+
+### 8.11 冲突检测点击后卡死
+- **现象**：术语管理器点击"冲突检测"后窗口完全无响应
+- **原因**：`DetectConflicts` 在 UI 线程同步执行，O(条目数 × 术语数) × 正则匹配开销
+- **修复**（2026-08-01）：包裹在 `Task.Run` 后台线程执行，`Dispatcher.BeginInvoke` 回 UI 线程显示结果
+
+### 8.12 冲突检测结果窗口崩溃
+- **现象**：冲突检测完成后弹出结果对话框时崩溃
+- **原因**：GlossaryWindow 触发事件后 `Close()`，异步回调时 `dialog.Owner = this` 指向已关闭窗口
+- **修复**（2026-08-01）：冲突结果显示职责转移到 MainWindow.`ShowConflictResults`，Owner 设为 MainWindow
+
+### 8.13 DataGrid RowHeight="Auto" 导致启动崩溃
+- **现象**：`dotnet run` 后窗口不弹出（静默崩溃）
+- **原因**：`DataGrid.RowHeight` 属性类型是 `double`，不接受 `"Auto"`（那是 `Grid` 的行高语法）
+- **修复**（2026-08-01）：删除 `RowHeight="Auto"`，DataGrid 默认即按内容自适应高度
+
+### 8.14 架构约束：MainWindow 是纯前端
+- **规则**：MainWindow.xaml.cs 及其 partial class 文件只承载 UI 职责（事件转发、生命周期、主题/本地化）
+- **禁止**：在 MainWindow 中写入业务逻辑、算法、数据处理
+- **正确位置**：业务逻辑放 `Services/`，编排逻辑放 `ViewModels/`
+- **强制**：单文件不超过 400 行，超过继续拆分 partial class
+
+### 8.15 翻译全部失败 [HTTP 400] 模型名错误
+- **现象**：日志 `[HTTP 400] The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-flash`
+- **原因**：DeepSeek 2026-04-24 升级 API 模型名，`deepseek-flash`/`deepseek-pro` 停用
+- **修复**（2026-08-01）：静态模型列表更新 + 新增 `FetchOpenAiCompatModelsAsync` 在线拉取模型；设置 → 刷新 → 选 `deepseek-v4-flash`
+
+### 8.16 多条评估/投票崩溃
+- **现象**：选择多条记录评估或投票时程序崩溃
+- **原因**：
+  1. `ToDictionary` 遇到重复译文抛 `ArgumentException`
+  2. `EvaluateBatchAsync`/`VoteBatchAsync` 无异常兜底，HTTP 错误/超时直接崩溃
+  3. HttpClient 超时 30s 太短（批量 prompt 长响应慢）
+- **修复**（2026-08-01）：循环赋值替代 ToDictionary；chunk 级 + 逐条级 try-catch 降级；超时 30s → 120s
+
+### 8.17 评估结果无输出窗口 / 弹窗崩溃
+- **现象**：多条评估完成后弹窗崩溃；或评估完看不到结果
+- **原因**：结果靠弹窗（EvaluationWindow）展示，多条数据时弹窗 UI 崩溃
+- **修复**（2026-08-01）：DataGrid 新增**"评分"列**，评估/投票结果直接写入表格（分数颜色编码 + 点击列头排序 + tooltip 显示改进建议），彻底移除弹窗
+
+### 8.18 投票"没反应" / 翻译出英文
+- **现象**：多代理投票点击后长时间无反馈；投票出的译文是英文
+- **原因 1**：候选生成逐条调 API 无进度日志，用户以为卡死
+- **原因 2**：prompt 把 `targetLang` 错误标注在原文上（`Original (Chinese): ...`），AI 误以为原文是中文
+- **修复**（2026-08-01）：候选生成逐条打进度日志；prompt 改 `Original (English): ...` + `Target language: Chinese` + "All candidates MUST be in {targetLang}"
+
+### 8.19 手动编辑翻译后"没有可撤销的操作"
+- **现象**：手动改了译文，点撤销提示无可撤销操作
+- **原因**：撤销栈只在批量替换/批量翻译时入栈，手动编辑不入栈
+- **修复**（2026-08-01）：DataGrid `BeginningEdit` 事件在开始编辑 Translation 列时先 push 当前值快照，手动编辑也可 Ctrl+Z 撤销，撤销后自动跳转定位到该行
+
+### 8.20 全选/选中整列卡顿
+- **现象**：大文件全选或选中整列严重卡顿；全选后再选整列更卡
+- **根因链**（2026-08-01 五轮排查）：
+  1. 逐行设置 `IsSelected` 触发 PropertyChanged 事件风暴
+  2. `SelectAll()` 一次性选中全部 cell（10000×6=60000 个）——**Ctrl+A 触发 DataGrid 内置 SelectAll，MainWindow_KeyDown 拦不住**
+  3. `SelectedCells` 滚动补选只增不减导致集合膨胀，`Clear()` 变慢
+- **修复**：Excel 式逻辑选择模型（`_logicalSelectAll`/`_logicalSelectColumn` 标志 + 只高亮可见行 + 滚动 Clear+重选）+ `PreviewKeyDown` 拦截 Ctrl+A + 显式开启行虚拟化
+
+### 8.21 冲突检测没有进度/日志，不知道进行到哪
+- **现象**：点击"Detect Conflicts"后界面无反馈，大数据量下以为卡死
+- **修复**（2026-08-02）：`DetectConflicts` 增加 `onProgress` 回调（按总数自适应步长，全程约 20 次上报），主窗口日志区实时显示"开始 → 进度 x/y → 完成并列出冲突数"，全部走本地化 key
+
+### 8.22 评分关了程序就没了
+- **现象**：评估/投票后关闭程序，重新打开文件评分列为空
+- **修复**（2026-08-02）：评分持久化到 `score_cache.json`（`%LocalAppData%\SimpleXmlEditor\`），保存时机为单条/批量评估、投票、快速保存；加载 XML 后按 Key 恢复（仅恢复未评估条目）。评分**不写入 XML**
+
+### 8.23 冲突/一致性检测结果怎么导出对照修改
+- **说明**（2026-08-02）：冲突对话框新增"导出 CSV"按钮（`conflict_report_日期.csv`）；一致性扫描完成弹窗询问是否导出（`consistency_report_日期.csv`）。列结构见 ReviewExporter
+
+### 8.24 自动保存是怎么回事
+- **说明**（2026-08-02）：每 5 分钟自动执行 `QuickSave()`（同步翻译缓存 + 评分缓存 + 配置），**不直接写 XML**——源 XML 仍由你手动保存，防止自动覆盖源文件导致数据损坏；仅加载文件后才触发
+
 ---
 
 ## 9. UI 窗口速查
@@ -366,6 +453,17 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 8. **DataGrid 内联编辑**：保存前务必调用 `EntriesGrid.CommitEdit(DataGridEditingUnit.Row, true)`
 9. **扩展方法**：通用字符串处理放 `StringExtensions.cs`
 10. **测试驱动**：修复 Bug 先写复现测试，新功能先写验收测试
+11. **MainWindow 是纯前端**：新功能不得写入 MainWindow（含 partial class 文件），业务逻辑放 `Services/` 或 `ViewModels/`，单文件不超过 400 行
+12. **DataGrid 交互**：单元格点击只选格子、行号点击选整行、列字母点击选整列、Ctrl+A 全选（均走 Excel 式逻辑选择模型，见第 18 条），全选/反选用 `_suppressSelectionSync` 防抖
+13. **HandyControl 主题**：`PrimaryColor` 是 Color 类型而非 Brush，误写为 Brush 会导致启动崩溃
+14. **DataGrid.RowHeight**：类型是 `double`，不接受 `"Auto"`，不设置即为内容自适应
+15. **冲突检测**：必须在后台线程执行（`Task.Run`），结果显示通过 `Dispatcher.BeginInvoke` 回 UI 线程
+16. **评估/投票同源偏差**：已落地 Phase 1（2026-08-01）——设置"评估模型"Tab 可配置独立厂商/模型，`TranslationEvaluator` 惰性创建评估专用服务实例；留空回退翻译模型
+17. **DataGrid Ctrl+A**：DataGrid 内置 Ctrl+A 会 `SelectAll()` 全部 cell 导致卡死，且冒泡事件拦不住——必须在 DataGrid `PreviewKeyDown`（隧道）拦截，编辑单元格时（焦点在 TextBox）放行
+18. **DataGrid 大范围选择**：禁止逐格 `SelectedCells.Add`（每个 cell 触发布局更新）——用"逻辑标志（全选/整列）+ 只高亮可见行 + `ScrollChanged` 滚动补选（先 Clear 再重选防积累）"的 Excel 式模型；业务读取走 `GetSelectedEntries()` 逻辑标志分支
+19. **模型名不硬编码**：静态模型列表是"已知模型缓存"，务必保留厂商 `GET /models` 动态拉取 + 静态兜底（DeepSeek 2026-04 模型升级教训）
+20. **批量异步编排必须兜底**：批量评估/投票（chunk → 逐条 → 跳过）每层 try-catch 降级；`ToDictionary` 遇重复键会崩溃，改用循环赋值
+21. **API 超时**：批量评估 prompt 长，HttpClient 超时设 120s（30s 会频繁超时）
 
 ---
 ## 11. 项目结构
@@ -390,7 +488,12 @@ xml-ai-translator-main/
 │   │   └── ExpertProfileManager.cs   # IExpertProfileManager
 │   ├── Localization/
 │   │   └── LocalizationManager.cs
-│   ├── MainWindow.xaml/.cs           # 主界面
+│   ├── MainWindow.xaml/.cs           # 主界面（partial class，拆分为 6 个文件）
+│   ├── MainWindow.Localization.cs    # ApplyLocalization / UpdateInfoLabels
+│   ├── MainWindow.Theme.cs           # ApplyTheme（深色/浅色模式）
+│   ├── MainWindow.Grid.cs            # DataGrid 交互：选中/列字母/行拖拽/批量勾选
+│   ├── MainWindow.Helpers.cs         # AddLog / UpdateCacheInfo / ShowControlButtons
+│   ├── MainWindow.Events.cs          # UI 事件处理：点击/筛选/菜单/快捷键/翻译命令
 │   ├── GlossaryWindow.xaml/.cs       # 术语表管理
 │   ├── SettingsWindow.xaml/.cs       # 设置界面
 │   ├── InputDialog.xaml/.cs

@@ -1,7 +1,7 @@
 # 开发日志 — XML AI Translator
 
 > 项目仓库：`xml-ai-translator-main`  
-> 作者：Veloxcity  
+> 作者：Veloxcity、BestFly666  
 > 技术栈：C# / .NET 8.0 / WPF / Newtonsoft.Json  
 > 目标平台：Windows 10/11
 
@@ -9,7 +9,7 @@
 
 ## 项目概述
 
-**XML AI Translator** 是一款专为游戏本地化设计的 XML 批量翻译工具。核心定位是基于 AI（8 个提供商）对 Excel Spreadsheet 格式的 XML 本地化文件进行批量翻译，通过智能分批、翻译缓存、速率限制等机制大幅降低 API 调用成本（90%+），同时提供 Material Design 风格的现代化桌面界面。
+**XML AI Translator** 是一款专为游戏本地化设计的 XML 批量翻译工具。核心定位是基于 AI（8 个提供商）对 Excel Spreadsheet 格式的 XML 本地化文件进行批量翻译，通过智能分批、翻译缓存、速率限制等机制大幅降低 API 调用成本（90%+），同时提供基于 **HandyControl 3.5.1** 组件库的现代桌面界面（浅色系配色，多彩按钮）。
 
 **产品定位（2026-08-01 确认）**：面向**中文游戏本地化译者**的一站式 AI 翻译工作台——将术语一致性、质量评估、格式兼容等专业流程自动化；同时为**独立游戏开发者**提供开箱即用的极简版，让"游戏文本 → 多语言"从几周变成几小时。共享核心引擎，双入口形态。
 
@@ -685,7 +685,7 @@ project-root/
 - [ ] `EntriesGrid.Columns` 索引访问 → 改为 Name 查找（审计 #27，P3）
 - [ ] `SanitizeLogMessage` Regex 缓存优化（审计 #28，P3）
 - [ ] `SaveTranslationProgress` 路径统一到 LocalAppData（审计 #29，P3）
-- [ ] 手动编辑翻译的撤销支持（审计 #30，P3）
+- [x] ~~手动编辑翻译的撤销支持（审计 #30，P3，2026-08-01 通过 DataGrid BeginningEdit 入栈快照实现）~~
 
 ### 功能规划
 - [x] ~~单元测试 / 集成测试覆盖~~（13 个测试，核心服务覆盖）
@@ -857,6 +857,335 @@ project-root/
 
 ---
 
+## 2026-08-01 — HandyControl 组件库全面接管 UI
+
+> 背景：此前 UI 样式全部为手写自定义（渐变菜单、卡片、TagPill、SectionTitle 等 6 个窗口各自维护），重复代码多、风格不统一。用户明确"一点点改浪费时间，直接用组件库"，经对比 Wpf.Ui 后选定 **HandyControl 3.5.1**，并执行"全部换了，一点不留"——删除所有自建样式，视觉完全交给 HandyControl。
+
+### A. 组件库引入与全局主题 ✅
+
+- **NuGet 依赖**：`HandyControl 3.5.1`
+- **App.xaml** 合并 `SkinDefault.xaml` + `Theme.xaml`，设置全局主题色：
+  - `PrimaryColor` = `#2196F3`（Material Blue，用户选定"蓝绿白橙青"多彩方案；**紫色仅作背景氛围点缀，禁止作为默认主色**）
+  - **关键坑**：HandyControl 主题键 `PrimaryColor` 是 **Color 类型**而非 `SolidColorBrush`，误写为 Brush 会导致应用启动崩溃
+- **删除全部自建样式**：`HeaderBtn`、`Card`、`SectionTitle`、`TagPill`、`InfoLabel` 五个自定义 Style 从 App.xaml 移除（全局 grep 确认引用清零）
+- **保留的全局样式**：`BaseButton`（基于 HandyControl `ButtonCustom` + CornerRadius=10）+ 7 个颜色变体（Primary/Success/Warning/Danger/Cyan/Grey/Small，含 hover/按下三层色）+ Glossary 窗口专用 `DataGridStyle`
+
+### B. 窗口全部切换 HandyControl ✅
+
+| 窗口 | 改动 |
+|------|------|
+| MainWindow | 菜单栏移除渐变背景/边框/子菜单样式回归默认；工具栏深蓝 → 白色系；AI 面板/Card 容器/信息 pills 全部内联化 |
+| SettingsWindow | 删除 6 种本地样式（ModernButton/SuccessButton/...）；TextBox/ComboBox 全部改 hc: 版本 + `hc:InfoElement.Placeholder` 水印 |
+| GlossaryWindow | 清空 Window.Resources 重复样式；hc:TextBox/hc:ComboBox + 全局按钮 |
+| EvaluationWindow | MarkLow/Close 用 `GreyBtn`，Apply 用 `SuccessBtn` |
+| InputDialog | `RoundedButton` → `GreyBtn`/`PrimaryBtn`；输入框 hc:TextBox + `ShowClearButton` |
+| FileTypeDialog | 删除 `RoundedButton`，改用 `PrimaryBtn`/`GreyBtn` |
+
+### C. 全新浅色系配色（用户要求"尽量不要出现白色"）✅
+
+| 用途 | 原颜色 | 新颜色 |
+|------|--------|--------|
+| 窗口背景 | 白/灰 | 淡紫灰 `#F0EEF6` |
+| 卡片/面板表面 | 纯白 | 淡紫白 `#F7F6FB` |
+| 工具栏/页签/底部栏 | 纯白 | 淡紫 `#EAE8F4` |
+| 边框 | `#E0E0E0`/`#E8ECF0` | 统一 `#DDD9EA` |
+| 表格交替行 | 淡紫 | **统一白色**（用户后续要求移除交替） |
+| 列头/行头 | `#ECEFF1` | `#E5E3F0` |
+| 功能面板 | — | 保持绿色 `#E8F5E9`、日志深色控制台 `#1E1E1E` |
+
+### D. Bug 修复（HandyControl 接管引发的回归）✅
+
+1. **全 UI 白字看不见（菜单/表格/输入框）**：App.xaml 曾把 `PrimaryTextColor` 覆盖为 `#FFFFFF`——这是 HandyControl 全局主文本色，浅色背景下白字全部不可见 → **删除该覆盖**，恢复主题默认深色文本
+2. **单元格选中/编辑白字**：`DataGridCell` 选中/编辑态显式设置 `Foreground=#263238` + 编辑 TextBox 显式 `Foreground/Background/CaretBrush`
+3. **整列选中无视觉反馈**：新增 `ColumnIndexMatchConverter`（MultiBinding 比较单元格列号与 `DataGrid.Tag`），点击列字母条 → `EntriesGrid.Tag = 列索引` → 整列单元格 DataTrigger 高亮 `#BBDEFB`；手动点选单元格自动清除列高亮（不逐格物理选中，避免卡顿）
+4. **日志折叠后无法展开**：原折叠按钮在 LogPanel 内部，面板 Collapsed 后按钮消失 → 外部新增窄条 `LogExpandBar`（▶），折叠时列宽保留 30px 常驻可点
+5. **日志内容垂直居中**：LogTextBox 显式 `VerticalContentAlignment="Top"`（HandyControl 隐式样式默认 Center）
+
+### 验证
+
+- `dotnet build SimpleXmlEditor.sln`：**0 错误**
+- `dotnet run --project SimpleXmlEditor`：启动稳定（主题色崩溃问题未复发）
+- `dotnet test SimpleXmlEditor.sln`：**13/13 通过**
+- 全项目 grep：`Card/SectionTitle/TagPill/InfoLabel/HeaderBtn` 引用清零
+
+### 遗留
+
+- 菜单栏视觉由 HandyControl 默认接管，深色渐变工具栏背景已移除（用户已知晓并接受白色系风格）
+- 其余 12 种未翻译 UI 语言仍静默回退英文（非本次范围）
+
+---
+
+## 2026-08-01（续）— DataGrid 交互全面对齐 Excel + 冲突检测修复 + MainWindow 拆分
+
+> 背景：用户要求译文列支持点击排序、选中整列需精确点击字母（Excel 式）、全选卡顿、单元格需竖线分隔且支持拖拽调整行列大小。冲突检测点击后卡死。MainWindow.xaml.cs 臃肿需拆分。
+
+### A. 译文列点击排序 ✅
+
+- **问题**：译文列 `DataGridTemplateColumn` 缺少 `SortMemberPath`，点击表头不排序
+- **修复**：[MainWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml) 译文列添加 `SortMemberPath="Translation"`，与 Key/原文列行为一致
+
+### B. 单元格点击行为改为 Excel 式 ✅
+
+- **原行为**：点任意单元格 → 联动勾选该行复选框 → 触发整行选中高亮
+- **新行为**：
+  - 点单元格 → 只选中当前格子（Excel 行为）
+  - 点行号（表头数字）→ 选中整行并勾选复选框
+  - 点列字母（A/B/C/D/E）→ 选中整列
+  - 点复选框 → 手动标记该行
+- **影响**："翻译选中"按钮现在只翻译**显式勾选**或**点列字母/行号选中**的行
+
+### C. 全选卡顿修复 ✅
+
+- **根因**：全选/取消全选用了 `EntriesGrid.Items.Refresh()`（重建整个视图），反选完全没加防抖，复选框勾选联动整行选中产生 SelectionChanged 事件风暴
+- **修复**：全选/取消/反选统一改用 `_suppressSelectionSync` 防抖（和列字母选中同一套机制），去掉 `Refresh()`。复选框状态靠 PropertyChanged 增量更新，虚拟化列表滚动时自动读取正确状态
+- **清理**：移除已无使用处的 `BulkUpdateSuppression` 静态标记（XmlRepository.cs）
+
+### D. 整列选中重写（假高亮 → 真选中）✅
+
+- **原实现**：`_selectedColumnIndex` 字段 + `EntriesGrid.Tag` 标记 + `ColumnIndexMatchConverter` 转换器 + DataTrigger 假高亮
+- **新实现**：点列字母 → `SelectedCells.Add(new DataGridCellInfo(entry, column))` 把该列每个格子**真正选中**，高亮走格子原生 `IsSelected`，和整行选中完全同一套机制
+- **删除**：`_selectedColumnIndex` 字段、`EntriesGrid.Tag` 标记、`ColumnIndexMatchConverter` 转换器和 XAML 里的假高亮 DataTrigger 全部移除
+- **优化**：`GetSelectedEntries` 统一遍历 `SelectedCells` + `SelectedItems` 去重，用 `HashSet` 避免大文件全选时的 O(N²) 卡顿
+
+### E. 列字母按钮铺满整格 ✅
+
+- **演进**：从小药丸（26×14 圆角）→ 铺满整格（`HorizontalAlignment="Stretch" VerticalAlignment="Stretch"`，直角无圆角）
+- 字母内容居中显示，视觉上和下面的单元格完全对齐——点这个格子的任何位置 = 选中整列
+
+### F. 单元格竖线 + 列宽拖拽 + 行高拖拽 + 文本换行修复 ✅
+
+| 改动 | 详情 |
+|------|------|
+| **竖线分隔** | `GridLinesVisibility` 改为 `All`，竖线/横线用浅灰色 `#E0E0E0`，去掉 CellStyle 里的 `BorderThickness="0"` |
+| **文本换行** | 去掉误加的 `RowHeight="Auto"`（DataGrid.RowHeight 是 double 不接受 "Auto"），默认即按内容自适应 |
+| **列宽拖拽** | 三列改为固定像素宽度（Key: 240px、Original: 360px、Translation: 360px），WPF 只有固定列宽才能拖拽边界 |
+| **行高拖拽** | 行号列底部加 5px Thumb 拖拽把手，DragDelta 按偏移量改 `Height`，最小 24px，和 Excel 一致 |
+
+### G. 冲突检测卡死修复 ✅
+
+- **根因**：`DetectConflicts` 在 UI 线程同步执行，O(条目数 × 术语数) × 正则匹配开销，大文件时卡死
+- **修复**：包裹在 `Task.Run` 里放到后台线程执行，通过 `Dispatcher.BeginInvoke` 回到 UI 线程显示结果
+
+### H. 冲突检测窗口关闭后异常修复 ✅
+
+- **根因**：GlossaryWindow 触发 `ConflictsDetected` 事件后立刻 `Close()`，异步检测完成回来调 `window.ShowConflicts()` 时窗口已关闭，`dialog.Owner = this` 抛异常
+- **修复**：把冲突结果显示职责从 GlossaryWindow 转移到 MainWindow（`ShowConflictResults` 方法，Owner 设为 MainWindow）
+
+### I. MainWindow.xaml.cs 拆分为 partial class ✅
+
+- **背景**：MainWindow.xaml.cs 约 1753 行，承担 8+ 个职责。用户要求"新功能不要往这里写"
+- **拆分结果**：
+
+| 文件 | 职责 | 行数 |
+|------|------|------|
+| `MainWindow.xaml.cs` | 核心：字段、构造函数、事件订阅、渲染方法、生命周期 | ~470 |
+| `MainWindow.Localization.cs` | ApplyLocalization、UpdateInfoLabels | ~145 |
+| `MainWindow.Theme.cs` | ApplyTheme（深色/浅色模式） | ~55 |
+| `MainWindow.Grid.cs` | DataGrid 交互：选中、列字母、行拖拽、批量勾选、审核状态 | ~255 |
+| `MainWindow.Helpers.cs` | AddLog、UpdateCacheInfo、ShowControlButtons、ShowEvaluationWindow | ~85 |
+| `MainWindow.Events.cs` | 所有 UI 事件处理：点击、筛选、菜单、快捷键、翻译命令 | ~590 |
+
+- **约束**：MainWindow 是纯前端 View 层，业务逻辑必须放在 Services/ 或 ViewModels/，单文件不超过 400 行
+
+### 验证
+
+- `dotnet build SimpleXmlEditor.sln`：**0 错误 0 警告**
+- 全部为纯代码搬家（partial class），逻辑零改动
+
+### 架构约束记录（已写入 project_memory.md）
+
+1. MainWindow.xaml.cs 是纯前端 View 层，新功能不得写入
+2. 业务逻辑、算法、数据处理必须放在 Services/ 或 ViewModels/
+3. 单文件不超过 400 行，超过继续拆分
+
+---
+
+## 2026-08-01（续）— 评估/投票架构分析与产品改进方向
+
+> 背景：用户发现评估和投票都调用同一 API（同一模型），质疑"AI 自己检查自己"的有效性；同时关注 token 成本（全套流程 4 倍 token）。
+
+### 当前架构问题
+
+```
+翻译（模型A）→ 评估（模型A）→ 投票（模型A）
+     ↑              ↑              ↑
+     └──────── 同源偏差：学生自己批改考卷 ────────┘
+```
+
+- 评估 = AI 给自己的翻译打分，系统性地高估质量
+- 投票的"3 个 Agent"只是 Prompt 里的 3 个角色，实际还是同一个模型回答——不是真正的多代理投票
+
+### API 调用成本分析
+
+| 操作 | API 调用次数 | Token 倍数 |
+|------|-------------|-----------|
+| 翻译 | 1 次 | 1x |
+| 评估 | 1 次 | +1x |
+| 投票 | 1 次（生成候选）+ 1 次（投票） | +2x |
+| **全套** | **4 次** | **4x** |
+
+### 产品改进方向（未实施，待验证）
+
+**Phase 1：评估换厂商**
+- 翻译保持当前 Provider
+- 评估/投票用不同 Provider（设置里加"评估模型"选项）
+- 改动量：给 `TranslationEvaluator` 注入第二个 `AiTranslationService` 实例
+
+**Phase 2：真·多代理投票**
+- 投票时并行调用 2-3 个不同厂商的 API
+- 每个模型独立评分，取平均
+
+**Phase 3：渐进式质量保障（降低 token 成本 ~89%）**
+```
+翻译完成
+  ↓
+第1层：零成本筛选（本地）— 术语命中? 缓存命中? → 跳过
+  ↓
+第2层：批量评估（1x token）— 对"非可信"条目批量打分
+  ↓
+第3层：精准投票（2x token，仅低分）— 只对低分条目生成候选+投票
+```
+
+**效果对比**（1000条，假设70%可信）：
+
+| 方案 | 评估 token | 投票 token | 总量 |
+|------|-----------|-----------|------|
+| 当前全量 | 1000条 | 3000条 | 4000条 |
+| 渐进式 | 300条 | 150条 | **450条（~89% 节省）** |
+
+---
+
+## 2026-08-01（续）— 评估换厂商落地（Phase 1）+ 翻译/评估稳定性修复 + 评分列落地
+
+> 背景：实现此前规划的 Phase 1（评估/投票换独立厂商模型打破同源偏差）；随后用户连续报告翻译失败、多条评估崩溃、投票无反应、投票出英文、撤销不生效、全选/整列卡顿等问题，逐项排查修复。
+
+### A. 评估模型独立配置落地（Phase 1）✅
+
+- **ConfigService**（[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs)）：`AppConfig` 新增 `EvaluationAiProvider` / `EvaluationModel` / `EncryptedEvaluationApiKey` 三个字段，API Key 沿用 DPAPI 加密存储
+- **TranslationEvaluator**（[TranslationEvaluator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.cs)）：注入 `IConfigService`，惰性创建**评估专用 `AiTranslationService` 实例**（不同厂商/模型），配置为空时回退翻译模型，保持旧行为兼容
+- **SettingsWindow**：新增"🔍 评估模型"Tab（提供商下拉 + API Key + 模型名），配置持久化到 config.json
+- **本地化**：新增 9 个中英文 key（`EvalModelTab`/`EvalModelConfig`/`EvalModelDesc`/`EvalAiProviderLabel`/`EvalApiKeyLabel`/`EvalApiKeyPlaceholder`/`EvalModelNameLabel`/`EvalModelPlaceholder`/`EvalUseTranslationModel`），全部界面文本走 LocalizationManager
+- **修复**：HandyControl 水印 API 用 `InfoElement.SetPlaceholder`（`TextBoxHelper` 不存在）
+
+### B. 翻译失败修复：DeepSeek 模型名升级 + 在线模型扫描 ✅
+
+- **现象**：批量翻译全部失败，日志 `[HTTP 400] The supported API model names are deepseek-v4-pro or deepseek-v4-flash, but you passed deepseek-flash`
+- **根因**：DeepSeek 2026-04-24 升级 API 模型名，`deepseek-flash`/`deepseek-pro` 停用，代码 `StaticModels` 硬编码过时
+- **修复 1**：`AiTranslationService.cs` 静态模型列表更新为 `deepseek-v4-flash` / `deepseek-v4-pro`
+- **修复 2**：新增 `FetchOpenAiCompatModelsAsync`——所有 OpenAI 兼容厂商（DeepSeek/智谱/Moonshot/千问/豆包/文心/讯飞）调用 `GET /models` 动态拉取最新模型列表；`EnsureRateLimitsFromStatic` 为动态获取的模型补速率限制兜底
+- **修复 3**：`FetchAvailableModelsAsync` 改为**动态获取优先 → 失败回退 StaticModels**，厂商再升级模型名也不会失效
+- **用户操作**：设置 → AI 模型 → 🔄 刷新 → 选择 `deepseek-v4-flash`
+
+### C. 多条评估/投票崩溃修复 ✅
+
+| 崩溃点 | 根因 | 修复 |
+|--------|------|------|
+| `results.ToDictionary(r => r.TranslatedText)` | 重复键抛 `ArgumentException` 直接崩溃 | 改用循环 + 索引赋值，重复时后者覆盖（[MainViewModel.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.cs)） |
+| 批量评估无异常兜底 | `EvaluateBatchAsync` 未 try-catch，HTTP 402/网络错误崩溃 | chunk 级 + fallback 逐条级 try-catch，失败条目标记并跳过（[TranslationEvaluator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.cs)） |
+| 投票流程无兜底 | `GenerateCandidatesAsync`/`VoteBatchAsync` 异常穿透 | ViewModel 层 try-catch，异常触发 `Failed` outcome |
+| HttpClient 超时 | 批量评估 prompt 长、响应慢，30s 不够 | 超时 30s → **120s** |
+
+### D. 评估分数落地 DataGrid（新增"评分"列）✅
+
+- **背景**：多条评估结果原本靠弹窗展示，弹窗 UI 在多条数据时崩溃；用户建议"额外增加一列用于显示输出分数，这样也好排序"
+- **LocalizationEntry**（[XmlRepository.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/XmlRepository.cs)）新增：
+  - `EvaluationScore`（double，-1 = 未评估）+ `EvaluationScoreDisplay`（"8.5"）+ `EvaluationScoreColor`（≥8 绿 / ≥5 黄 / <5 红 / 未评估灰）+ `EvaluationImprovement`（tooltip 显示改进建议）
+  - 全部支持 `INotifyPropertyChanged`，UI 自动更新
+- **DataGrid 新增 Score 列**（[MainWindow.xaml:493](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml#L493)）：`SortMemberPath="EvaluationScore"` 支持点击列头排序，颜色编码，悬停 tooltip 显示 AI 解释
+- **移除弹窗**：批量/单条评估结果直接写入表格，不再调用 `ShowEvaluationWindow`（彻底规避崩溃）
+- **本地化**：新增 `Score` / `LogScoreUpdated` key
+
+### E. 多代理投票体验完善 ✅
+
+- **候选生成进度反馈**：每条生成打日志 `生成候选译文 [3/10]: KEY`，状态文本同步更新——之前投票逐条调 API 无反馈，用户以为卡死
+- **VotingOutcome 携带结果**：新增 `AppliedCount`（已应用条数）+ `Results`（`List<VotingResult>`，含平均分/最佳译文/共识摘要）
+- **投票结果写 DataGrid**：批量投票按 `EntryKey` 回填 `EvaluationScore`，tooltip 显示最佳译文；最佳译文自动应用（可 Ctrl+Z 撤销）
+- **本地化**：新增 7 个中英文 key（`LogGeneratingCandidate`/`VoteCandidateProgress`/`LogVotingStart`/`VoteVotingProgress`/`VoteBatchResultDetail`/`VoteBestTranslation` 等）
+
+### F. 投票翻译出英文修复 ✅
+
+- **根因**：候选生成与投票 prompt 把 `targetLang` 错误标注在原文上（`Original (Chinese): hello`），AI 误以为原文是中文
+- **修复**：改为 `Original (English): hello` + `Target language: Chinese`，并强调 "All candidates MUST be in {targetLang}, NOT in English"（[TranslationEvaluator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.cs)）
+
+### G. 撤销功能对齐 Excel ✅
+
+- **撤销实时响应**：`UndoLast()` 返回 `List<LocalizationEntry>`；移除 MessageBox 弹窗阻断，改日志输出；撤销后 `ScrollIntoView` + `SelectedItem` 跳转定位到被撤销行
+- **手动编辑可撤销（审计 #30 关闭）**：DataGrid 新增 `BeginningEdit` 事件（[MainWindow.xaml:271](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml#L271)），用户开始编辑 Translation 列时先 push 当前值快照——手动编辑翻译后也能 Ctrl+Z 恢复
+
+### H. 全选/整列卡顿修复（Excel 式选择模型，5 轮迭代）✅
+
+| 轮次 | 方案 | 效果 |
+|------|------|------|
+| 1 | 静默设置 `IsSelected`（不触发 PropertyChanged）+ `SelectAll()`/`UnselectAll()` | 仍卡；且 `SelectAll()` 选中所有 cell 导致"选中整列变全选" |
+| 2 | 分片添加 `SelectedCells` + `Task.Yield()` | 界面不冻结但总耗时仍长 |
+| 3 | **Excel 式逻辑选择模型**：`_logicalSelectAll`/`_logicalSelectColumn` 标志 + 只高亮可见行 + 滚动补选 | 选中列不卡；全选仍卡 |
+| 4 | `VirtualizingStackPanel` 遍历（替代 `ContainerFromIndex` 全量遍历）+ 滚动时 Clear+重选防 SelectedCells 积累 + 显式开启虚拟化 | 改善但仍卡 |
+| 5 | **根因定位**：Ctrl+A 走 DataGrid 内置 `SelectAll()`，一次性选中 10000×6=60000 个 cell；`PreviewKeyDown` 拦截 Ctrl+A 改为逻辑全选（[MainWindow.Grid.cs:96](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.Grid.cs#L96)），编辑单元格时（焦点在 TextBox）放行 | ✅ 毫秒级 |
+
+- **最终架构**（[MainWindow.Grid.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.Grid.cs)）：
+  - 逻辑选择标志记录"全选/整列"状态，`GetSelectedEntries()` 直接返回全部行（业务毫秒级）
+  - `HighlightVisibleCells` 只操作虚拟化可见行的 cell（视觉毫秒级）
+  - `EntriesGrid_ScrollChanged` 滚动补选，先 Clear 再重选防集合无限积累
+  - 用户手动点击行 / 反选 / 全不选时自动退出逻辑模式
+- **性能调试**：关键路径保留 `[perf]` 前缀计时日志（Stopwatch），便于后续定位
+
+### 验证
+
+- `dotnet build SimpleXmlEditor\SimpleXmlEditor.csproj`：**0 错误 0 警告**
+- 全选 / 选中整列 / 反选均为毫秒级，滚动高亮跟随视野
+
+### 遗留
+
+- 反选（不规则选择）仍走分片方案，大数据量下耗时较长但界面不冻结，可后续优化
+- `[perf]` 计时日志为调试保留，确认稳定后可移除
+
+---
+
+## 2026-08-02 — 术语表体验完善 + 检测结果导出 + 评分持久化 + 自动保存
+
+> 背景：术语表冲突检测无进度反馈、按钮拥挤、刷新按钮看不清；冲突/一致性检测结果无法导出对照修改；评分不持久化导致重新打开文件后丢失；缺少 Excel 式自动保存。
+
+### A. 术语表窗口体验完善 ✅
+
+- **冲突检测进度 + 日志**（[GlossaryManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.cs)）：`DetectConflicts` 新增 `onProgress` 回调参数，按总数自适应步长（全程约上报 20 次，避免刷屏）；主窗口日志区实时显示"开始 → 进度 x/y → 完成并列出冲突数"
+- **本地化**：新增 `LogConflictStart`/`LogConflictProgress`/`LogConflictDone`（中英双语），进度反馈不硬编码
+- **术语表按钮布局**（[GlossaryWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/GlossaryWindow.xaml)）：工具栏拆成两行——第一行 Add/Edit/Delete、Import/Export/Share 与右侧统计/刷新/关闭；第二行搜索框、分类/状态筛选、合并配置、冲突检测，控件不再拥挤
+- **刷新按钮颜色**：从无背景的 `SmallBtn` 改为 `CyanBtn`（青色 #00ACC1 白字），浅色底上清晰可辨
+
+### B. 冲突/一致性检测结果导出 ✅
+
+- **ReviewExporter 扩展**（[ReviewExporter.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ReviewExporter.cs)）：
+  - `ExportConflicts(path, conflicts)`：导出列 `EntryKey, Source, Translation, TermEnglish, Expected, Category`
+  - `ExportConsistency(path, issues)`：导出列 `Original, Translations, EntryKeys`
+  - 新增 `ConsistencyIssue` 结构化类（原文 + 不同译文列表 + 涉及条目 Key）
+- **冲突对话框导出按钮**（[GlossaryWindow.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/GlossaryWindow.xaml.cs)）：ConflictDialog 底部新增青色"导出 CSV"按钮，保存 `conflict_report_日期.csv`
+- **一致性检测导出**（[MainWindow.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml.cs)）：扫描完成后弹窗询问"是否导出报告以便对照修改？"，保存 `consistency_report_日期.csv`
+- **ScanConsistencyIssues 结构化**（[MainViewModel.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.cs)）：返回类型从 `List<string>` 改为 `List<ConsistencyIssue>`，日志/弹窗显示逻辑不变
+- **本地化**：新增 `GlossaryExportConflicts`/`GlossaryExportConflictsTitle`/`GlossaryExportConflictsDone`/`ConsistencyExportPrompt`/`ConsistencyExported`
+
+### C. 评分持久化缓存（score_cache.json）✅
+
+- **背景**：用户反馈"不可能一次看完所有评分再校对，下一次打开没评分了"
+- **ConfigService**（[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs)）：
+  - 新增 `ScoreCacheItem`（Score + Improvement）+ `ScoreCache` 字典 + `score_cache.json` 独立文件
+  - `SyncScoresToCache` / `SaveScoreCache` / `RestoreScores` 三个方法；`LoadConfig` 时一并加载
+- **保存时机**：单条评估/投票（`UpdateEntryScore`）、批量评估、批量投票、快速保存（Ctrl+S）都会同步评分缓存
+- **恢复时机**：加载 XML 后按条目 Key 恢复（仅恢复未评估条目，新评估结果优先）
+- **关键约束不变**：评分只进独立 JSON 缓存，**绝不写入 XML**——XML 保存路径仍排除评分（详见 XmlRepository）
+
+### D. Excel 式定时自动保存 ✅
+
+- **MainWindow**（[MainWindow.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.xaml.cs)）：新增 `_autoSaveTimer`，每 **5 分钟**触发一次（仿 Excel AutoRecover 节奏）
+- **触发逻辑**（[MainWindow.Events.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/MainWindow.Events.cs)）：`AutoSaveTimer_Tick` 仅在已加载文件时调用现有 `QuickSave()`——同步翻译缓存 + 评分缓存 + 配置，**不直接写 XML**（防止自动覆盖源文件导致数据损坏，源 XML 仍手动保存）
+- **窗口关闭时** `_autoSaveTimer.Stop()`，防止定时器空转
+
+### 验证
+
+- `dotnet build SimpleXmlEditor\SimpleXmlEditor.csproj`：**0 错误 0 警告**
+- 冲突检测日志实时显示进度；导出 CSV 可在 Excel 中对照修改；评分关闭重开后保留；5 分钟自动保存日志可见
+
+---
+
 ## 经验教训
 
 1. **架构先行**：早期"上帝类"（God Class）导致后期维护成本剧增，MVVM + 服务层提前规划可避免
@@ -866,3 +1195,9 @@ project-root/
 5. **编译排查**：.NET WPF 项目中，`InitializeComponent()` 执行时的 null 引用是常见的陷阱，需加防护
 6. **渐进式重构的边界**：`TranslationOrchestrator` 虽然抽取了翻译流程，但 MainWindow 仍保留了 LoadConfig/SaveConfig 等副本——重构必须追踪到所有调用点，不能只完成任务的一半
 7. **对话框 DialogResult 陷阱**：WPF 中以代码创建的子窗口（非 XAML）需要显式设置 `DialogResult = true/false`，否则 `ShowDialog()` 返回 null，导致调用方误判
+8. **WPF DataGrid 的 Ctrl+A 陷阱**：DataGrid 内置 Ctrl+A 会触发 `SelectAll()` 一次性选中所有 cell（N 行 × M 列），大数据量下直接卡死；且 `MainWindow_KeyDown`（冒泡）拦不住它，必须用 `PreviewKeyDown`（隧道）在 DataGrid 层拦截
+9. **WPF DataGrid 的 cell 级选择本质慢**：`SelectedCells.Add` 每个 cell 都会触发布局更新，不要对大数据量逐格选择——用"逻辑标志 + 只操作可见行 + 滚动补选"的 Excel 式模型替代
+10. **SelectedCells 会无限积累**：滚动补选时若只增不减，集合膨胀后 `Clear()`/`Contains()` 全部变慢；滚动时应先 Clear 再重选
+11. **厂商模型名会升级停用**：API 模型名硬编码在 StaticModels 中迟早过时（DeepSeek 2026-04-24 升级），应支持从厂商 `GET /models` 动态拉取并回退静态列表
+12. **批量 API 结果要用 key 去重**：AI 对多条原文可能返回重复译文，`ToDictionary` 遇重复键直接抛异常崩溃，应改用循环赋值或分组
+13. **外部 API 调用必须逐层兜底**：批量评估/投票等异步编排，任何一层异常都要 try-catch 并降级（chunk 失败 → 逐条 → 跳过），否则用户数据场景下必然崩溃
