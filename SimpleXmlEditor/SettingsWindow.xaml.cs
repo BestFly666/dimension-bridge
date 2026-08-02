@@ -19,12 +19,16 @@ namespace SimpleXmlEditor
         public string CustomPrompt { get; private set; }
         public string ActiveExpertProfile { get; private set; }
         public AIProvider AiProvider { get; private set; }
+        public string EvalAiProvider { get; private set; } = "";
+        public string EvalApiKey { get; private set; } = "";
+        public string EvalModel { get; private set; } = "";
         private readonly MainWindow _mainWindow;
         private readonly IExpertProfileManager _profileManager;
 
-        public SettingsWindow(string currentApiKey, string currentModel, string currentTargetLanguage, 
+        public SettingsWindow(string currentApiKey, string currentModel, string currentTargetLanguage,
             string currentProgramLanguage, string currentCustomPrompt, string currentActiveExpertProfile,
-            AIProvider currentAiProvider, MainWindow mainWindow, IExpertProfileManager profileManager)
+            AIProvider currentAiProvider, MainWindow mainWindow, IExpertProfileManager profileManager,
+            string currentEvalProvider = "", string currentEvalApiKey = "", string currentEvalModel = "")
         {
             InitializeComponent();
             
@@ -53,6 +57,20 @@ namespace SimpleXmlEditor
             }
             
             ApiKeyTextBox.Text = currentApiKey;
+
+            // 评估模型配置
+            EvalApiKeyTextBox.Text = currentEvalApiKey;
+            EvalModelTextBox.Text = currentEvalModel;
+            foreach (System.Windows.Controls.ComboBoxItem item in EvalProviderComboBox.Items)
+            {
+                if (item.Tag?.ToString() == currentEvalProvider)
+                {
+                    EvalProviderComboBox.SelectedItem = item;
+                    break;
+                }
+            }
+            if (EvalProviderComboBox.SelectedItem == null && EvalProviderComboBox.Items.Count > 0)
+                EvalProviderComboBox.SelectedIndex = 0;
             
             // Set current model
             foreach (System.Windows.Controls.ComboBoxItem item in ModelComboBox.Items)
@@ -157,6 +175,17 @@ namespace SimpleXmlEditor
 
             // Buttons
             CancelButton.Content = L("Cancel");
+
+            // Evaluation model tab
+            EvaluationModelTab.Header = $"  🔍  {L("EvalModelTab")}  ";
+            EvalModelConfigTitle.Text = $"🔍 {L("EvalModelConfig")}";
+            EvalModelConfigDesc.Text = L("EvalModelDesc");
+            EvalProviderHeader.Text = $"🔌 {L("EvalAiProviderLabel")}";
+            EvalUseTranslationModelItem.Content = L("EvalUseTranslationModel");
+            EvalApiKeyHeader.Text = $"🔑 {L("EvalApiKeyLabel")}";
+            HandyControl.Controls.InfoElement.SetPlaceholder(EvalApiKeyTextBox, L("EvalApiKeyPlaceholder"));
+            EvalModelHeader.Text = $"🤖 {L("EvalModelNameLabel")}";
+            HandyControl.Controls.InfoElement.SetPlaceholder(EvalModelTextBox, L("EvalModelPlaceholder"));
             OkButton.Content = L("SaveApply");
 
             // Expert profiles tab
@@ -470,6 +499,12 @@ namespace SimpleXmlEditor
             }
 
             CustomPrompt = CustomPromptTextBox.Text.Trim();
+
+            // 评估模型配置
+            if (EvalProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem evalItem)
+                EvalAiProvider = evalItem.Tag?.ToString() ?? "";
+            EvalApiKey = EvalApiKeyTextBox.Text.Trim();
+            EvalModel = EvalModelTextBox.Text.Trim();
 
             DialogResult = true;
             Close();

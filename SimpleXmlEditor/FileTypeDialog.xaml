@@ -3,31 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="选择文件类型" Height="160" Width="350"
         WindowStyle="ToolWindow" ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        Background="#F7F6FB" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
     <Window.Resources>
-        <Style x:Key="RoundedButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#2196F3"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}" CornerRadius="10"
-                                Padding="{TemplateBinding Padding}">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.88"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
     </Window.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
@@ -40,10 +17,10 @@
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button Name="SourceBtn" Content="原文" Width="80" Height="32" Margin="0,0,10,0"
-                    Click="SourceBtn_Click" IsDefault="True" Style="{StaticResource RoundedButton}"/>
+                    Click="SourceBtn_Click" IsDefault="True" Style="{StaticResource PrimaryBtn}"/>
             <Button Name="TranslationBtn" Content="译文" Width="80" Height="32" Margin="0,0,10,0"
-                    Click="TranslationBtn_Click" Style="{StaticResource RoundedButton}"/>
-            <Button Name="CancelBtn" Content="取消" Width="80" Height="32" Click="CancelBtn_Click" IsCancel="True" Style="{StaticResource RoundedButton}"/>
+                    Click="TranslationBtn_Click" Style="{StaticResource PrimaryBtn}"/>
+            <Button Name="CancelBtn" Content="取消" Width="80" Height="32" Click="CancelBtn_Click" IsCancel="True" Style="{StaticResource GreyBtn}"/>
         </StackPanel>
     </Grid>
 </Window>

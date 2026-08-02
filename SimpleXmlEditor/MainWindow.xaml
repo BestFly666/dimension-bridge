@@ -1,166 +1,15 @@
 <Window x:Class="SimpleXmlEditor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hc="https://handyorg.github.io/handycontrol"
         xmlns:local="clr-namespace:SimpleXmlEditor"
         Title="" Height="800" Width="1400"
         MinWidth="1100" MinHeight="640"
-        WindowStartupLocation="CenterScreen" Background="#F0F2F5" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
+        WindowStartupLocation="CenterScreen" Background="#F0EEF6" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
 
     <Window.Resources>
         <!-- Convert DataGrid column DisplayIndex to an Excel-style letter (A, B, C, ...) -->
         <local:IndexToLetterConverter x:Key="IndexToLetter"/>
-        <!-- ===== Button Base Template ===== -->
-        <Style x:Key="BaseButton" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Margin" Value="3"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
-                                CornerRadius="10"
-                                Padding="{TemplateBinding Padding}"
-                                RenderOptions.BitmapScalingMode="HighQuality">
-                            <Grid>
-                                <Border x:Name="FocusRing" CornerRadius="10" BorderThickness="2"
-                                        BorderBrush="#00000000" Margin="-4" IsHitTestVisible="False"/>
-                                <ContentPresenter HorizontalAlignment="Center"
-                                                VerticalAlignment="Center"
-                                                TextElement.Foreground="{TemplateBinding Foreground}"/>
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Opacity" Value="0.88"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Opacity" Value="0.76"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.45"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="#1976D2"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ===== Color Variants ===== -->
-        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#2196F3"/>
-        </Style>
-        <Style x:Key="SuccessBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#4CAF50"/>
-        </Style>
-        <Style x:Key="WarningBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#FF9800"/>
-        </Style>
-        <Style x:Key="DangerBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#EF5350"/>
-        </Style>
-        <Style x:Key="CyanBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#00ACC1"/>
-        </Style>
-        <Style x:Key="PurpleBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#7E57C2"/>
-        </Style>
-        <Style x:Key="TealBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#00897B"/>
-        </Style>
-        <Style x:Key="AmberBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#FFA726"/>
-        </Style>
-        <Style x:Key="GreyBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#78909C"/>
-        </Style>
-        <Style x:Key="PinkBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
-            <Setter Property="Background" Value="#EC407A"/>
-        </Style>
-
-        <!-- ===== Ghost Button for header bar ===== -->
-        <Style x:Key="HeaderBtn" TargetType="Button">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="12,7"/>
-            <Setter Property="Margin" Value="1"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="Normal"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="border" Background="{TemplateBinding Background}"
-                                CornerRadius="10" Padding="{TemplateBinding Padding}">
-                            <Grid>
-                                <Border x:Name="FocusRing" CornerRadius="10" BorderThickness="2"
-                                        BorderBrush="#00000000" Margin="-3" IsHitTestVisible="False"/>
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                TextElement.Foreground="{TemplateBinding Foreground}"/>
-                            </Grid>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#FFFFFF22"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#FFFFFF10"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="BorderBrush" Value="#FFFFFF"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ===== Modern Card Style ===== -->
-        <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16"/>
-            <Setter Property="Margin" Value="8"/>
-            <Setter Property="BorderBrush" Value="#E8ECF0"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
-            <Setter Property="Effect">
-                <Setter.Value>
-                    <DropShadowEffect Color="#263238" BlurRadius="12" ShadowDepth="2" Direction="270" Opacity="0.10"/>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <!-- ===== Section Title ===== -->
-        <Style x:Key="SectionTitle" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="15"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#37474F"/>
-            <Setter Property="Margin" Value="0,0,0,10"/>
-        </Style>
-
-        <!-- ===== Tag Pill ===== -->
-        <Style x:Key="TagPill" TargetType="Border">
-            <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="12,5"/>
-            <Setter Property="Margin" Value="4,0"/>
-        </Style>
-
-        <!-- ===== Info Label ===== -->
-        <Style x:Key="InfoLabel" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
     </Window.Resources>
 
     <Grid>
@@ -173,57 +22,11 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- ═══════════ MENU BAR ═══════════ -->
-        <Menu Grid.Row="0" FontSize="14" FontWeight="SemiBold" BorderThickness="0,0,0,2">
-            <Menu.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#546E7A" Offset="0.0"/>
-                    <GradientStop Color="#455A64" Offset="0.5"/>
-                    <GradientStop Color="#263238" Offset="1.0"/>
-                </LinearGradientBrush>
-            </Menu.Background>
-            <Menu.BorderBrush>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#1E88E5" Offset="0.0"/>
-                    <GradientStop Color="#7E57C2" Offset="0.5"/>
-                    <GradientStop Color="#00ACC1" Offset="1.0"/>
-                </LinearGradientBrush>
-            </Menu.BorderBrush>
-            <Menu.Resources>
-                <!-- Sub-menu (dropdown) item style: light card + highlight on hover,
-                     so dropdowns match the app's light theme instead of the raw system look. -->
-                <Style TargetType="MenuItem">
-                    <Setter Property="Padding" Value="16,7"/>
-                    <Setter Property="Foreground" Value="#37474F"/>
-                    <Setter Property="Background" Value="White"/>
-                    <Setter Property="BorderThickness" Value="0"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="#E3F2FD"/>
-                            <Setter Property="Foreground" Value="#1565C0"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-                <Style TargetType="MenuItem" x:Key="TopMenuStyle">
-                    <Setter Property="Padding" Value="14,5"/>
-                    <Setter Property="Foreground" Value="White"/>
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Style.Triggers>
-                        <Trigger Property="IsHighlighted" Value="True">
-                            <Setter Property="Background" Value="#26FFFFFF"/>
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-                <Style TargetType="Separator">
-                    <Setter Property="Background" Value="#E0E0E0"/>
-                    <Setter Property="Margin" Value="8,4"/>
-                    <Setter Property="Height" Value="1"/>
-                </Style>
-            </Menu.Resources>
-
+        <!-- ═══════════ MENU BAR (HandyControl style) ═══════════ -->
+        <Menu Grid.Row="0" FontSize="14" FontWeight="SemiBold">
 
             <!-- File -->
-            <MenuItem Name="MenuFile" Header="📁 File" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuFile" Header="📁 File">
                 <MenuItem Name="MenuOpen" Header="📂 Open (Ctrl+O)" Click="LoadBtn_Click" InputGestureText="Ctrl+O"/>
                 <MenuItem Name="MenuSave" Header="💾 Save (Ctrl+S)" Click="SaveBtn_Click" InputGestureText="Ctrl+S"/>
                 <Separator/>
@@ -235,34 +38,34 @@
             </MenuItem>
 
             <!-- Edit -->
-            <MenuItem Name="MenuEdit" Header="✏️ Edit" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuEdit" Header="✏️ Edit">
                 <MenuItem Name="MenuUndo" Header="↩️ Undo" Click="UndoBtn_Click"/>
                 <MenuItem Name="MenuReplace" Header="🔄 Replace" Click="BatchReplaceBtn_Click"/>
             </MenuItem>
 
             <!-- View -->
-            <MenuItem Name="MenuView" Header="👁 View" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuView" Header="👁 View">
                 <MenuItem Name="MenuDarkMode" Header="🌙 Dark Mode" Click="MenuDarkMode_Click"/>
                 <MenuItem Name="MenuShowFilter" Header="🔍 Show Filter" Click="MenuShowFilter_Click"/>
                 <MenuItem Name="MenuShowLog" Header="📋 Show Log" Click="MenuShowLog_Click"/>
             </MenuItem>
 
             <!-- Translate -->
-            <MenuItem Name="MenuTranslate" Header="🌐 Translate" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuTranslate" Header="🌐 Translate">
                 <MenuItem Name="MenuTranslateSelected" Header="🎯 Selected" Click="TranslateSelectedBtn_Click"/>
                 <MenuItem Name="MenuTranslateAll" Header="🚀 All" Click="TranslateAllBtn_Click"/>
                 <MenuItem Name="MenuSmartPreTrans" Header="🔮 Smart Pre-trans" Click="MenuSmartPreTrans_Click"/>
             </MenuItem>
 
             <!-- Quality -->
-            <MenuItem Name="MenuQuality" Header="⭐ Quality" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuQuality" Header="⭐ Quality">
                 <MenuItem Name="MenuEvaluate" Header="🤖 AI Evaluate (F5)" Click="EvaluateBtn_Click" InputGestureText="F5"/>
                 <MenuItem Name="MenuVote" Header="🗳 Agent Vote (F6)" Click="VoteBtn_Click" InputGestureText="F6"/>
                 <MenuItem Name="MenuConsistency" Header="🔍 Consistency" Click="MenuConsistency_Click"/>
             </MenuItem>
 
             <!-- Tools -->
-            <MenuItem Name="MenuTools" Header="🔧 Tools" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuTools" Header="🔧 Tools">
                 <MenuItem Name="MenuGlossary" Header="📖 Glossary" Click="GlossaryBtn_Click"/>
                 <MenuItem Name="MenuStatistics" Header="📊 Statistics" Click="StatsBtn_Click"/>
                 <Separator/>
@@ -270,14 +73,14 @@
             </MenuItem>
 
             <!-- Help -->
-            <MenuItem Name="MenuHelp" Header="❓ Help" Style="{StaticResource TopMenuStyle}">
+            <MenuItem Name="MenuHelp" Header="❓ Help">
                 <MenuItem Name="MenuShortcuts" Header="⌨ Shortcuts" Click="MenuShortcuts_Click"/>
                 <MenuItem Name="MenuAbout" Header="ℹ️ About" Click="MenuAbout_Click"/>
             </MenuItem>
         </Menu>
 
         <!-- ═══════════ SIMPLIFIED HEADER TOOLBAR ═══════════ -->
-        <Border Grid.Row="1" Background="#1E88E5" Padding="14,10">
+        <Border Grid.Row="1" Background="#EAE8F4" BorderBrush="#DDD9EA" BorderThickness="0,0,0,1" Padding="14,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -288,8 +91,8 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <TextBlock Text="🌐" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="White"/>
-                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="#E1F5FE"/>
+                        <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="#37474F"/>
+                        <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="#78909C"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -301,19 +104,19 @@
                     <Separator Style="{x:Null}" Width="10"/>
 
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <ComboBox Name="ExpertProfileCombo" Height="30" Width="150"
-                                  SelectionChanged="ExpertProfileCombo_SelectionChanged"
-                                  Margin="4,0" FontSize="12">
+                        <hc:ComboBox Name="ExpertProfileCombo" Height="30" Width="150"
+                                     SelectionChanged="ExpertProfileCombo_SelectionChanged"
+                                     Margin="4,0" FontSize="12">
                             <ComboBoxItem Name="NoExpertItem" Content="No Expert" Tag="" IsSelected="True"/>
-                        </ComboBox>
+                        </hc:ComboBox>
                     </StackPanel>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ═══════════ FILE TABS PANEL ═══════════ -->
-        <Border Grid.Row="2" Name="FileTabsPanel" Background="#F5F5F5" Padding="8,4"
-                BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Visibility="Visible">
+        <Border Grid.Row="2" Name="FileTabsPanel" Background="#E5E3F0" Padding="8,4"
+                BorderBrush="#DDD9EA" BorderThickness="0,0,0,1" Visibility="Visible">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Name="ProjectFiles" Text="📄 Project" FontSize="13" FontWeight="SemiBold"
                            Foreground="#546E7A" VerticalAlignment="Center" Margin="8,0,12,0"/>
@@ -328,7 +131,8 @@
         </Border>
 
         <!-- ═══════════ AI TRANSLATION PANEL ═══════════ -->
-        <Border Grid.Row="3" Style="{StaticResource Card}" Background="#E8F5E9" Margin="8,8,8,4" BorderBrush="#C8E6C9">
+        <Border Grid.Row="3" Background="#E8F5E9" Margin="8,8,8,4" BorderBrush="#C8E6C9"
+                CornerRadius="8" Padding="16" BorderThickness="1">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -336,7 +140,7 @@
                 </Grid.RowDefinitions>
 
                 <TextBlock Grid.Row="0" Name="AITranslationTitle" Text="🤖 AI Translation Center"
-                          Style="{StaticResource SectionTitle}" Foreground="#2E7D32" Margin="0,0,0,10"/>
+                          FontSize="15" FontWeight="Bold" Foreground="#2E7D32" Margin="0,0,0,10"/>
 
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
@@ -350,12 +154,11 @@
                                 Click="TranslateSelectedBtn_Click" Style="{StaticResource PrimaryBtn}"/>
 
                         <!-- Batch Settings -->
-                        <Border Background="White" CornerRadius="6" Padding="10,6" Margin="8,0" BorderBrush="#E0E0E0" BorderThickness="1">
+                        <Border Background="#FDFDFE" CornerRadius="6" Padding="10,6" Margin="8,0" BorderBrush="#DDD9EA" BorderThickness="1">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Name="BatchLabelText" Text="Batch:" Foreground="#78909C" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBox Name="BatchSizeTxt" Text="50" Width="42" FontSize="13"
-                                        BorderBrush="#CFD8DC" BorderThickness="1" Padding="4,3"
-                                        VerticalAlignment="Center" TextChanged="BatchSizeTxt_TextChanged" TextAlignment="Center"/>
+                                <hc:TextBox Name="BatchSizeTxt" Text="50" Width="42" FontSize="13"
+                                            VerticalAlignment="Center" TextChanged="BatchSizeTxt_TextChanged" TextAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
@@ -372,23 +175,26 @@
 
                     <!-- Right: Info Pills only (no clear buttons) -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                        <Border Style="{StaticResource TagPill}" Background="#E8F5E9">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#E8F5E9">
                             <TextBlock Name="EvalResult" Text=""
-                                      Style="{StaticResource InfoLabel}" Foreground="#2E7D32"
+                                      FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                      Foreground="#2E7D32"
                                       ToolTip="Last evaluation result"/>
                         </Border>
-                        <Border Style="{StaticResource TagPill}" Background="#E3F2FD">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#E3F2FD">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Name="CacheInfo" Text="💾 Cache: 0"
-                                          Style="{StaticResource InfoLabel}" Foreground="#1565C0"/>
+                                          FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                          Foreground="#1565C0"/>
                                 <Button Name="ClearCacheBtn" Content="🗑 清空缓存"
                                         Click="ClearCacheBtn_Click" Style="{StaticResource GreyBtn}"
                                         FontSize="11" Padding="8,4" Margin="8,0,0,0"/>
                             </StackPanel>
                         </Border>
-                        <Border Style="{StaticResource TagPill}" Background="#F3E5F5">
+                        <Border CornerRadius="12" Padding="12,5" Margin="4,0" Background="#F3E5F5">
                             <TextBlock Name="GlossaryInfo" Text="📖 Glossary: 0"
-                                      Style="{StaticResource InfoLabel}" Foreground="#7B1FA2"/>
+                                      FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"
+                                      Foreground="#7B1FA2"/>
                         </Border>
                     </StackPanel>
                 </Grid>
@@ -403,7 +209,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- ===== LEFT: DataGrid ===== -->
-            <Border Grid.Column="0" Style="{StaticResource Card}" Margin="0,0,4,0">
+            <Border Grid.Column="0" Background="White" Margin="0,0,4,0" BorderBrush="#DDD9EA"
+                    BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -418,7 +225,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0" Name="TranslationDataTitle" Text="📋 Translation Data"
-                                  Style="{StaticResource SectionTitle}" Margin="0"/>
+                                  FontSize="15" FontWeight="Bold" Foreground="#37474F" Margin="0"/>
                         <TextBlock Grid.Column="1" Name="FilterCountText" Text="0"
                                   Foreground="#78909C" FontSize="12" VerticalAlignment="Center"/>
                     </Grid>
@@ -440,15 +247,15 @@
                                       VerticalAlignment="Center" Margin="6,0,0,0"
                                       Click="UntranslatedToggle_Click" FontSize="12"/>
                         </StackPanel>
-                        <TextBox Grid.Column="1" Name="FilterKeyBox" Margin="2" Padding="7,5" FontSize="13"
-                                BorderBrush="#CFD8DC" BorderThickness="1"
-                                TextChanged="FilterKeyBox_TextChanged" ToolTip="Filter by Key"/>
-                        <TextBox Grid.Column="2" Name="FilterBox" Margin="2" Padding="7,5" FontSize="13"
-                                BorderBrush="#CFD8DC" BorderThickness="1"
-                                TextChanged="FilterBox_TextChanged" ToolTip="Filter by Original"/>
-                        <TextBox Grid.Column="3" Name="FilterTranslationBox" Margin="2" Padding="7,5" FontSize="13"
-                                BorderBrush="#CFD8DC" BorderThickness="1"
-                                TextChanged="FilterTranslationBox_TextChanged" ToolTip="Filter by Translation"/>
+                        <hc:TextBox Grid.Column="1" Name="FilterKeyBox" Margin="2" Padding="7,5" FontSize="13"
+                                    hc:InfoElement.Placeholder="筛选 Key…" hc:InfoElement.ShowClearButton="True"
+                                    TextChanged="FilterKeyBox_TextChanged" ToolTip="Filter by Key"/>
+                        <hc:TextBox Grid.Column="2" Name="FilterBox" Margin="2" Padding="7,5" FontSize="13"
+                                    hc:InfoElement.Placeholder="筛选原文…" hc:InfoElement.ShowClearButton="True"
+                                    TextChanged="FilterBox_TextChanged" ToolTip="Filter by Original"/>
+                        <hc:TextBox Grid.Column="3" Name="FilterTranslationBox" Margin="2" Padding="7,5" FontSize="13"
+                                    hc:InfoElement.Placeholder="筛选译文…" hc:InfoElement.ShowClearButton="True"
+                                    TextChanged="FilterTranslationBox_TextChanged" ToolTip="Filter by Translation"/>
                     </Grid>
 
                     <!-- DataGrid -->
@@ -456,9 +263,16 @@
                              AutoGenerateColumns="False" CanUserAddRows="False"
                              SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
                              HeadersVisibility="All"
-                             GridLinesVisibility="Horizontal" RowHeaderWidth="52"
-                             AlternatingRowBackground="#F8FAFB" BorderThickness="0"
+                             GridLinesVisibility="All"
+                             HorizontalGridLinesBrush="#E0E0E0" VerticalGridLinesBrush="#E0E0E0"
+                             RowHeaderWidth="52"
+                             BorderThickness="0"
                              Loaded="EntriesGrid_Loaded"
+                             BeginningEdit="EntriesGrid_BeginningEdit"
+                             PreviewKeyDown="EntriesGrid_PreviewKeyDown"
+                             ScrollViewer.ScrollChanged="EntriesGrid_ScrollChanged"
+                             EnableRowVirtualization="True"
+                             EnableColumnVirtualization="True"
                              FontSize="12.5">
                         <DataGrid.ContextMenu>
                             <ContextMenu FontSize="12">
@@ -483,7 +297,7 @@
                         </DataGrid.ContextMenu>
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
-                                <Setter Property="Background" Value="#ECEFF1"/>
+                                <Setter Property="Background" Value="#E5E3F0"/>
                                 <Setter Property="Foreground" Value="#455A64"/>
                                 <Setter Property="FontWeight" Value="Bold"/>
                                 <Setter Property="FontSize" Value="12"/>
@@ -498,10 +312,12 @@
                                                     <RowDefinition Height="18"/>
                                                     <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
-                                                <!-- Column letter strip: click to select the whole column -->
+                                                <!-- Column letter strip: same size as the cell below (Excel-style),
+                                                     letter centered inside; click anywhere in this row = select the whole column -->
                                                 <Button Grid.Row="0" Padding="0" Cursor="Hand"
+                                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                                         Foreground="#607D8B" FontWeight="Bold" FontSize="10"
-                                                        Background="#E3E7EB" BorderBrush="#CFD8DC" BorderThickness="0,0,0,1"
+                                                        Background="#DDD9EA" BorderBrush="#B0BEC5" BorderThickness="0,0,0,1"
                                                         Content="{Binding Column.DisplayIndex, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource IndexToLetter}}"
                                                         Click="ColumnLetterBtn_Click"
                                                         Tag="{Binding RelativeSource={RelativeSource TemplatedParent}}">
@@ -548,7 +364,7 @@
                         </DataGrid.ColumnHeaderStyle>
                         <DataGrid.RowHeaderStyle>
                             <Style TargetType="DataGridRowHeader">
-                                <Setter Property="Background" Value="#ECEFF1"/>
+                                <Setter Property="Background" Value="#E5E3F0"/>
                                 <Setter Property="Foreground" Value="#78909C"/>
                                 <Setter Property="FontSize" Value="11"/>
                                 <Setter Property="BorderThickness" Value="0,0,1,1"/>
@@ -556,14 +372,32 @@
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="DataGridRowHeader">
-                                            <Border Background="{TemplateBinding Background}"
-                                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                                    BorderThickness="{TemplateBinding BorderThickness}">
-                                                <TextBlock Text="{Binding RowNumber}"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center"
-                                                           Foreground="{TemplateBinding Foreground}"/>
-                                            </Border>
+                                            <Grid>
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}">
+                                                    <TextBlock Text="{Binding RowNumber}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{TemplateBinding Foreground}"/>
+                                                </Border>
+                                                <!-- Excel-style row-height drag handle -->
+                                                <Thumb x:Name="RowResizeThumb"
+                                                       DragDelta="RowResizeThumb_DragDelta"
+                                                       DragStarted="RowResizeThumb_DragStarted"
+                                                       DragCompleted="RowResizeThumb_DragCompleted"
+                                                       VerticalAlignment="Bottom"
+                                                       Height="5"
+                                                       Cursor="SizeNS">
+                                                    <Thumb.Template>
+                                                        <ControlTemplate TargetType="Thumb">
+                                                            <Border Background="Transparent"
+                                                                    BorderThickness="0"
+                                                                    Height="{TemplateBinding Height}"/>
+                                                        </ControlTemplate>
+                                                    </Thumb.Template>
+                                                </Thumb>
+                                            </Grid>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
@@ -583,10 +417,27 @@
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="Foreground" Value="#37474F"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#BBDEFB"/>
+                                        <Setter Property="Foreground" Value="#263238"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEditing" Value="True">
+                                        <Setter Property="Background" Value="#FDFDFE"/>
+                                        <Setter Property="Foreground" Value="#263238"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.CellStyle>
                         <DataGrid.Columns>
                             <DataGridCheckBoxColumn Header="✓" Binding="{Binding IsSelected}" Width="36"/>
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusIcon}" Width="48" IsReadOnly="True" FontSize="12"/>
-                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="*" MinWidth="120">
+                            <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="240" MinWidth="120">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="Wrap"/>
@@ -599,10 +450,13 @@
                                         <Setter Property="Padding" Value="6,2"/>
                                         <Setter Property="VerticalContentAlignment" Value="Center"/>
                                         <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Background" Value="#FDFDFE"/>
+                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="CaretBrush" Value="#263238"/>
                                     </Style>
                                 </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTextColumn Header="Original" Binding="{Binding Value}" Width="1.5*" MinWidth="150">
+                            <DataGridTextColumn Header="Original" Binding="{Binding Value}" Width="360" MinWidth="150">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="TextWrapping" Value="Wrap"/>
@@ -615,10 +469,13 @@
                                         <Setter Property="Padding" Value="6,2"/>
                                         <Setter Property="VerticalContentAlignment" Value="Center"/>
                                         <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Background" Value="#FDFDFE"/>
+                                        <Setter Property="Foreground" Value="#263238"/>
+                                        <Setter Property="CaretBrush" Value="#263238"/>
                                     </Style>
                                 </DataGridTextColumn.EditingElementStyle>
                             </DataGridTextColumn>
-                            <DataGridTemplateColumn Header="Translation" Width="1.5*" MinWidth="150">
+                            <DataGridTemplateColumn Header="Translation" SortMemberPath="Translation" Width="360" MinWidth="150">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Translation}" TextWrapping="Wrap" VerticalAlignment="Center" Padding="8,4"/>
@@ -628,9 +485,23 @@
                                     <DataTemplate>
                                         <TextBox Text="{Binding Translation, UpdateSourceTrigger=PropertyChanged}"
                                                 TextWrapping="Wrap" AcceptsReturn="True"
-                                                BorderThickness="0" Padding="8,4"/>
+                                                BorderThickness="0" Padding="8,4"
+                                                Background="#FDFDFE" Foreground="#263238" CaretBrush="#263238"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="Score" SortMemberPath="EvaluationScore" Width="70" MinWidth="50" CanUserResize="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding EvaluationScoreDisplay}"
+                                                   Foreground="{Binding EvaluationScoreColor}"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Padding="4,4"
+                                                   ToolTip="{Binding EvaluationImprovement}"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
                         </DataGrid.Columns>
                     </DataGrid>
@@ -638,7 +509,17 @@
             </Border>
 
             <!-- ===== RIGHT: Activity Log ===== -->
-            <Border x:Name="LogPanel" Grid.Column="1" Style="{StaticResource Card}" Margin="4,0,0,0">
+            <Grid Grid.Column="1">
+                <!-- Collapsed-state expand bar (always reachable) -->
+                <Border x:Name="LogExpandBar" Background="#EAE8F4" Margin="4,0,0,0"
+                        BorderBrush="#DDD9EA" BorderThickness="1" CornerRadius="8"
+                        HorizontalAlignment="Left" Width="26" Visibility="Collapsed">
+                    <Button Content="▶" Click="ToggleLogBtn_Click" Style="{StaticResource GreyBtn}"
+                            Padding="0" FontSize="10" Margin="2,0,2,0"
+                            ToolTip="Expand log"/>
+                </Border>
+                <Border x:Name="LogPanel" Background="#F7F6FB" Margin="4,0,0,0"
+                        BorderBrush="#DDD9EA" BorderThickness="1" CornerRadius="8" Padding="16">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -653,7 +534,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Name="ActivityLogTitle" Text="📋 Activity Log"
-                                  Style="{StaticResource SectionTitle}" Margin="0"/>
+                                  FontSize="15" FontWeight="Bold" Foreground="#37474F" Margin="0"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <Button Name="ToggleLogBtn" Content="◀" Click="ToggleLogBtn_Click"
                                     Style="{StaticResource GreyBtn}" Width="30" Padding="4,4" FontSize="10"
@@ -671,12 +552,13 @@
                                     FontFamily="Consolas, 'Cascadia Code', monospace"
                                     FontSize="11.5" IsReadOnly="True" Background="Transparent"
                                     Foreground="#00FF00" BorderThickness="0" Padding="12"
+                                    VerticalContentAlignment="Top"
                                     AcceptsReturn="True" VerticalScrollBarVisibility="Disabled"/>
                         </ScrollViewer>
                     </Border>
 
                     <!-- Log Stats -->
-                    <Border Grid.Row="2" Background="#ECEFF1" CornerRadius="4" Padding="8,6" Margin="0,8,0,0">
+                    <Border Grid.Row="2" Background="#E5E3F0" CornerRadius="4" Padding="8,6" Margin="0,8,0,0">
                         <Grid>
                             <TextBlock Name="RealTimeLabel" Text="🕒 Real-time" FontSize="10"
                                       Foreground="#78909C" HorizontalAlignment="Left"/>
@@ -686,11 +568,12 @@
                     </Border>
                 </Grid>
             </Border>
+            </Grid>
         </Grid>
 
         <!-- ═══════════ BOTTOM BAR ═══════════ -->
-        <Border Grid.Row="5" Background="White" CornerRadius="4" Padding="10,6"
-                Margin="8,0,8,8" BorderBrush="#E8ECF0" BorderThickness="1">
+        <Border Grid.Row="5" Background="#EAE8F4" CornerRadius="4" Padding="10,6"
+                Margin="8,0,8,8" BorderBrush="#DDD9EA" BorderThickness="1">
             <Border.Effect>
                 <DropShadowEffect Color="#263238" BlurRadius="8" ShadowDepth="1" Direction="270" Opacity="0.08"/>
             </Border.Effect>
@@ -710,7 +593,7 @@
                 <!-- Progress Bar -->
                 <ProgressBar Grid.Column="1" Name="ProgressBar" Height="8"
                             IsIndeterminate="False" Visibility="Collapsed"
-                            Foreground="#2196F3" Background="#ECEFF1" BorderThickness="0"
+                            Foreground="#2196F3" Background="#DDD9EA" BorderThickness="0"
                             VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                 <!-- Speed / ETA / Cost -->

@@ -600,23 +600,67 @@ namespace SimpleXmlEditor
             Grid.SetRow(dataGrid, 1);
             grid.Children.Add(dataGrid);
 
+            var btnPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 8, 0, 0)
+            };
+            Grid.SetRow(btnPanel, 2);
+            grid.Children.Add(btnPanel);
+
+            var exportBtn = new Button
+            {
+                Content = LocalizationManager.GetString("GlossaryExportConflicts"),
+                Width = 110,
+                Height = 30,
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x00, 0xAC, 0xC1)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                FontWeight = FontWeights.Medium
+            };
+            exportBtn.Click += (_, _) => ExportConflicts(conflicts);
+            btnPanel.Children.Add(exportBtn);
+
             var closeBtn = new Button
             {
                 Content = LocalizationManager.GetString("GlossaryClose"),
                 Width = 80,
                 Height = 30,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 8, 0, 0),
                 Background = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
                 Foreground = Brushes.White,
                 BorderThickness = new Thickness(0),
                 FontWeight = FontWeights.Medium
             };
             closeBtn.Click += (_, _) => Close();
-            Grid.SetRow(closeBtn, 2);
-            grid.Children.Add(closeBtn);
+            btnPanel.Children.Add(closeBtn);
 
             Content = grid;
+        }
+
+        private void ExportConflicts(List<GlossaryConflict> conflicts)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = LocalizationManager.GetString("GlossaryExportConflictsTitle"),
+                Filter = "CSV files (*.csv)|*.csv",
+                FileName = $"conflict_report_{DateTime.Now:yyyyMMdd}.csv"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                new ReviewExporter().ExportConflicts(dlg.FileName, conflicts);
+                MessageBox.Show(
+                    LocalizationManager.GetString("GlossaryExportConflictsDone", dlg.FileName),
+                    LocalizationManager.GetString("MsgPrompt"), MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(LocalizationManager.GetString("ExportFailed", ex.Message),
+                    LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
     }
 }

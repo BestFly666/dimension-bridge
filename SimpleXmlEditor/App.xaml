@@ -1,19 +1,110 @@
 <Application x:Class="SimpleXmlEditor.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hc="https://handyorg.github.io/handycontrol">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/HandyControl;component/Themes/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+
             <!-- Global accent color: Material Blue, matching the toolbar gradient.
                  Other accent colors (green/orange/cyan) remain as per-element highlights.
                  NOTE: HandyControl theme keys are Color (not Brush). -->
             <Color x:Key="PrimaryColor">#2196F3</Color>
             <Color x:Key="PrimaryColorDark">#1976D2</Color>
             <Color x:Key="PrimaryColorLight">#BBDEFB</Color>
-            <Color x:Key="PrimaryTextColor">#FFFFFF</Color>
+
+            <!-- ══════════════════════════════════════════════════════════
+                 Shared app-wide styles (consumed by every window).
+                 Buttons follow the colorful accent scheme (blue/green/
+                 orange/red/cyan); inputs are handled by HandyControl.
+                 ══════════════════════════════════════════════════════════ -->
+
+            <!-- ===== Button Base Template (HandyControl ButtonCustom + corner radius) ===== -->
+            <Style x:Key="BaseButton" TargetType="Button" BasedOn="{StaticResource ButtonCustom}">
+                <Setter Property="hc:BorderElement.CornerRadius" Value="10"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="16,8"/>
+                <Setter Property="Margin" Value="3"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            </Style>
+
+            <!-- ===== Color Variants (background + hover/down states) ===== -->
+            <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#2196F3"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#1976D2"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#1565C0"/>
+            </Style>
+            <Style x:Key="SuccessBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#4CAF50"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#43A047"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#388E3C"/>
+            </Style>
+            <Style x:Key="WarningBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#FF9800"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#FB8C00"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#F57C00"/>
+            </Style>
+            <Style x:Key="DangerBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#EF5350"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#E53935"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#D32F2F"/>
+            </Style>
+            <Style x:Key="CyanBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#00ACC1"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#0097A7"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#00838F"/>
+            </Style>
+            <Style x:Key="GreyBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Background" Value="#78909C"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseHoverBackground" Value="#607D8B"/>
+                <Setter Property="hc:BackgroundSwitchElement.MouseDownBackground" Value="#546E7A"/>
+            </Style>
+            <Style x:Key="SmallBtn" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+                <Setter Property="Padding" Value="8,5"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+
+            <!-- ===== Glossary window DataGrid ===== -->
+            <Style x:Key="DataGridStyle" TargetType="DataGrid">
+                <Setter Property="Background" Value="#F7F6FB"/>
+                <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+                <Setter Property="HorizontalGridLinesBrush" Value="#F0F0F0"/>
+                <Setter Property="HeadersVisibility" Value="Column"/>
+                <Setter Property="AutoGenerateColumns" Value="False"/>
+                <Setter Property="CanUserAddRows" Value="False"/>
+                <Setter Property="CanUserDeleteRows" Value="False"/>
+                <Setter Property="SelectionMode" Value="Single"/>
+                <Setter Property="RowHeight" Value="32"/>
+                <Setter Property="FontSize" Value="13"/>
+                <Setter Property="CellStyle">
+                    <Setter.Value>
+                        <Style TargetType="DataGridCell">
+                            <Setter Property="Foreground" Value="#37474F"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="BorderThickness" Value="0"/>
+                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter Property="Background" Value="#BBDEFB"/>
+                                    <Setter Property="Foreground" Value="#263238"/>
+                                </Trigger>
+                                <Trigger Property="IsEditing" Value="True">
+                                    <Setter Property="Background" Value="#FDFDFE"/>
+                                    <Setter Property="Foreground" Value="#263238"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

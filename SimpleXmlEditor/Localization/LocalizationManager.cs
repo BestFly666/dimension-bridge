@@ -118,6 +118,7 @@ namespace SimpleXmlEditor.Localization
                 ["Key"] = "Key",
                 ["Original"] = "Original",
                 ["Translation"] = "Translation",
+                ["Score"] = "Score",
 
                 // === Status bar ===
                 ["Ready"] = "Ready",
@@ -186,6 +187,9 @@ namespace SimpleXmlEditor.Localization
                 ["GlossaryExpectedTranslation"] = "Expected",
                 ["GlossaryActualTranslation"] = "Actual Translation",
                 ["GlossaryEntryKey"] = "Entry Key",
+                ["GlossaryExportConflicts"] = "Export CSV",
+                ["GlossaryExportConflictsTitle"] = "Export conflict report",
+                ["GlossaryExportConflictsDone"] = "Conflict report exported: {0}",
                 ["GlossaryRequiredFields"] = "English and Chinese fields are required.",
                 ["GlossaryCompare"] = "Compare",
 
@@ -200,6 +204,9 @@ namespace SimpleXmlEditor.Localization
                 ["RealTime"] = "Real-time",
                 ["AutoScroll"] = "Auto-scroll",
                 ["ClearLog"] = "Clear Log",
+                ["LogConflictStart"] = "🔍 Conflict detection started ({0} entries)...",
+                ["LogConflictProgress"] = "🔍 Conflict detection: {0}/{1} entries...",
+                ["LogConflictDone"] = "✅ Conflict detection finished: {0} conflict(s) found",
 
                 // === Settings ===
                 ["AIConfiguration"] = "AI Configuration",
@@ -395,6 +402,10 @@ namespace SimpleXmlEditor.Localization
                 ["CtxSelectAll"] = "Select All",
                 ["CtxSelectNone"] = "Select None",
                 ["CtxInvertSelection"] = "Invert Selection",
+                ["SelectingColumn"] = "Selecting column",
+                ["SelectingAll"] = "Selecting all",
+                ["InvertingSelection"] = "Inverting selection",
+                ["SelectedCount"] = "Selected",
 
                 // === Prompt messages ===
                 ["MsgPrompt"] = "Prompt",
@@ -519,12 +530,19 @@ namespace SimpleXmlEditor.Localization
                 ["EvalNoResults"] = "No results",
                 ["EvalBatchSummary"] = "Avg: {0:F1} | High: {1} | Low: {2}",
                 ["LogBatchEvalComplete"] = "Batch evaluation complete: {0} entries, Avg: {1:F1}, High: {2}, Low: {3}",
+                ["LogScoreUpdated"] = "Updated {0} scores to the table (click Score column header to sort)",
                 ["LogBatchVoting"] = "Multi-agent voting for {0} entries...",
                 ["VoteBatchProgress"] = "Voting {0}...",
                 ["VoteBatchResult"] = "{0} voted | Best: {1}",
                 ["LogBatchVoteComplete"] = "Batch voting complete: {0} entries, {1} entries rated best",
                 ["LogAppliedSuggestion"] = "Applied suggestion for: {0}",
                 ["VoteAppliedBest"] = "Voting complete: applied best translation to {0} entries",
+                ["LogGeneratingCandidate"] = "Generating candidates [{0}/{1}] for: {2}",
+                ["VoteCandidateProgress"] = "Generating candidates [{0}/{1}]...",
+                ["LogVotingStart"] = "Starting multi-agent voting for {0} entries...",
+                ["VoteVotingProgress"] = "Voting on {0} entries...",
+                ["VoteBatchResultDetail"] = "{0} voted | Best: {1} | Applied: {2}",
+                ["VoteBestTranslation"] = "Best translation",
                 ["VoteApplyPrompt"] = "Apply best translation for \"{0}\"?\n\n{1}",
                 ["VoteApplyTitle"] = "Apply Best Translation",
                 ["VoteApplied"] = "Best translation applied for {0}",
@@ -607,9 +625,10 @@ namespace SimpleXmlEditor.Localization
                 ["ConsistencyScanTitle"] = "Consistency Check Results",
                 ["ConsistencyScanning"] = "Scanning for inconsistencies...",
                 ["ConsistencyNoIssues"] = "No consistency issues found.",
-                ["ConsistencyIssuesFound"] = "Found {0} consistency issues.",
                 ["ConsistencyIssueDesc"] = "{0} → translated as \"{1}\" and \"{2}\"",
                 ["LogConsistencyScan"] = "Consistency scan: {0} issues found in {1} entries",
+                ["ConsistencyExportPrompt"] = "Found {0} consistency issues. Export a report for reference?",
+                ["ConsistencyExported"] = "Consistency report exported: {0}",
 
                 // === Context-aware Translation ===
                 ["ContextAware"] = "Context-aware",
@@ -631,6 +650,17 @@ namespace SimpleXmlEditor.Localization
                 // === Shortcuts ===
                 ["ShortcutsTitle"] = "Keyboard Shortcuts",
                 ["ShortcutsText"] = "Ctrl+O   Open File\nCtrl+S   Quick Save\nCtrl+Z   Undo\nCtrl+F   Find\nF5       AI Evaluate\nF6       Agent Vote\nCtrl+T   Translate Selected\nCtrl+Shift+T  Translate All\nEscape   Clear Filters",
+
+                // === Evaluation Model Settings ===
+                ["EvalModelTab"] = "Evaluation Model",
+                ["EvalModelConfig"] = "Evaluation Model Configuration",
+                ["EvalModelDesc"] = "Configure a separate AI model for evaluation and voting to break same-source bias. Leave empty to use the translation model.",
+                ["EvalAiProviderLabel"] = "Evaluation AI Provider",
+                ["EvalApiKeyLabel"] = "Evaluation API Key",
+                ["EvalApiKeyPlaceholder"] = "Enter evaluation model API key (empty = use translation key)",
+                ["EvalModelNameLabel"] = "Evaluation Model Name",
+                ["EvalModelPlaceholder"] = "Enter model name, e.g. deepseek-chat, glm-4-flash",
+                ["EvalUseTranslationModel"] = "(Use Translation Model)",
             };
 
             // =========================================================================
@@ -675,6 +705,7 @@ namespace SimpleXmlEditor.Localization
                 ["Key"] = "键",
                 ["Original"] = "原文",
                 ["Translation"] = "译文",
+                ["Score"] = "评分",
 
                 // === Status bar ===
                 ["Ready"] = "就绪",
@@ -743,6 +774,9 @@ namespace SimpleXmlEditor.Localization
                 ["GlossaryExpectedTranslation"] = "期望译文",
                 ["GlossaryActualTranslation"] = "实际译文",
                 ["GlossaryEntryKey"] = "条目 Key",
+                ["GlossaryExportConflicts"] = "导出 CSV",
+                ["GlossaryExportConflictsTitle"] = "导出冲突报告",
+                ["GlossaryExportConflictsDone"] = "冲突报告已导出: {0}",
                 ["GlossaryRequiredFields"] = "英文和中文字段为必填。",
                 ["GlossaryCompare"] = "对比",
 
@@ -757,6 +791,9 @@ namespace SimpleXmlEditor.Localization
                 ["RealTime"] = "实时",
                 ["AutoScroll"] = "自动滚动",
                 ["ClearLog"] = "清除日志",
+                ["LogConflictStart"] = "🔍 冲突检测开始（共 {0} 条）...",
+                ["LogConflictProgress"] = "🔍 冲突检测进度：{0}/{1} 条...",
+                ["LogConflictDone"] = "✅ 冲突检测完成：发现 {0} 个冲突",
 
                 // === Settings ===
                 ["AIConfiguration"] = "AI 配置",
@@ -930,6 +967,10 @@ namespace SimpleXmlEditor.Localization
                 ["CtxSelectAll"] = "全选",
                 ["CtxSelectNone"] = "全不选",
                 ["CtxInvertSelection"] = "反选",
+                ["SelectingColumn"] = "正在选中整列",
+                ["SelectingAll"] = "正在全选",
+                ["InvertingSelection"] = "正在反选",
+                ["SelectedCount"] = "已选中",
 
                 // === Prompt messages ===
                 ["MsgPrompt"] = "提示",
@@ -1076,12 +1117,19 @@ namespace SimpleXmlEditor.Localization
                 ["EvalNoResults"] = "无结果",
                 ["EvalBatchSummary"] = "平均: {0:F1} | 优秀: {1} | 较差: {2}",
                 ["LogBatchEvalComplete"] = "批量评估完成: {0} 条, 平均: {1:F1}, 优秀: {2}, 较差: {3}",
+                ["LogScoreUpdated"] = "已更新 {0} 条评分到表格（点击「评分」列头可排序）",
                 ["LogBatchVoting"] = "多代理投票中 {0} 条...",
                 ["VoteBatchProgress"] = "投票中 {0}...",
                 ["VoteBatchResult"] = "{0} 条已投票 | 最优: {1}",
                 ["LogBatchVoteComplete"] = "批量投票完成: {0} 条, {1} 条评为最优",
                 ["LogAppliedSuggestion"] = "已应用建议: {0}",
                 ["VoteAppliedBest"] = "投票完成: 已为 {0} 条应用最佳译文",
+                ["LogGeneratingCandidate"] = "生成候选译文 [{0}/{1}]: {2}",
+                ["VoteCandidateProgress"] = "生成候选译文 [{0}/{1}]...",
+                ["LogVotingStart"] = "开始多代理投票 {0} 条...",
+                ["VoteVotingProgress"] = "投票中 {0} 条...",
+                ["VoteBatchResultDetail"] = "{0} 条已投票 | 最优: {1} | 已应用: {2}",
+                ["VoteBestTranslation"] = "最佳译文",
                 ["VoteApplyPrompt"] = "是否将 \"{0}\" 的最佳译文应用？\n\n{1}",
                 ["VoteApplyTitle"] = "应用最佳译文",
                 ["VoteApplied"] = "已为 {0} 应用最佳译文",
@@ -1164,9 +1212,10 @@ namespace SimpleXmlEditor.Localization
                 ["ConsistencyScanTitle"] = "一致性检查结果",
                 ["ConsistencyScanning"] = "正在扫描一致性问题...",
                 ["ConsistencyNoIssues"] = "未发现一致性问题。",
-                ["ConsistencyIssuesFound"] = "发现 {0} 个一致性问题。",
                 ["ConsistencyIssueDesc"] = "{0} → 分别译为 \"{1}\" 和 \"{2}\"",
                 ["LogConsistencyScan"] = "一致性扫描: 在 {1} 条中发现 {0} 个问题",
+                ["ConsistencyExportPrompt"] = "发现 {0} 个一致性问题，是否导出报告以便对照修改？",
+                ["ConsistencyExported"] = "一致性报告已导出: {0}",
 
                 // === Context-aware Translation ===
                 ["ContextAware"] = "上下文感知",
@@ -1188,6 +1237,17 @@ namespace SimpleXmlEditor.Localization
                 // === Shortcuts ===
                 ["ShortcutsTitle"] = "键盘快捷键",
                 ["ShortcutsText"] = "Ctrl+O   打开文件\nCtrl+S   快速保存\nCtrl+Z   撤销\nCtrl+F   查找\nF5       AI 评估\nF6       代理投票\nCtrl+T   翻译选中\nCtrl+Shift+T  全部翻译\nEscape   清除筛选",
+
+                // === 评估模型设置 ===
+                ["EvalModelTab"] = "评估模型",
+                ["EvalModelConfig"] = "评估模型配置",
+                ["EvalModelDesc"] = "配置独立的 AI 模型用于翻译评估和投票，打破同源偏差。留空则使用翻译模型进行评估。",
+                ["EvalAiProviderLabel"] = "评估 AI 提供商",
+                ["EvalApiKeyLabel"] = "评估 API 密钥",
+                ["EvalApiKeyPlaceholder"] = "输入评估模型的 API 密钥（留空则使用翻译密钥）",
+                ["EvalModelNameLabel"] = "评估模型名称",
+                ["EvalModelPlaceholder"] = "输入模型名称，如 deepseek-chat、glm-4-flash",
+                ["EvalUseTranslationModel"] = "（使用翻译模型）",
             };
         }
     }
