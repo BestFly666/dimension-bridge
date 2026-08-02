@@ -10,7 +10,7 @@
 ![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
 
 > [!IMPORTANT]
-> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与文件格式尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
+> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 星球大战重制版模组4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与文件格式尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
 
 ---
 
