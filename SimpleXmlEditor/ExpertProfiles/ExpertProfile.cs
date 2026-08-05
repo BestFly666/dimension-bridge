@@ -49,13 +49,13 @@ namespace SimpleXmlEditor.ExpertProfiles
             if (Glossary != null && Glossary.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine($"IMPORTANT - {Name} Terminology Glossary (MUST follow these exact translations):");
+                sb.AppendLine($"IMPORTANT - {Name} Terminology Glossary (preferred translations):");
                 foreach (var kvp in Glossary)
                 {
-                    sb.AppendLine($"  • \"{kvp.Key}\" MUST be translated as \"{kvp.Value}\"");
+                    sb.AppendLine($"  • \"{kvp.Key}\" → \"{kvp.Value}\"");
                 }
                 sb.AppendLine();
-                sb.AppendLine("These terms are non-negotiable. Always use the exact translations above for these specific terms.");
+                sb.AppendLine("Use these translations by default for terminology consistency. If a term is clearly used with a different meaning in the specific context (figurative use, part of a proper name, or a different sense), translate it naturally instead; when in doubt, prefer the glossary translation.");
             }
 
             sb.AppendLine("=========================================");

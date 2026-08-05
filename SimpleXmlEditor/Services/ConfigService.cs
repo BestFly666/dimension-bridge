@@ -40,23 +40,15 @@ namespace SimpleXmlEditor.Services
         public string EncryptedApiKey { get; set; } = "";
     }
 
-    /// <summary>评分缓存条目：分数 + 改进建议（按条目 Key 关联）。</summary>
-    public class ScoreCacheItem
-    {
-        public double Score { get; set; }
-        public string Improvement { get; set; } = "";
-    }
-
-    public class ConfigService : IConfigService
+    public partial class ConfigService : IConfigService
     {
         private readonly string _appDataDir;
         private readonly string _configPath;
         private readonly string _cachePath;
         private readonly string _scoreCachePath;
+        private readonly string _progressPath;
         private readonly object _cacheLock = new object();
 
-        public ConcurrentDictionary<string, string> Cache { get; private set; } = new();
-        public ConcurrentDictionary<string, ScoreCacheItem> ScoreCache { get; private set; } = new();
         public AppConfig Config { get; private set; } = new();
 
         public event Action<string> LogMessage;
@@ -70,6 +62,22 @@ namespace SimpleXmlEditor.Services
             _configPath = Path.Combine(_appDataDir, "config.json");
             _cachePath = Path.Combine(_appDataDir, "translation_cache.json");
             _scoreCachePath = Path.Combine(_appDataDir, "score_cache.json");
+            _progressPath = Path.Combine(_appDataDir, "translation_progress.json");
+
+            // 清理旧版本残留在程序目录（bin，随 Debug/Release 构建变化）的进度文件，
+            // 统一缓存/进度文件到 AppData，避免"缓存文件变来变去"与删除译文被旧数据复活
+            try
+            {
+                var legacyProgressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
+                if (File.Exists(legacyProgressPath))
+                {
+                    File.Delete(legacyProgressPath);
+                }
+            }
+            catch
+            {
+                // 旧文件清理失败不影响主流程
+            }
         }
 
         private void RaiseLog(string message)
@@ -302,187 +310,6 @@ namespace SimpleXmlEditor.Services
             {
                 RaiseLog(LocalizationManager.GetString("ConfigSaveError", ex.Message));
             }
-        }
-
-        public void SaveCache()
-        {
-            try
-            {
-                File.WriteAllText(_cachePath, JsonConvert.SerializeObject(Cache, Formatting.Indented));
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogCacheWriteError", ex.Message));
-            }
-        }
-
-        public void SaveScoreCache()
-        {
-            try
-            {
-                File.WriteAllText(_scoreCachePath, JsonConvert.SerializeObject(ScoreCache, Formatting.Indented));
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogScoreCacheWriteError", ex.Message));
-            }
-        }
-
-        /// <summary>
-        /// 把已评估条目的评分与改进建议同步到评分缓存（仅 Key 非空 + 已评估）。
-        /// 按条目 Key 关联，重新打开文件后可通过 RestoreScores 恢复。
-        /// </summary>
-        public void SyncScoresToCache(IEnumerable<LocalizationEntry> entries)
-        {
-            foreach (var entry in entries)
-            {
-                if (string.IsNullOrEmpty(entry.Key) || entry.EvaluationScore < 0) continue;
-                ScoreCache[entry.Key] = new ScoreCacheItem
-                {
-                    Score = entry.EvaluationScore,
-                    Improvement = entry.EvaluationImprovement ?? ""
-                };
-            }
-        }
-
-        /// <summary>
-        /// 按条目 Key 恢复缓存的评分与改进建议（仅恢复未评估的条目）。
-        /// 返回恢复的条目数。
-        /// </summary>
-        public int RestoreScores(IEnumerable<LocalizationEntry> entries)
-        {
-            if (ScoreCache.Count == 0) return 0;
-            int restored = 0;
-            foreach (var entry in entries)
-            {
-                if (string.IsNullOrEmpty(entry.Key) || entry.EvaluationScore >= 0) continue;
-                if (ScoreCache.TryGetValue(entry.Key, out var item))
-                {
-                    entry.EvaluationScore = item.Score;
-                    entry.EvaluationImprovement = item.Improvement;
-                    restored++;
-                }
-            }
-            if (restored > 0)
-                RaiseLog(LocalizationManager.GetString("LogScoresRestored", restored));
-            return restored;
-        }
-
-        public void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries)
-        {
-            foreach (var entry in entries)
-            {
-                if (!string.IsNullOrEmpty(entry.Translation) && !string.IsNullOrWhiteSpace(entry.Value))
-                {
-                    Cache[entry.Key] = entry.Translation;
-                    var cacheKey = GetCacheKey(entry.Value);
-                    if (cacheKey != null)
-                        Cache[cacheKey] = entry.Translation;
-                }
-            }
-        }
-
-        public Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries)
-        {
-            var cache = new Dictionary<string, string>();
-            foreach (var entry in entries)
-            {
-                if (!string.IsNullOrEmpty(entry.Value) && !string.IsNullOrEmpty(entry.Translation))
-                {
-                    cache[entry.Value] = entry.Translation;
-                }
-            }
-            return cache;
-        }
-        public void SaveTranslationProgress(IEnumerable<LocalizationEntry> entries)
-        {
-            try
-            {
-                var progressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
-                var progress = new Dictionary<string, string>();
-
-                foreach (var entry in entries)
-                {
-                    if (!string.IsNullOrEmpty(entry.Value) && !string.IsNullOrEmpty(entry.Translation))
-                    {
-                        progress[entry.Value] = entry.Translation;
-                    }
-                }
-
-                if (progress.Count > 0)
-                {
-                    File.WriteAllText(progressPath, JsonConvert.SerializeObject(progress, Formatting.Indented));
-                }
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogProgressSaveError", ex.Message));
-            }
-        }
-
-        public int RestoreTranslationProgress(IEnumerable<LocalizationEntry> entries)
-        {
-            try
-            {
-                var progressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
-                if (!File.Exists(progressPath)) return 0;
-
-                var json = File.ReadAllText(progressPath);
-                var progress = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-                if (progress == null || progress.Count == 0) return 0;
-
-                int restoredCount = 0;
-                var entryList = entries.ToList();
-
-                foreach (var entry in entryList)
-                {
-                    if (string.IsNullOrEmpty(entry.Value)) continue;
-                    if (!string.IsNullOrEmpty(entry.Translation)) continue;
-                    if (progress.TryGetValue(entry.Value, out var translation))
-                    {
-                        entry.Translation = translation;
-                        restoredCount++;
-                    }
-                }
-
-                if (restoredCount > 0)
-                {
-                    RaiseLog(LocalizationManager.GetString("LogCrashRecovery", restoredCount));
-                }
-
-                return restoredCount;
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogRecoveryError", ex.Message));
-                return 0;
-            }
-        }
-
-        public void DeleteProgressFile()
-        {
-            try
-            {
-                var progressPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "translation_progress.json");
-                if (File.Exists(progressPath))
-                {
-                    File.Delete(progressPath);
-                }
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogProgressDeleteError", ex.Message));
-            }
-        }
-
-        public string GetCacheKey(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-                return null;
-
-            using var md5 = System.Security.Cryptography.MD5.Create();
-            var hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text));
-            return System.Convert.ToHexString(hash);
         }
 
         public void UpdateConfig(Action<AppConfig> updater)

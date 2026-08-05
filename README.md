@@ -50,7 +50,10 @@
 
 ### 翻译核心
 - 批量翻译：单次 API 调用翻译多条，比逐条翻译减少 90% 以上的 API 请求
-- 智能分批：根据模型 Token 上限自动计算每批条目数量
+- 智能分批：按估算输出 Token 预算动态分批（3800 token/批），中文约 20-30 条/批，避免输出截断
+- 并发翻译：3 路批次并发 + 动态 429 退避，有效提升大批量翻译吞吐量
+- 条目 Key 注入：翻译时注入条目 Key（如 `TEXT_UNIT_*`），帮助 AI 理解语境，提升翻译准确率
+- 批次计时：每批次翻译完成后输出耗时统计，便于定位性能瓶颈
 - 翻译缓存：已翻译内容自动缓存，避免重复调用 API
 - 译文合并：导入译文文件时自动按 Key 匹配合并，无需重新加载原文
 - 强制重译：选中条目支持绕过缓存重新翻译
@@ -81,7 +84,12 @@
 - **自动保存**：每 5 分钟自动保存缓存与配置（不覆盖源 XML），类似 Excel 的 AutoRecover
 - 批量替换：支持正则搜索替换
 - 撤销：批量替换、AI 应用、手动编辑均可 Ctrl+Z 撤销，撤销后自动跳转到对应行
-- Ctrl+S 快速保存缓存
+- Ctrl+S 快速保存缓存（只写缓存，不覆盖源 XML）
+
+### 黑名单过滤
+- 按 Key 前缀匹配跳过指定条目（如 `TEXT_SPEECH_` 语音文本），不消耗 API 配额
+- 黑名单条目在表格中可选隐藏，翻译时自动排除
+- 规则持久化到本地，重启后保留
 
 ---
 
@@ -123,7 +131,7 @@
 ## 已知问题与限制
 
 - **已验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏上实测通过；**其他游戏、XML 结构或二进制格式未验证**，请先用副本测试。
-- **数据安全**：Ctrl+S / 自动保存只更新本地缓存（`translation_cache.json`），**不会覆盖源 XML**；写入源文件的操作会要求手动确认。仍建议定期备份源文件。
+- **数据安全**：Ctrl+S / 自动保存只更新本地缓存（`translation_cache.json`，存于 `%LocalAppData%\SimpleXmlEditor\`），**不会覆盖源 XML**；只有显式点击"保存"按钮才导出 XML（译文替换原文值供游戏使用）。仍建议定期备份源文件。
 - **游戏内断行适配**：中文在游戏引擎内的断行处理（如 4.0 的 79 字符强制换行）是**引擎专用**的，由独立脚本维护（`scripts/` 目录，不在本工具内），换行参数需按游戏自行调整。
 - **语音/界面文本**：`TEXT_SPEECH` 等语音文本与单位描述类条目不支持手动换行，游戏使用自动换行。
 
@@ -149,7 +157,7 @@ dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 
 ```bash
 dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
-# 当前: 13/13 通过，0 失败，0 跳过
+# 当前: 40/40 通过，0 失败，0 跳过
 ```
 
 ### CI/CD
@@ -163,49 +171,58 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 ```
 project-root/
 ├── SimpleXmlEditor/                     # WPF 主项目
-│   ├── Services/                        # 服务层（全部接口化 6/6）
+│   ├── Services/                        # 服务层（全部接口化）
 │   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商）
-│   │   ├── ConfigService.cs             # IConfigService — 配置与缓存管理（DPAPI 加密）
-│   │   ├── Interfaces.cs                # 6 个服务接口定义
-│   │   ├── TranslationEvaluator.cs     # ITranslationEvaluator — 质量评估 + 多代理投票
-│   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（分批/术语/缓存/prompt/API）
+│   │   ├── AiTranslationService.Models.cs   # 模型列表与速率限制
+│   │   ├── AiTranslationService.Providers.cs # 各提供商 API 实现
+│   │   ├── AiResponseParser.cs          # AI 响应解析（截断检测 + 三级回退）
+│   │   ├── ConfigService.cs             # IConfigService — 配置管理（DPAPI 加密）
+│   │   ├── ConfigService.Cache.cs       # 缓存读写（translation_cache / progress）
+│   │   ├── ConfigService.Scores.cs      # 评分缓存管理
+│   │   ├── Interfaces.cs                # 服务接口定义
+│   │   ├── TranslationEvaluator.cs      # ITranslationEvaluator — 质量评估 + 多代理投票
+│   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（token预算分批/术语/缓存/prompt）
 │   │   └── XmlRepository.cs             # IXmlRepository — XML 数据访问
 │   ├── ViewModels/
-│   │   └── MainViewModel.cs             # MVVM ViewModel（INotifyPropertyChanged，30+ 字段）
+│   │   ├── MainViewModel.cs             # MVVM ViewModel（主类）
+│   │   ├── MainViewModel.Translation.cs # 翻译流水线（并发/暂停/进度/计时）
+│   │   ├── MainViewModel.EntryProcessing.cs # 条目加载与缓存恢复
+│   │   ├── MainViewModel.Cache.cs       # 缓存同步
+│   │   ├── MainViewModel.Undo.cs        # 撤销快照
+│   │   ├── MainViewModel.Consistency.cs # 一致性检测
+│   │   └── ...                          # 其他 partial 拆分
+│   ├── Windows/                         # WPF 窗口（partial class 拆分）
+│   │   ├── MainWindow.xaml/.cs          # 主界面
+│   │   ├── MainWindow.Events.File.cs    # 文件加载/保存/QuickSave
+│   │   ├── MainWindow.Handlers.cs       # 事件订阅（BeginInvoke 异步）
+│   │   ├── MainWindow.Grid.cs           # DataGrid 交互
+│   │   ├── SettingsWindow.xaml/.cs      # 设置界面
+│   │   └── ...                          # 其他窗口与 partial 拆分
 │   ├── Localization/
-│   │   └── LocalizationManager.cs       # 中英文 UI 本地化（200+ 键值对）
+│   │   ├── LocalizationManager.cs       # 中英文 UI 本地化
+│   │   ├── LocalizationManager.Dicts.Zh.cs  # 中文文案
+│   │   └── LocalizationManager.Dicts.En.cs  # 英文文案
 │   ├── Dictionary/
-│   │   ├── CsvHelper.cs                 # CSV 文件解析/转义工具
-│   │   └── GlossaryManager.cs           # IGlossaryManager — 术语表管理（CRUD/导入导出/冲突检测）
-│   ├── ExpertProfiles/
-│   │   ├── ExpertProfile.cs             # 专家配置数据模型
-│   │   └── ExpertProfileManager.cs      # IExpertProfileManager — 专家配置生命周期管理
-│   ├── MainWindow.xaml/.cs              # 主界面（partial class，拆分为 6 个文件）
-│   ├── MainWindow.Localization.cs       # 本地化（ApplyLocalization）
-│   ├── MainWindow.Theme.cs              # 主题（ApplyTheme）
-│   ├── MainWindow.Grid.cs               # DataGrid 交互（选中/列字母/行拖拽）
-│   ├── MainWindow.Helpers.cs            # UI 辅助方法
-│   ├── MainWindow.Events.cs             # UI 事件处理
-│   ├── VotingReviewWindow.xaml/.cs      # 多代理投票候选译文审查窗口
-│   ├── GlossaryWindow.xaml/.cs          # 术语表管理窗口
-│   ├── SettingsWindow.xaml/.cs          # 设置界面（含专家配置编辑器）
-│   ├── InputDialog.xaml/.cs             # 通用双输入对话框
-│   ├── FileTypeDialog.xaml/.cs          # 文件类型选择对话框
-│   ├── StringExtensions.cs              # 公共扩展方法
-│   ├── PromptTemplates.cs               # AI 提示词模板
-│   ├── App.xaml/.cs                     # 应用入口（DI 容器）
+│   │   ├── BlacklistManager.cs          # IBlacklistManager — 黑名单过滤
+│   │   ├── GlossaryManager.cs           # IGlossaryManager — 术语表管理
+│   │   └── ...                          # Glossary partial 拆分
+│   ├── Utils/
+│   │   └── PromptTemplates.cs           # AI 提示词模板
+│   ├── Plugins/
+│   │   └── TxtFilePlugin.cs             # TXT 文件格式插件
+│   ├── ExpertProfiles/                  # 专家配置
 │   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
-├── SimpleXmlEditor.Tests/               # xUnit 测试项目（13 个测试）
-│   ├── ConfigServiceTests.cs
-│   ├── StringExtensionsTests.cs
-│   ├── GlossaryManagerTests.cs
+├── SimpleXmlEditor.Tests/               # xUnit 测试项目（40 个测试）
+│   ├── TranslationOrchestratorTests.cs  # 分批/翻译/Key注入 测试
+│   ├── BlacklistManagerTests.cs         # 黑名单过滤测试
+│   ├── XmlRepositoryTests.cs            # XML 读写测试
+│   ├── GlossaryManagerTests.cs          # 术语表测试
 │   └── SimpleXmlEditor.Tests.csproj
 ├── .github/workflows/ci.yml             # GitHub Actions CI/CD
 ├── scripts/                             # 附加工具脚本（参考示例）
-│   ├── 4.0_添加换行写入DAT.py           # 4.0 译文换行处理并写回 DAT 的完整示例
-│   └── datlib.py                        # DAT 文件读写库（read_dat / write_dat）
 ├── DEVELOPMENT_LOG.md                   # 开发日志
 ├── HANDOVER.md                          # 交接文档
+├── PROJECT_INDEX.md                     # 项目文件索引
 ├── PRODUCT_PLAN.md                      # 产品规划
 └── README.md                            # 项目说明
 ```

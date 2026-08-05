@@ -1,25 +1,53 @@
 # XML AI Translator — 产品规划
 
-> **规划人**：产品经理 Alex  
-> **日期**：2026-07-30  
-> **版本**：1.0  
-> **状态**：已审批，待执行
+> **规划人**：产品经理 Alex
+> **日期**：2026-08-02
+> **版本**：2.0
+> **状态**：已审批，执行中
+> **干系人**：开发（Veloxcity & BestFly666）、中文游戏本地化社区用户
+> **文档形式**：本文件既是 PRD（问题/画像/方案/发布计划）也是路线图（Now/Next/Later），单一事实来源。
 
 ---
 
-## 一、产品定位与愿景
+## 一、Problem Statement（问题陈述）
 
-### 1.1 一句话定位
+我们在解决一个具体的用户痛点：**中文游戏本地化译者面对数千条英文 XML 文本，缺少一个"质量可控、术语统一、成本可算"的专业翻译工具**。
+
+### 谁遇到了这个问题
+
+独立汉化者、小型汉化组、游戏 Mod 作者。他们通常业余时间有限，要在数周内完成一个游戏 Mod 的全量汉化（往往 3000–10000 条文本），既无企业级 CAT 工具预算，也不满足于通用翻译工具的"逐条粘贴"流程。
+
+### 不解决的代价
+
+- 译者要么手工逐条翻译（数月工作量），要么用通用 AI 工具粘贴（术语前后不一、专有名词乱翻）
+- 游戏专有名词（如"绝地/西斯/原力"）翻译不统一，玩家体验割裂
+- AI 翻译质量参差，无量化评估手段，译者只能逐条人工校对
+- 翻译中途崩溃丢失进度，被迫从头再来
+
+### Evidence（证据）
+
+- **用户研究（真实项目验证）**：核心翻译流程在「星球大战重制版模组 4.0」汉化项目完整跑通——翻译 → 术语表 → 评估/投票 → 导出 → DAT 写入 → 游戏内实机验证，证明端到端流程可用
+- **行为数据**：批量翻译单次 API 调用处理 5–100 条，比逐条翻译减少 90%+ API 请求；翻译缓存自动去重，相同内容绝不重复翻译
+- **竞争信号**：通用翻译工具（DeepL/Google 翻译）不支持 XML 批量处理；专业 CAT 工具（Trados/memoQ）企业级定价、上手门槛极高；现有游戏汉化工具多为纯文本编辑器，无 AI 集成
+- **客服信号（开发者自用反馈）**：开发期间连续报告"翻译失败（模型名升级）、评估崩溃、投票无反应、投票出英文、撤销不生效、全选卡顿"等问题——每一条都验证了真实使用场景下的痛点
+
+---
+
+## 二、产品定位与愿景
+
+### 2.1 一句话定位
 
 **面向中文游戏本地化译者（独立汉化者/小型汉化组）的专业 AI 翻译工作站**
 
-> 2026-08-01 决策：**先专注译者**。独立游戏开发者极简版暂缓（见「四、不做的事情」），待译者版验证后再从现有代码派生。
+> 2026-08-01 决策：**先专注译者**。独立游戏开发者极简版暂缓（见「十、不做的事情」），待译者版验证后再从现有代码派生。
 
-### 1.2 核心价值主张
+### 2.2 核心价值主张
 
-帮助游戏本地化团队将数千条英文文本快速转化为高质量中文译文，通过 AI 智能翻译 + 术语一致性管理 + 专家领域知识注入，实现 **质量可控、术语统一、成本可算** 的专业本地化流程。
+帮助游戏本地化团队将数千条英文文本快速转化为高质量中文译文，通过 **AI 智能翻译 + 术语一致性管理 + 专家领域知识注入 + 多代理投票评估**，实现质量可控、术语统一、成本可算的专业本地化流程。
 
-### 1.3 目标用户
+**One-liner**：XML AI Translator 帮助中文游戏汉化者把数千条英文 XML 在数天内变成术语统一、质量可量化的中文译文，而无需逐条粘贴或购买企业级 CAT 工具。
+
+### 2.3 目标用户
 
 | 用户类型 | 规模 | 核心需求 | 痛点 |
 |----------|------|----------|------|
@@ -27,312 +55,312 @@
 | 小型汉化组 | 3-10 人 | 协作翻译 + 术语统一 | 多人翻译风格不统一，重复翻译浪费 |
 | Mod 作者 | 1 人 | 快速本地化游戏 Mod | 需要处理多种 XML 格式，工具链不统一 |
 
-> 2026-08-01 决策：以上三者为**主用户群（译者）**，产品资源全部投入此处。独立游戏开发者列为**潜在第二用户群**，暂缓开发。
-
-### 1.4 竞争定位
+### 2.4 竞争定位
 
 | 维度 | 通用翻译工具（DeepL/Google） | CAT 工具（Trados/memoQ） | XML AI Translator（我方） |
 |------|---------------------------|-------------------------|--------------------------|
-| XML 支持 | 不支持或有限 | 复杂配置 | 原生 Excel XML 支持 |
-| 游戏术语 | 无 | 需手动维护 | 内置术语表 + 倒排索引 |
+| XML 批量支持 | 不支持或有限 | 复杂配置 | 原生 Excel XML 支持 + 插件扩展 |
+| 游戏术语 | 无 | 需手动维护 | 内置术语表 + 倒排索引 + 冲突检测 |
 | 批量翻译 | 按字数计费 | 企业级定价 | 按 API Token 计费，成本可控 |
-| 上手难度 | 低 | 极高 | 中低（桌面应用开箱即用） |
+| AI 质量评估 | 无 | 无 | 单条评分 + 多代理投票 + 独立评估模型 |
+| 上手难度 | 低 | 极高 | 中低（桌面应用开箱即用，便携版免安装） |
 | 社区定位 | 全球通用 | 企业级 | **中文游戏社区专属** |
 
 ---
 
-## 二、当前状态评估
+## 三、User Personas & Stories（用户画像与故事）
 
-### 2.1 功能完成度
+### Primary Persona（主要画像）
+
+**阿凯** — 28 岁，独立游戏汉化者，业余时间为星球大战 Mod 做中文汉化。每周可投入 8–10 小时，需要在 2 个月内完成 5000 条文本的汉化。懂基础英语，但对 Star Wars 专有名词的"官方译名"把握不准；预算有限，按 API Token 计费的方式让他能精确控制成本。
+
+### 核心用户故事及验收标准
+
+**Story 1**: 作为独立汉化者，我想要**一次性批量翻译选中条目**，以便在数小时而非数周内完成初译。
+
+**Acceptance Criteria**:
+- [ ] Given 加载了 5000 条 XML 条目，when 选中全部并点击"翻译全部"，then 翻译按批次（默认 50 条/批）自动进行，进度实时显示
+- [ ] Given 翻译过程中网络中断，when 恢复后继续，then 已翻译条目不丢失，从断点续传
+- [ ] Given 翻译过程中程序崩溃，when 重启并重新加载文件，then 翻译缓存恢复，已译条目不重复翻译
+- [ ] Performance: Ctrl+A 全选 10000 条 + 启动翻译在毫秒级响应（已通过 Excel 式逻辑选择模型实现）
+
+**Story 2**: 作为汉化者，我想要**术语表自动注入翻译**，以便"Jedi"在全文件统一译为"绝地"而非一会儿"杰迪"一会儿"绝地武士"。
+
+**Acceptance Criteria**:
+- [ ] Given 术语表含 `Jedi → 绝地`，when 翻译包含 "Jedi" 的条目，then 术语通过词边界匹配注入 Prompt，译文使用"绝地"
+- [ ] Given 同一英文对应多个中文译文，when 运行冲突检测，then 列出所有冲突条目并可导出 CSV
+- [ ] Given 术语表数千条，when 执行冲突检测，then 在后台线程运行不冻结 UI（已通过 Task.Run + 进度回调实现）
+
+**Story 3**: 作为汉化者，我想要**量化评估翻译质量**，以便聚焦校对低分条目而非通读 5000 条。
+
+**Acceptance Criteria**:
+- [ ] Given 翻译完成，when 对条目运行 AI 评估，then DataGrid"评分"列显示 0-10 分（颜色编码：≥8 绿/≥5 黄/<5 红），支持点击列头排序
+- [ ] Given 评分完成，when 关闭并重新打开文件，then 评分从 score_cache.json 恢复（评分绝不写入源 XML）
+- [ ] Given 想打破"AI 自己检查自己"的同源偏差，when 配置独立评估模型（如 DeepSeek 翻译、智谱评估），then 评估使用不同厂商模型
+- [ ] Given 多代理投票运行，when 候选生成完成，then VotingReviewWindow 列出候选译文供人工确认，最佳译文自动应用且可 Ctrl+Z 撤销
+
+**Story 4**: 作为汉化者，我想要**类 Excel 的操作体验**，以便无需学习新工具即可上手。
+
+**Acceptance Criteria**:
+- [ ] Given DataGrid 显示条目，when 按 Ctrl+A，then 逻辑全选所有行（毫秒级，不卡顿）
+- [ ] Given 点击列字母按钮，then 整列选中（真选中而非假高亮）
+- [ ] Given 手动编辑译文或批量替换，when 按 Ctrl+Z，then 撤销并自动跳转定位到被撤销行（实时响应，无弹窗阻断）
+- [ ] Given 翻译进行中，when 每 5 分钟自动保存，then 翻译缓存与评分缓存同步（不覆盖源 XML）
+
+---
+
+## 四、Solution Overview（方案概述）
+
+XML AI Translator 是一款 WPF 桌面应用，采用 MVVM + 依赖注入架构，集成 8 家国产 AI 大模型，为中文游戏本地化提供"翻译-术语-评估-导出"完整工作流。
+
+核心价值链：**加载 XML → 批量 AI 翻译（术语注入 + 专家配置）→ 多代理投票评估 → 评分持久化 → 导出译文**。整个过程翻译缓存自动去重降低 API 成本，崩溃恢复机制防止进度丢失，评分缓存支持分批校对。
+
+### Key Design Decisions（关键设计决策）
+
+- **8 家国产 AI 而非 OpenAI/Claude**：目标用户在国内，国内 AI 服务可直接访问无需代理，且按 Token 计费成本可控。取舍：放弃海外模型，但覆盖国内主流厂商（Gemini/DeepSeek/豆包/千问/智谱/Kimi/文心/讯飞）。**动态模型列表**（GET /models）保证厂商升级模型名也不失效（已验证：DeepSeek 2026-04-24 升级模型名自动适配）。
+
+- **评估独立模型配置**：评估/投票可配置与翻译不同的厂商模型，打破"AI 自己检查自己"的同源偏差。取舍：增加用户配置复杂度，但显著提升评估可信度。
+
+- **评分只进独立缓存（score_cache.json），绝不写入源 XML**：防止评分污染源文件、防止自动保存覆盖原始数据。取舍：评分与 XML 解耦，迁移文件时需单独携带缓存。
+
+- **Excel 式逻辑选择模型**：Ctrl+A / 整列选中走"逻辑标志 + 只操作可见行 + 滚动补选"，规避 DataGrid 内置 SelectAll() 选中 N×M 个 cell 的卡顿陷阱。取舍：反选仍走分片方案，大数据量下耗时较长（已记录为遗留优化项）。
+
+- **便携版单文件发布 + 隐私数据硬校验**：CI 打包为自包含单文件 zip，解压后文件位于单一 `XmlAiTranslator` 文件夹；发布前硬校验排除 config.json/缓存/.dat 等用户数据，泄漏则构建失败。取舍：包体较大（自包含运行时），但用户免装 .NET。
+
+- **HandyControl 组件库接管 UI**：从手写控件切换到组件库，统一皮肤与语义画刷，浅色系配色避免纯白背景。取舍：依赖第三方库，但显著降低 UI 维护成本。
+
+- **MainWindow.xaml.cs 纯 View 层**：业务逻辑全部下沉到 Services/ 与 ViewModels/，MainWindow 用 partial class 拆分为 6 个职责单一的文件（Grid/Events/Helpers/Localization/Theme）。取舍：文件数增加，但符合后端架构师分层思想，单文件不超 400 行。
+
+- **插件系统支持多文件格式**：Android strings.xml / JSON i18n / Gettext .po 通过插件扩展，新格式无需改核心。取舍：插件接口尚需稳定化（Later 阶段）。
+
+---
+
+## 五、当前状态评估（2026-08-02 复盘）
+
+### 5.1 功能完成度
 
 | 模块 | 完成度 | 说明 |
 |------|--------|------|
-| AI 翻译核心 | 90% | 8 个提供商，批量翻译，速率限制 |
-| 翻译缓存 | 85% | 基于 MD5 的缓存，增量保存 |
-| 术语表管理 | 85% | CRUD、导入导出、冲突检测、倒排索引 |
-| 专家配置 | 70% | 基础 CRUD，术语注入 |
-| UI 本地化 | 85% | 中英文支持，部分遗漏 |
-| XML 处理 | 80% | 两种格式支持，译文合并 |
-| 翻译评估 | 40% | API 调用实现，无 UI |
-| 多代理投票 | 30% | 代码实现，未集成到 UI |
+| AI 翻译核心 | 95% | 8 提供商，批量翻译，速率限制，动态模型列表 |
+| 翻译缓存 | 95% | ConcurrentDictionary 线程安全，增量保存，空原文 null key |
+| 术语表管理 | 90% | CRUD、导入导出、冲突检测（进度回调）、倒排索引、CSV 导出 |
+| 专家配置 | 80% | CRUD，术语注入，内置星球大战/漫威示例 |
+| UI 本地化 | 90% | 中英文双语，LocalizationManager 统一管理，少量遗漏 |
+| XML 处理 | 85% | Excel XML + 插件（Android/JSON/PO），译文合并，XXE 防护 |
+| 翻译评估 | 85% | 单条+批量评估，评分列（颜色+排序+tooltip），独立评估模型 |
+| 多代理投票 | 80% | 候选生成进度，VotingReviewWindow 人工确认，结果写表格 |
+| 评分持久化 | 100% | score_cache.json，关闭重开保留，绝不写 XML |
+| Excel 式交互 | 95% | Ctrl+A/整列毫秒级，撤销实时响应+跳转定位，手动编辑可撤销 |
+| 自动保存 | 100% | 5 分钟定时，同步缓存+配置，不覆盖源 XML |
+| HandyControl UI | 100% | 全窗口切换，浅色配色，组件库皮肤 |
+| CI/CD | 100% | ci.yml（build+test+publish）+ release.yml（tag→Release+zip） |
+| 单元测试 | 60% | 13 个测试通过（Config/StringExtensions/GlossaryManager），核心服务覆盖待提升 |
+| 发布 | 100% | 预览版已发布 GitHub，4.0 游戏实机验证通过，隐私校验 |
 
-### 2.2 技术债务清单
+### 5.2 架构成熟度
 
-根据审计报告，存在 8 个已知问题（详见 [HANDOVER.md](HANDOVER.md#7-已知问题2026-07-29-终审)）：
+```
+MVVM 过渡完成度：100%
+  UI 层 (WPF, partial class 拆分)   ✓ 完成
+  ViewModel 层 (MainViewModel)      ✓ 完成（30+ 字段）
+  Service 层接口 (6/6)              ✓ 全部接口化
+  依赖注入 (DI 容器)                ✓ Microsoft.Extensions.DependencyInjection
+  单元测试                          △ 13 个通过，覆盖率待提升
+  CI/CD                             ✓ GitHub Actions 双工作流
+  已知问题                          ✓ 全部关闭（2026-07-30 审计清零）
+```
 
-| 优先级 | 数量 | 类型 |
+### 5.3 已发布版本
+
+- **预览版（Preview）**：已发布至 [GitHub Releases](https://github.com/BestFly666/xml-ai-translator-tool/releases)，便携版 zip，自包含 win-x64，解压后单文件夹，隐私数据硬校验通过
+- **验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏实测通过；其他游戏/XML 结构/二进制格式未验证
+
+### 5.4 已关闭的技术债务（历史审计）
+
+所有 2026-07-30 审计发现的 P0/P1/P2 问题已全部关闭（详见 [HANDOVER.md](HANDOVER.md#7-已知问题2026-07-30--审计清零--运行时修复)）：
+
+| 优先级 | 问题 | 状态 |
 |--------|------|------|
-| P0 (严重) | 1 | 线程安全 |
-| P1 (高) | 2 | 接口缺失 + 代码重复 |
-| P2 (中) | 3 | 代码重复 + UI 本地化 + 资源泄漏 |
-| P3 (低) | 2 | 错误处理 + 死代码 |
-
-### 2.3 架构成熟度
-
-```
-MVVM 过渡完成度：≈70%
-  UI 层 (WPF)          ✓ 完成
-  ViewModel 层          ✓ 基本完成（30+ 字段）
-  Service 层接口        △ 3/6 已实现接口
-  依赖注入              ✗ 手动构造，无 DI 容器
-  单元测试              ✗ 0 测试用例
-  CI/CD                 ✗ 无
-```
+| P0 | 线程安全（ConcurrentDictionary/ConcurrentQueue） | ✅ |
+| P0 | DI 容器解析 TranslationOrchestrator 失败 | ✅ |
+| P0 | CI/CD 缺少 .sln 导致构建失败 | ✅ |
+| P1 | 接口缺失（GlossaryManager/ExpertProfileManager/TranslationEvaluator） | ✅ |
+| P1 | MainWindow 重复代码（6 个方法） | ✅ |
+| P2 | HasChineseChars 重复 / 术语表 UI 英文状态 / HttpRequestMessage Dispose | ✅ |
 
 ---
 
-## 三、产品路线图
+## 六、产品路线图（Now / Next / Later）
 
-### 总览
+### 🌟 North Star Metric（北极星指标）
 
-```
-Phase 1: 稳固根基 ──→ Phase 2: 架构完善 ──→ Phase 3: 功能增强
-   (2-3 周)              (2-4 周)              (3-5 周)
-  技术债务清零            测试 + CI/CD            差异化功能
-       │                      │                      │
-       └──────────────────────┴──────────────────────┘
-                              │
-                         Phase 4: 生态扩展
-                            (4-8 周)
-                         插件系统 + CLI + 协作
-```
+**活跃用户周翻译条目数**（衡量工具实际使用深度，而非下载量）
 
----
+**Current**：单人项目验证通过（4.0 汉化）  **Target by EOY 2026**：≥ 10 个活跃项目，周翻译条目数累计 ≥ 50000
 
-### Phase 1: 稳固根基（P0-P1 技术债务清零）
+### Supporting Metrics Dashboard（支撑指标看板）
 
-**目标**：消除所有审计发现的严重和高优先级问题，为后续开发建立安全基础。
-
-**北极星指标**：8 个已知问题全部关闭，0 个 P0/P1 残留。
-
-#### 1.1 线程安全修复 [P0]
-
-| 任务 | 文件 | 当前状态 | 目标状态 |
-|------|------|----------|----------|
-| Cache 改为 ConcurrentDictionary | ConfigService.cs | `Dictionary<string,string>` | `ConcurrentDictionary<string,string>` |
-| RecentRequests 改为 ConcurrentQueue | AiTranslationService.cs | `Queue<DateTime>` | `ConcurrentQueue<DateTime>` |
-| 验证并发场景 | 翻译全部 3000+ 条 | 可能存在竞态 | 线程安全，无数据竞争 |
-
-**验收标准**：
-- [ ] 并发翻译 3000 条条目，缓存命中数和 API 调用数统计准确
-- [ ] 多次暂停/恢复不产生异常
-- [ ] 快速连续操作（导入→翻译→保存→清空）无崩溃
-
-#### 1.2 接口补全 [P1]
-
-| 任务 | 新增接口 | 影响范围 |
-|------|----------|----------|
-| IGlossaryManager | 术语表 CRUD + 查询 + 导入导出 | TranslationOrchestrator, MainViewModel |
-| IExpertProfileManager | 专家配置 CRUD + 合并 | SettingsWindow, TranslationOrchestrator |
-| ITranslationEvaluator | 评估 + 投票 | MainWindow (未来 UI 集成) |
-
-**验收标准**：
-- [ ] `TranslationOrchestrator` 依赖接口而非具体类
-- [ ] `MainViewModel` 通过接口注入所有依赖
-- [ ] 编译通过，功能无回归
-
-#### 1.3 消除 MainWindow 重复代码 [P1]
-
-| 任务 | 删除的方法 | 统一到 |
-|------|-----------|--------|
-| LoadConfig | MainWindow.LoadConfig() | MainViewModel / ConfigService |
-| SaveConfig | MainWindow 中的内联调用 | ConfigService.SaveConfig() |
-| SaveTranslationProgress | MainWindow 中的方法 | ConfigService (已有) |
-| RestoreTranslationProgress | MainWindow 中的方法 | ConfigService (已有) |
-| SyncEntriesToCache | MainWindow 中的方法 | ConfigService.SyncEntriesToCache() |
-| HasChineseChars | MainWindow 中的方法 | 提取为公共扩展方法 |
-
-**验收标准**：
-- [ ] MainWindow.xaml.cs 减少 50+ 行重复代码
-- [ ] 所有业务逻辑走 ViewModel → Service 路径
-- [ ] 功能无回归
-
-#### 1.4 其他 P2 修复 [P2]
-
-| 任务 | 说明 |
-|------|------|
-| 提取 HasChineseChars 公共方法 | 创建 `StringExtensions.cs`，消除 MainWindow + Orchestrator 重复 |
-| 术语表状态本地化 | 状态筛选框显示"已确认/待审核/已拒绝"而非 "confirmed/pending/rejected" |
-| HttpRequestMessage Dispose | 循环中所有 HttpRequestMessage 添加 `using` |
+| 指标 | 当前值 | 目标值 | 趋势 |
+|------|--------|--------|------|
+| 预览版下载量 | 刚发布 | ≥ 200 | → |
+| 术语一致性（术语命中率） | ~85% | ≥ 95% | → |
+| 缓存命中率（重译避免率） | 取决于术语表 | ≥ 80% | → |
+| 应用崩溃率（已知） | 0 | 0 | → |
+| GitHub Issues 响应时长 | 未度量 | < 48h | → |
 
 ---
 
-### Phase 2: 架构完善（质量基础设施）
+### 🟢 Now — 本季度进行中
 
-**目标**：建立测试框架和 CI/CD 流水线，完成 MVVM 架构最后一公里。
+已承诺的工作，工程与 PM 完全对齐。
 
-**北极星指标**：核心服务测试覆盖率 ≥ 60%，CI 流水线可用。
+| Initiative | User Problem | Success Metric | Owner | Status | ETA |
+|------------|-------------|----------------|-------|--------|-----|
+| 评估多模型 + 投票聚合 | 单评估模型仍有偏差，多模型投票更可信 | 评估多模型列表配置 + 投票聚合落地，0 编译错误 | 开发 | In Dev | 本周 |
+| 预览版反馈收集 | 预览版刚发布，真实用户反馈未知 | 建立 Issue 反馈通道，收集 ≥ 5 个真实用户反馈 | PM | 进行中 | 持续 |
+| 本地化文案补全 | 评估多模型新增 UI 文案 key | 所有新 UI 文案走 LocalizationManager，0 硬编码 | 开发 | In Dev | 本周 |
 
-#### 2.1 依赖注入容器
+### 🟡 Next — 未来 1–2 个季度
 
-| 任务 | 说明 |
-|------|------|
-| 引入 DI 容器 | 使用 `Microsoft.Extensions.DependencyInjection` |
-| 注册服务 | 在 `App.xaml.cs` 中配置服务生命周期（Singleton/Transient） |
-| 重构 MainWindow | 通过构造函数注入 `MainViewModel` |
+方向性已承诺，开发前需进一步定义范围。
 
-```csharp
-// 目标架构
-services.AddSingleton<IConfigService, ConfigService>();
-services.AddSingleton<IGlossaryManager, GlossaryManager>();
-services.AddSingleton<IExpertProfileManager, ExpertProfileManager>();
-services.AddSingleton<IAiTranslationService, AiTranslationService>();
-services.AddSingleton<ITranslationEvaluator, TranslationEvaluator>();
-services.AddSingleton<IXmlRepository, XmlRepository>();
-services.AddSingleton<TranslationOrchestrator>();
-services.AddSingleton<MainViewModel>();
-services.AddTransient<MainWindow>();
-```
+| Initiative | Hypothesis | Expected Outcome | Confidence | Blocker |
+|------------|------------|-----------------|------------|---------|
+| CLI 模式（translate/batch/export-tmx） | 如果提供 CLI，CI/CD 集成与自动化脚本用户会采用 | 3 条核心命令可用，≥ 3 个用户在自动化流程中使用 | Med | 需定义命令规范 |
+| 翻译进度可视化优化 | 如果显示进度条+速度+实时费用，用户对长任务的耐心提升 | 进度条+剩余时间+条/秒+费用累计实时显示 | High | 无 |
+| 协作功能（轻量级） | 如果支持翻译状态标记+冲突标记+审校报告导出，小型汉化组协作效率提升 | 审校状态标记 + Excel 审校报告导出 | Med | 需用户验证多人场景 |
+| 更多游戏格式验证 | 如果验证 ≥ 2 款其他游戏的完整流程，预览版可去掉"仅 4.0 验证"限制 | 至少 1 款非 4.0 游戏实机验证通过 | Low | 需社区用户提供测试样本 |
+| 核心服务测试覆盖率提升 | 如果核心服务测试覆盖 ≥ 60%，回归风险显著降低 | ConfigService/AiTranslationService/TranslationOrchestrator 覆盖率达标 | High | 无 |
 
-#### 2.2 单元测试框架
+### 🔵 Later — 3–6 个月视野
 
-| 任务 | 技术选型 | 覆盖范围 |
-|------|----------|----------|
-| 测试项目 | xUnit + Moq | `SimpleXmlEditor.Tests` |
-| ConfigService 测试 | Mock 文件系统 | 缓存读写、配置序列化、进度恢复 |
-| GlossaryManager 测试 | 内存术语表 | CRUD、倒排索引、冲突检测、CSV/JSON 导入导出 |
-| TranslationOrchestrator 测试 | Mock AI 服务 | 分批逻辑、Prompt 构建、术语注入 |
-| AiTranslationService 测试 | Mock HttpClient | 速率限制计算、费用计算、API Key 管理 |
+战略性投注，未排期。当证据或优先级支持时推进到 Next。
 
-**目标覆盖率**：
-- ConfigService: 80%
-- GlossaryManager: 75%
-- TranslationOrchestrator: 60%
-- AiTranslationService: 50%
-
-#### 2.3 CI/CD 流水线
-
-| 任务 | 工具 | 触发条件 |
-|------|------|----------|
-| 编译检查 | `dotnet build` | 每次 push |
-| 单元测试 | `dotnet test` | 每次 push |
-| 代码分析 | .NET Analyzers | 每次 push |
-| 自动发布 | `dotnet publish` | tag push |
-
-```yaml
-# GitHub Actions 示意
-name: CI
-on: [push, pull_request]
-jobs:
-  build-and-test:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: '8.0.x' }
-      - run: dotnet build SimpleXmlEditor
-      - run: dotnet test SimpleXmlEditor.Tests
-      - run: dotnet publish SimpleXmlEditor -c Release -r win-x64 --self-contained
-```
-
-#### 2.4 错误处理规范化 [P3]
-
-| 任务 | 说明 |
-|------|------|
-| 空 catch 块处理 | 所有空 catch 至少添加 `Debug.WriteLine` 或 `_logger.LogWarning` |
-| 日志系统引入 | 使用 `ILogger<T>`（或简易版 `LogService`）替代零散的 `LogMessage` 事件 |
-| 用户友好错误提示 | 网络异常、API 限流等常见错误给中文提示而非原始异常 |
+| Initiative | Strategic Hypothesis | Signal Needed to Advance |
+|------------|---------------------|--------------------------|
+| 插件接口稳定化 | 第三方插件扩展是长期护城河 | ≥ 1 个第三方插件验证接口稳定性 |
+| 社区术语表市场 | 社区共享术语表能降低新项目冷启动成本 | 用户反馈"术语表冷启动"为高频痛点 |
+| 独立开发者极简版 | 译者版验证通过后，从现有代码派生极简版边际成本低 | 译者版护城河（术语一致性）验证通过 |
+| 翻译记忆（TMX）标准支持 | TMX 导入导出能让工具融入专业本地化生态 | 专业译者反馈 TMX 互操作需求 |
 
 ---
 
-### Phase 3: 功能增强（差异化竞争力）
+## 七、Launch Plan（发布计划）
 
-**目标**：上线翻译质量评估 UI、完善多代理投票、新增 CLI 模式，形成与通用工具的核心差异化。
+| Phase | Date | Audience | Success Gate |
+|-------|------|----------|-------------|
+| Internal alpha | 2026-07 ~ 2026-08 | 开发者自用（4.0 汉化项目） | ✅ 已通过：核心流程完整，0 P0 Bug |
+| Closed preview | 2026-08-02 | GitHub 公开预览版（prerelease） | 当前阶段：收集真实用户反馈，CSAT ≥ 4/5 |
+| Open beta | 2026-09 ~ 2026-10（待定） | 公开下载，去掉 prerelease 标记 | 错误率 < 1%，≥ 2 款非 4.0 游戏验证通过 |
+| GA | 2026-Q4（待定） | 稳定版 | 20%→100% 灰度，指标达标 |
 
-**北极星指标**：用户翻译质量满意度（通过内置评分功能收集）≥ 4/5。
+**Rollback Criteria（回滚标准）**：如果发布后错误率 > 2%，或核心翻译流程不可用，或隐私数据校验失败，立即回退到上一稳定标签并通知值班人员（通过 GitHub Release 标记为 prerelease/yanked）。
 
-#### 3.1 翻译质量评估 UI 集成
+### 发布机制（已实现）
 
-当前状态：`TranslationEvaluator` 代码已实现，但无 UI 入口。
-
-| 功能 | 交互方式 | 说明 |
-|------|----------|------|
-| 单条评估 | DataGrid 右键 → "AI 评估此条" | 返回 0-10 评分 + 解释 + 改进建议 |
-| 批量评估 | 翻译全部后自动运行 | 对低分条目（<6 分）高亮标记 |
-| 评估面板 | 底部 Tab 页或侧面板 | 展示评分分布图、常见问题汇总 |
-
-#### 3.2 多代理投票功能完善
-
-| 功能 | 说明 |
-|------|------|
-| 投票配置 | 选择 2-3 个 AI 提供商参与投票 |
-| 权重设置 | 可配置各代理（Fluency/Accuracy/Style）权重 |
-| 结果展示 | 显示各候选译文及其得分，自动选择最佳 |
-
-#### 3.3 CLI 模式
-
-面向自动化脚本和 CI/CD 集成场景：
-
-```
-# 单文件翻译
-XmlAiTranslator translate -i input.xml -o output.xml -p GoogleGemini -l Chinese
-
-# 批量翻译目录
-XmlAiTranslator batch -d ./xml_files/ -p DeepSeek
-
-# 导出翻译记忆（TMX 格式）
-XmlAiTranslator export-tmx -i input.xml -o memory.tmx
-```
-
-| 命令 | 功能 |
-|------|------|
-| `translate` | 单文件翻译 |
-| `batch` | 目录批量翻译 |
-| `export-tmx` | 导出 TMX 标准翻译记忆 |
-| `import-tmx` | 导入 TMX 补充缓存 |
-| `validate` | 验证 XML 格式 + 术语一致性检查 |
-
-#### 3.4 翻译进度可视化优化
-
-| 改进 | 当前 | 目标 |
-|------|------|------|
-| 进度条 | 仅文字百分比 | 带进度条 + 剩余时间估算 |
-| 实时速度 | 无 | 显示"条/秒"翻译速度 |
-| 费用实时更新 | 翻译结束后显示 | 实时累计费用显示 |
-| 暂停/恢复状态 | 按钮文字切换 | 视觉状态指示器（绿色运行/黄色暂停/灰色停止） |
-
-#### 3.5 协作功能（轻量级）
-
-| 功能 | 说明 |
-|------|------|
-| 翻译状态标记 | 人工审核状态：未审/已审/需修改 |
-| 冲突标记 | 同一 Key 被多人修改时标记冲突 |
-| 导出审校报告 | Excel 格式，标记待审核 / 低分条目 |
+- **触发**：push `v*` 标签自动触发 [release.yml](file:///e:/translate/xml-ai-translator-main/.github/workflows/release.yml)
+- **流程**：restore → build → test → publish（win-x64 自包含单文件）→ 整理为 `XmlAiTranslator` 单文件夹 → 隐私数据硬校验（泄漏则构建失败）→ 压缩 zip → 创建 GitHub Release（prerelease）
+- **隐私保护**：CI 打包前清理 config.json/缓存/.dat/stable_us.xml 等用户数据；硬校验发布包内不含任何个人配置或翻译数据
 
 ---
 
-### Phase 4: 生态扩展（长期愿景）
+## 八、GTM 简报
 
-**目标**：从单一工具发展为本地化平台，建立社区生态。
+**Launch Date**：2026-08-02（预览版已发布）
+**Launch Tier**：2（Standard，预览阶段）
+**PM Owner**：Alex  **Eng DRI**：Veloxcity & BestFly666
 
-#### 4.1 插件系统
+### 1. What We're Launching
 
-| 能力 | 说明 |
-|------|------|
-| 翻译服务插件 | 第三方可开发新 AI 提供商插件 |
-| 文件格式插件 | 支持自定义 XML Schema、JSON、YAML 等格式 |
-| 后处理插件 | 翻译后自动格式化、去重、质量检查 |
+一款面向中文游戏汉化者的 WPF 桌面 AI 翻译工具，预览版已通过 4.0 游戏实机验证，集成 8 家国产 AI、术语表管理、多代理投票评估，便携版免安装。
 
-#### 4.2 更多文件格式支持
+### 2. Target Audience
 
-| 格式 | 优先级 | 说明 |
-|------|--------|------|
-| `.po` / `.pot` | 高 | Gettext 格式，大量开源项目使用 |
-| Android `strings.xml` | 中 | 移动端本地化 |
-| iOS `.strings` | 中 | iOS 本地化 |
-| JSON i18n | 中 | Web 前端本地化格式 |
+| Segment | Size | Why They Care | Channel |
+|---------|------|---------------|---------|
+| Primary: 独立汉化者/汉化组 | 中文游戏汉化社区 | 批量翻译+术语统一解决核心痛点 | GitHub、汉化论坛（3DM、游侠）、模组社区 |
+| Secondary: Mod 作者 | Mod 开发者 | 快速本地化 Mod | Nexus Mods、Mod DB |
+| Expansion: 独立游戏开发者 | 独立游戏团队 | 极简本地化（Later 阶段派生） | indie 社区 |
 
-#### 4.3 社区建设
+### 3. Core Value Proposition
 
-| 事项 | 说明 |
-|------|------|
-| 术语表市场 | 社区共享游戏术语表（如"星空术语表"、"原神术语表"） |
-| 专家配置分享 | 导入/导出专家配置，一键切换翻译风格 |
-| 文档完善 | API 文档、插件开发指南、贡献指南 |
+**One-liner**：XML AI Translator 帮助中文游戏汉化者把数千条英文 XML 在数天内变成术语统一、质量可量化的中文译文，而无需逐条粘贴或购买企业级 CAT 工具。
+
+### 4. Launch Checklist
+
+**Engineering**:
+- [x] CI/CD 流水线可用，每次 push 自动构建+测试
+- [x] 隐私数据硬校验已上线
+- [x] 回滚 Runbook：删除/标记 Release 为 yanked，重新打 tag
+**Product**:
+- [x] README 已撰写（预览版声明、已知问题、反馈通道）
+- [x] Release Notes 已撰写
+- [ ] 帮助中心/使用教程文章（待补）
+**Marketing**:
+- [ ] 汉化论坛发帖（3DM、游侠汉化区）
+- [ ] 模组社区推广（4.0 Mod 关联社区）
+- [ ] 社交媒体文案（知乎/B站专栏）
+**Sales/CS**:
+- [x] GitHub Issues 反馈通道已建立
+- [ ] 常见异议 FAQ 文档（待预览版反馈积累后补）
+
+### 5. Success Criteria
+
+| Timeframe | Metric | Target | Owner |
+|-----------|--------|--------|-------|
+| 发布 7 天 | 预览版下载量 | ≥ 50 | PM |
+| 发布 30 天 | GitHub Issues 反馈数 | ≥ 5 个真实用户反馈 | PM |
+| 发布 60 天 | 非 4.0 游戏验证数 | ≥ 1 款 | Eng |
+| 发布 90 天 | 活跃用户周翻译条目数 | ≥ 5000 累计 | PM |
 
 ---
 
-## 四、不做的事情（Non-Goals）
+## 九、Technical Considerations（技术考量）
+
+### Dependencies（依赖）
+
+| 依赖 | 用途 | Owner | Timeline Risk |
+|------|------|-------|---------------|
+| 8 家国产 AI API | 翻译+评估核心能力 | 开发 | Med（厂商模型名升级、限流） |
+| HandyControl 3.5.1 | UI 组件库 | 开发 | Low |
+| .NET 8.0 | 运行时 | 开发 | Low |
+| Microsoft.Extensions.DI | 依赖注入 | 开发 | Low |
+| Newtonsoft.Json | 序列化 | 开发 | Low |
+| GitHub Actions | CI/CD | 开发 | Low |
+
+### Known Risks（已知风险）
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| AI API 服务不稳定/限流 | Medium | High | 多提供商冗余 + 翻译缓存 + 速率限制 |
+| 厂商模型名升级停用 | Medium | Medium | 动态 GET /models 拉取 + 静态列表回退（已验证） |
+| API 费用超预期 | Medium | Medium | 翻译前费用预估 + 批次大小限制 + 缓存去重 |
+| 仅 4.0 单一游戏验证 | High | Medium | 预览版标注限制，鼓励社区反馈测试样本 |
+| WPF 技术栈人才稀少 | Medium | Low | 文档完善 + partial class 拆分降低维护门槛 |
+| DataGrid 大数据量选择卡顿 | Low | Medium | 已用 Excel 式逻辑选择模型解决，反选遗留 |
+
+### Open Questions（待解决问题）
+
+- [ ] 评估多模型投票的聚合策略（平均/加权/多数）需确定默认值 — Owner: 开发 — Deadline: 本周
+- [ ] CLI 模式命令规范需定义（参数风格、配置文件优先级）— Owner: PM + 开发 — Deadline: Next 阶段启动前
+- [ ] 协作功能的多人冲突标记规则需用户验证 — Owner: PM — Deadline: Next 阶段启动前
+- [ ] 非 4.0 游戏格式兼容性需社区提供测试样本 — Owner: PM — Deadline: Open beta 前
+
+### 工程约束（已写入 project_memory.md，不可违反）
+
+- XML 保持 3 列结构：Key | 原文 | 译文；加载原文时译文列不变
+- 翻译进度增量保存到临时文件防止数据丢失
+- 评分只进 score_cache.json，绝不写入源 XML
+- API Key 用 DPAPI 加密，经 HTTP Header 传递，日志脱敏
+- XML 解析禁用 DTD/外部实体防 XXE
+- 共享数据结构用线程安全集合或锁保护
+- CPU 密集操作走后台线程防 UI 冻结
+- UI 文案禁止硬编码，必须走 LocalizationManager
+- MainWindow.xaml.cs 是纯 View 层，业务逻辑全部下沉 Services/ViewModels
+
+---
+
+## 十、不做的事情（Non-Goals）
 
 明确说明本项目**不会**涉足的领域，防止范围蔓延：
 
@@ -341,87 +369,62 @@ XmlAiTranslator export-tmx -i input.xml -o memory.tmx
 | 图片/视频本地化 | 非本项目定位，技术栈不匹配 | 如果有独立团队介入 |
 | 网页版/SaaS 化 | 桌面工具定位，目标用户需要离线能力 | 如果用户强烈需求在线协作 |
 | 机器翻译引擎自研 | 成本极高，AI API 已满足需求 | AI API 成本不可接受时 |
-| CAT 工具全功能对齐 | Trados/memoQ 级功能需要企业级投入 | 不考虑，保持差异化 |
+| CAT 工具全功能对齐 | Trados/memoQ 级功能需企业级投入 | 不考虑，保持差异化 |
 | 独立开发者极简版（2026-08-01 暂缓） | 双用户群并行会造成"两头不讨好"，先验证译者版护城河（术语一致性） | 译者版验证通过后，从现有代码派生极简版（复用核心引擎），边际成本低 |
-| 低置信度条目联网搜索补翻（2026-08-02 延后） | ① 需求未验证（无用户证据，仅担心生僻词翻不准）② 8 家厂商联网搜索方式各不相同，适配成本高（DeepSeek 需走 Responses API、千问 enable_search、智谱/Kimi 工具声明……）③ 游戏专有名词的官方译名更多依赖术语表与社区资料，通用搜索收益有限 | 出现真实信号：用户反馈"生僻词翻译差"为高频痛点，且"低分条目人工复核清单"（见 3.1/3.5）验证后仍覆盖不足时，以**单厂商 MVP**（DeepSeek v4-flash Responses API 或千问 enable_search）+ 可选开关形式重新评估 |
+| 低置信度条目联网搜索补翻（2026-08-02 延后） | ① 需求未验证（无用户证据，仅担心生僻词翻不准）② 8 家厂商联网搜索方式各不相同，适配成本高（DeepSeek 需走 Responses API、千问 enable_search、智谱/Kimi 工具声明……）③ 游戏专有名词的官方译名更多依赖术语表与社区资料，通用搜索收益有限 | 出现真实信号：用户反馈"生僻词翻译差"为高频痛点，且"低分条目人工复核清单"验证后仍覆盖不足时，以**单厂商 MVP**（DeepSeek v4-flash Responses API 或千问 enable_search）+ 可选开关形式重新评估 |
 
 ---
 
-## 五、成功指标
-
-### 5.1 北极星指标
-
-**活跃用户周翻译条目数**（衡量工具实际使用深度）
-
-### 5.2 各阶段 KPI
-
-| Phase | 核心指标 | 目标值 |
-|-------|----------|--------|
-| Phase 1 | P0/P1 问题清零 | 100% 关闭 |
-| Phase 2 | 核心服务测试覆盖率 | ≥ 60% |
-| Phase 2 | CI 流水线可用 | 每次 push 自动构建+测试 |
-| Phase 3 | 翻译评估功能可用 | 单条 + 批量评估 |
-| Phase 3 | CLI 基本功能 | translate/batch/export-tmx 三条命令 |
-| Phase 4 | 插件接口稳定 | 至少 1 个第三方插件验证 |
-
-### 5.3 质量指标
-
-| 指标 | 当前基线 | Phase 3 目标 |
-|------|---------|-------------|
-| 翻译一致性（术语命中率） | ~85% | ≥ 95% |
-| 缓存命中率（重译避免率） | 取决于术语表大小 | ≥ 80% |
-| 用户翻译后人工修改率 | 未测量 | < 10% |
-| 应用崩溃率 | 低频（术语表窗口已修复） | 0 已知崩溃 |
-
----
-
-## 六、风险评估
+## 十一、风险评估
 
 | 风险 | 可能性 | 影响 | 缓解措施 |
 |------|--------|------|----------|
-| AI API 服务不稳定 | 中 | 高 | 多提供商冗余 + 本地缓存 |
+| AI API 服务不稳定 | 中 | 高 | 多提供商冗余 + 本地缓存 + 速率限制 |
 | API 费用超预期 | 中 | 中 | 翻译前费用预估 + 批次大小限制 |
-| WPF 技术栈人才稀少 | 中 | 低 | 文档完善 + 架构简单 |
+| WPF 技术栈人才稀少 | 中 | 低 | 文档完善 + partial class 拆分 + 架构简单 |
 | 用户增长超预期导致性能问题 | 低 | 中 | 倒排索引已解决核心性能瓶颈 |
 | 游戏格式变化不兼容 | 低 | 高 | XmlRepository 支持多格式，新格式通过插件扩展 |
+| 仅 4.0 单游戏验证限制采用 | 高 | 中 | 预览版标注限制，优先收集社区测试样本 |
+| 预览版反馈不足导致方向偏差 | 中 | 中 | 主动在汉化社区推广，建立反馈激励 |
 
 ---
 
-## 七、资源估算
+## 十二、资源估算
 
-### 7.1 工作量预估（单人开发）
+### 12.1 工作量预估（单人开发）
 
-| Phase | 预估工时 | 核心产出 |
-|-------|----------|----------|
-| Phase 1: 稳固根基 | 2-3 周 | 技术债务清零，架构安全 |
-| Phase 2: 架构完善 | 2-4 周 | 测试框架 + CI/CD |
-| Phase 3: 功能增强 | 3-5 周 | 评估 UI + CLI + 可视化 |
-| Phase 4: 生态扩展 | 4-8 周 | 插件系统 + 多格式 + 社区 |
-| **合计** | **11-20 周** | 从单一工具到本地化平台 |
+| 阶段 | 预估工时 | 核心产出 | 当前状态 |
+|-------|----------|----------|----------|
+| Phase 1: 稳固根基 | 2-3 周 | 技术债务清零，架构安全 | ✅ 已完成 |
+| Phase 2: 架构完善 | 2-4 周 | 测试框架 + CI/CD + DI | ✅ 已完成 |
+| Phase 3: 功能增强 | 3-5 周 | 评估 UI + 投票 + Excel 式交互 + 自动保存 | 🟡 80% 完成（CLI/进度可视化/协作待做） |
+| Phase 4: 生态扩展 | 4-8 周 | 插件稳定化 + 多格式 + 社区 | 🔵 未启动 |
+| **当前剩余** | **4-7 周** | 完成评估多模型 + CLI + 进度可视化 + 协作 | — |
 
-### 7.2 当前人力
+### 12.2 当前人力
 
-- 开发：1 人（Veloxcity）
-- 测试：0 人（依赖自动化测试）
-- 设计：通过 AI 辅助设计
+- 开发：1 人（Veloxcity，AI 辅助）
+- 测试：0 人（依赖自动化测试 + 真实项目验证）
+- 设计：通过 AI 辅助 + HandyControl 组件库
+- PM：Alex（AI 代理）
 
 ---
 
-## 八、立即行动项（本周可启动）
+## 十三、立即行动项（本周可启动）
 
 按优先级排列：
 
-1. **[P0]** ConfigService.Cache → ConcurrentDictionary（影响：线程安全）
-2. **[P0]** AiTranslationService.RecentRequests → ConcurrentQueue（影响：速率限制准确性）
-3. **[P1]** 为 GlossaryManager、ExpertProfileManager、TranslationEvaluator 抽取接口
-4. **[P1]** 消除 MainWindow 中的 LoadConfig/SaveConfig/SaveTranslationProgress 等重复代码
-5. **[P1]** 提取 HasChineseChars 为公共扩展方法
-6. **[P2]** HttpRequestMessage 添加 using/Dispose
-7. **[P2]** 术语表状态本地化
+1. **[进行中]** 完成评估多模型功能：ConfigService 多模型配置 + TranslationEvaluator 投票聚合 + SettingsWindow UI（下拉+刷新+添加/删除列表）+ 本地化 key + 0 编译错误
+2. **[高]** 收集预览版真实用户反馈：在汉化论坛/模组社区发帖，建立 Issue 反馈激励
+3. **[高]** 核心服务测试覆盖率提升：补 AiTranslationService / TranslationOrchestrator 测试
+4. **[中]** 定义 CLI 模式命令规范（Next 阶段启动前）
+5. **[中]** 翻译进度可视化优化（进度条+速度+实时费用）
+6. **[低]** 非 4.0 游戏格式验证（依赖社区测试样本）
 
 ---
 
-> **版本历史**  
-> v1.2 (2026-08-02) — Non-Goals 新增：低置信度条目联网搜索补翻延后（记录延后理由与重新评估条件）  
-> v1.1 (2026-08-01) — 定位收窄：主攻译者，独立开发者极简版暂缓（Non-Goals 新增）  
+> **版本历史**
+> v2.0 (2026-08-02) — 完整产品规划复盘：新增问题陈述、用户画像与故事、方案概述、发布计划、GTM 简报、技术考量章节；更新当前状态评估反映真实进度（Phase 1-2 已完成，Phase 3 80%）；路线图改为 Now/Next/Later 格式；保留所有 Non-Goals 决策记录
+> v1.2 (2026-08-02) — Non-Goals 新增：低置信度条目联网搜索补翻延后（记录延后理由与重新评估条件）
+> v1.1 (2026-08-01) — 定位收窄：主攻译者，独立开发者极简版暂缓（Non-Goals 新增）
 > v1.0 (2026-07-30) — 初始产品规划，由产品经理 Alex 基于项目审计制定

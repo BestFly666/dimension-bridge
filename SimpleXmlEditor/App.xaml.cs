@@ -21,6 +21,7 @@ namespace SimpleXmlEditor
             // Domain services (Singleton — shared state)
             services.AddSingleton<IConfigService, ConfigService>();
             services.AddSingleton<IGlossaryManager, GlossaryManager>();
+            services.AddSingleton<IBlacklistManager, BlacklistManager>();
             services.AddSingleton<IExpertProfileManager, ExpertProfileManager>();
 
             // AI services

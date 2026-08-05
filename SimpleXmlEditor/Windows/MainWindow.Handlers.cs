@@ -1,90 +1,32 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.ComponentModel;
-using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Data;
-using System.Windows.Media;
+using Microsoft.Win32;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.Localization;
 using SimpleXmlEditor.Services;
 using SimpleXmlEditor.ViewModels;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace SimpleXmlEditor
 {
     /// <summary>
-    /// Pure UI layer. All business logic (translation, evaluation, voting, caching,
-    /// consistency scanning) lives in MainViewModel / services. This class only:
-    ///  - forwards UI events to ViewModel commands/methods
-    ///  - renders ViewModel state via events (status, progress, evaluation results)
-    ///  - manages window lifecycle, theme, and localization
-    ///
-    /// Split into partial classes:
-    ///   MainWindow.Localization.cs  — ApplyLocalization, UpdateInfoLabels
-    ///   MainWindow.Theme.cs        — ApplyTheme
-    ///   MainWindow.Grid.cs         — DataGrid interaction, selection, column/row resize
-    ///   MainWindow.Helpers.cs      — AddLog, UpdateCacheInfo, ShowControlButtons, ShowEvaluationWindow
-    ///   MainWindow.Events.cs       — All UI event handlers (clicks, filters, menus, shortcuts)
+    /// MainWindow partial: ViewModel 事件订阅与结果渲染回调
+    /// （评估 / 投票 / 预翻译 / 一致性扫描 / 词汇冲突展示）。
     /// </summary>
-    public partial class MainWindow : Window
+    public partial class MainWindow
     {
-        private MainViewModel _viewModel;
-        private ReviewExporter _reviewExporter = new ReviewExporter();
-        private System.Windows.Threading.DispatcherTimer _filterTimer;
-        private System.Windows.Threading.DispatcherTimer _autoSaveTimer;
-        private static readonly TimeSpan AutoSaveInterval = TimeSpan.FromMinutes(5);
-
-        private bool _isDarkMode = false;
-        private bool _showUntranslatedOnly = false;
-        private bool _suppressSelectionSync = false;
-        private bool _suppressSelectionChanged = false;
-        private bool _logCollapsed = false;
-        private const double LogPanelDefaultWidth = 380;
-
-        public MainWindow()
-        {
-            InitializeComponent();
-            _viewModel = App.Services?.GetService<MainViewModel>() ?? new MainViewModel();
-            SubscribeViewModelEvents();
-
-            EntriesGrid.ItemsSource = _viewModel.Entries;
-
-            EntriesGrid.SelectionChanged += EntriesGrid_SelectionChanged;
-            EntriesGrid.Loaded += EntriesGrid_Loaded;
-
-            _filterTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromMilliseconds(500)
-            };
-            _filterTimer.Tick += FilterTimer_Tick;
-
-            // Excel 式自动保存：每 5 分钟自动保存缓存与配置（不直接写 XML，防止覆盖源文件）
-            _autoSaveTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = AutoSaveInterval
-            };
-            _autoSaveTimer.Tick += AutoSaveTimer_Tick;
-            _autoSaveTimer.Start();
-
-            this.KeyDown += MainWindow_KeyDown;
-
-            InitializeFromConfig();
-        }
-
         private void SubscribeViewModelEvents()
         {
-            _viewModel.LogMessage += msg => Dispatcher.Invoke(() => AddLog(msg));
-            _viewModel.StatusMessageChanged += msg => Dispatcher.Invoke(() => StatusText.Text = msg);
+            // BeginInvoke（异步）：后台线程不阻塞等待 UI 线程，立即返回继续执行。
+            // 此前用 Invoke（同步）导致批次完成时后台线程被 UI 线程阻塞，
+            // batchSemaphore.Release() 延迟执行 → 有效并发度退化（3 路退化为串行）。
+            _viewModel.LogMessage += msg => Dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
+            _viewModel.StatusMessageChanged += msg => Dispatcher.BeginInvoke(new Action(() => StatusText.Text = msg));
 
-            _viewModel.TranslationStarted += total => Dispatcher.Invoke(() =>
+            _viewModel.TranslationStarted += total => Dispatcher.BeginInvoke(new Action(() =>
             {
                 ShowControlButtons(true);
                 ProgressBar.Visibility = Visibility.Visible;
@@ -92,16 +34,16 @@ namespace SimpleXmlEditor
                 ProgressBar.Maximum = Math.Max(total, 1);
                 ProgressBar.Value = 0;
                 StatusIndicator.Text = _viewModel.GetTranslationStatusIndicator();
-            });
+            }));
 
-            _viewModel.TranslationProgressChanged += (translated, total) => Dispatcher.Invoke(() =>
+            _viewModel.TranslationProgressChanged += (translated, total) => Dispatcher.BeginInvoke(new Action(() =>
             {
                 if (total > 0) ProgressBar.Maximum = total;
                 ProgressBar.Value = translated;
                 UpdateProgressDisplay();
-            });
+            }));
 
-            _viewModel.TranslationFinished += () => Dispatcher.Invoke(() =>
+            _viewModel.TranslationFinished += () => Dispatcher.BeginInvoke(new Action(() =>
             {
                 ShowControlButtons(false);
                 PauseBtn.Content = $"⏸️ {LocalizationManager.GetString("Pause")}";
@@ -114,19 +56,20 @@ namespace SimpleXmlEditor
                 ProgressBar.Value = 0;
                 UpdateCacheInfo();
                 UpdateGlossaryInfo();
-            });
+            }));
 
-            _viewModel.TranslationErrorOccurred += msg => Dispatcher.Invoke(() =>
-                MessageBox.Show(msg, LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error));
+            _viewModel.TranslationErrorOccurred += msg => Dispatcher.BeginInvoke(new Action(() =>
+                MessageBox.Show(msg, LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error)));
 
-            _viewModel.EvaluationStatusText += msg => Dispatcher.Invoke(() => EvalResult.Text = msg);
-            _viewModel.VotingStatusText += msg => Dispatcher.Invoke(() => EvalResult.Text = msg);
+            _viewModel.EvaluationStatusText += msg => Dispatcher.BeginInvoke(new Action(() => EvalResult.Text = msg));
+            _viewModel.VotingStatusText += msg => Dispatcher.BeginInvoke(new Action(() => EvalResult.Text = msg));
 
-            _viewModel.EvaluationCompleted += outcome => Dispatcher.Invoke(() => RenderEvaluationOutcome(outcome));
-            _viewModel.VotingCompleted += outcome => Dispatcher.Invoke(() => RenderVotingOutcome(outcome));
-            _viewModel.PreTranslateCompleted += outcome => Dispatcher.Invoke(() => RenderPreTranslateOutcome(outcome));
-            _viewModel.ConsistencyScanCompleted += issues => Dispatcher.Invoke(() => RenderConsistencyScan(issues));
+            _viewModel.EvaluationCompleted += outcome => Dispatcher.BeginInvoke(new Action(() => RenderEvaluationOutcome(outcome)));
+            _viewModel.VotingCompleted += outcome => Dispatcher.BeginInvoke(new Action(() => RenderVotingOutcome(outcome)));
+            _viewModel.PreTranslateCompleted += outcome => Dispatcher.BeginInvoke(new Action(() => RenderPreTranslateOutcome(outcome)));
+            _viewModel.ConsistencyScanCompleted += issues => Dispatcher.BeginInvoke(new Action(() => RenderConsistencyScan(issues)));
 
+            // ConfirmationRequested 需要返回值 → 保留 Invoke（同步等待用户确认）
             _viewModel.ConfirmationRequested += (message, title) =>
             {
                 var tcs = new TaskCompletionSource<bool>();
@@ -138,8 +81,8 @@ namespace SimpleXmlEditor
                 return tcs.Task;
             };
 
-            _viewModel.MessageRequested += (message, title) => Dispatcher.Invoke(() =>
-                MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information));
+            _viewModel.MessageRequested += (message, title) => Dispatcher.BeginInvoke(new Action(() =>
+                MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information)));
         }
 
         private void RenderEvaluationOutcome(EvaluationOutcome outcome)
@@ -405,229 +348,6 @@ namespace SimpleXmlEditor
             var dialog = new ConflictDialog(conflicts);
             dialog.Owner = this;
             dialog.ShowDialog();
-        }
-
-        private void InitializeFromConfig()
-        {
-            _viewModel.LoadConfig();
-            _viewModel.ConfigService.MigrateLegacyApiKey();
-            _viewModel.AiTranslationService.ApiKey = _viewModel.ConfigService.GetApiKey();
-
-            BatchSizeTxt.Text = _viewModel.BatchSize.ToString();
-            _viewModel.ProfileManager.EnsureDefaultsExist();
-            RefreshExpertProfileCombo();
-            ApplyLocalization();
-
-            if (!string.IsNullOrEmpty(_viewModel.LastLoadedFilePath) && File.Exists(_viewModel.LastLoadedFilePath))
-            {
-                LoadXml(_viewModel.LastLoadedFilePath);
-                AddLog($"📂 {LocalizationManager.GetString("LogAutoLoad", Path.GetFileName(_viewModel.LastLoadedFilePath))}");
-            }
-
-            UpdateCacheInfo();
-            UpdateGlossaryInfo();
-            AddLog($"✅ {LocalizationManager.GetString("LogStarted")}");
-
-            AutoLoadModelsAsync();
-        }
-
-        private async void AutoLoadModelsAsync()
-        {
-            try
-            {
-                if (_viewModel.AiProvider != AIProvider.GoogleGemini)
-                {
-                    LoadStaticModels();
-                    return;
-                }
-
-                if (!string.IsNullOrEmpty(_viewModel.AiTranslationService.ApiKey))
-                {
-                    AddLog($"🔄 {LocalizationManager.GetString("LogAutoRefreshModels")}");
-                    var models = await _viewModel.AiTranslationService.FetchAvailableModelsAsync(_viewModel.AiTranslationService.ApiKey, _viewModel.AiProvider);
-
-                    if (models.Count > 0)
-                    {
-                        AddLog($"✅ {LocalizationManager.GetString("LogAutoModelsLoaded", models.Count)}");
-
-                        if (string.IsNullOrEmpty(_viewModel.AiTranslationService.Model) || !models.Contains(_viewModel.AiTranslationService.Model))
-                        {
-                            _viewModel.AiTranslationService.Model = models.FirstOrDefault() ?? "";
-                            _viewModel.SaveConfig();
-                            AddLog($"🔧 {LocalizationManager.GetString("LogAutoModelSelected", _viewModel.AiTranslationService.Model)}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"AutoLoadModels error: {ex.Message}");
-            }
-        }
-
-        private void LoadStaticModels()
-        {
-            if (!AiTranslationService.StaticModels.ContainsKey(_viewModel.AiProvider)) return;
-
-            _viewModel.AiTranslationService.ModelPricing.Clear();
-            _viewModel.AiTranslationService.ModelLimits.Clear();
-
-            if (AiTranslationService.ProviderRateLimits.ContainsKey(_viewModel.AiProvider))
-            {
-                foreach (var kvp in AiTranslationService.ProviderRateLimits[_viewModel.AiProvider])
-                {
-                    _viewModel.AiTranslationService.ModelLimits[kvp.Key] = kvp.Value;
-                }
-            }
-
-            var models = AiTranslationService.StaticModels[_viewModel.AiProvider];
-
-            if (string.IsNullOrEmpty(_viewModel.AiTranslationService.Model) || !models.Contains(_viewModel.AiTranslationService.Model))
-            {
-                _viewModel.AiTranslationService.Model = models.FirstOrDefault() ?? "";
-                _viewModel.SaveConfig();
-            }
-
-            AddLog($"✅ {LocalizationManager.GetString("LogDeepSeekModels", models.Count)}");
-        }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            _filterTimer?.Stop();
-            _autoSaveTimer?.Stop();
-            _viewModel.AiTranslationService.Dispose();
-            base.OnClosed(e);
-        }
-
-        public async Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null)
-        {
-            return await _viewModel.AiTranslationService.FetchAvailableModelsAsync(apiKey, provider ?? _viewModel.AiProvider);
-        }
-
-        public IConfigService ConfigService => _viewModel.ConfigService;
-
-        public Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> GetModelLimits(AIProvider? provider = null)
-        {
-            if (provider.HasValue && AiTranslationService.ProviderRateLimits.ContainsKey(provider.Value))
-            {
-                var result = new Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)>();
-                foreach (var kvp in AiTranslationService.ProviderRateLimits[provider.Value])
-                {
-                    result[kvp.Key] = kvp.Value;
-                }
-                return result;
-            }
-            return new Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)>(_viewModel.AiTranslationService.ModelLimits);
-        }
-
-        private void LoadXml(string fileName = "stable_us.xml", bool isTranslationFile = false)
-        {
-            try
-            {
-                if (!File.Exists(fileName))
-                {
-                    AddLog($"❌ {LocalizationManager.GetString("LogFileNotFound", fileName)}");
-                    return;
-                }
-
-                var loadedEntries = _viewModel.XmlRepository.LoadXml(fileName, isTranslationFile);
-
-                if (isTranslationFile && _viewModel.Entries.Count > 0)
-                {
-                    var lookup = new Dictionary<string, LocalizationEntry>();
-                    foreach (var e in loadedEntries)
-                    {
-                        lookup.TryAdd(e.Key, e);
-                    }
-
-                    int matched = 0;
-                    foreach (var existing in _viewModel.Entries)
-                    {
-                        if (lookup.TryGetValue(existing.Key, out var translated)
-                            && !string.IsNullOrEmpty(translated.Translation))
-                        {
-                            existing.Translation = translated.Translation;
-                            _viewModel.ConfigService.Cache.TryAdd(existing.Key, translated.Translation);
-                            matched++;
-                        }
-                    }
-
-                    StatusText.Text = LocalizationManager.GetString("MergedTranslations", matched);
-                    AddLog($"✅ {LocalizationManager.GetString("LogTranslationMerged", matched, _viewModel.Entries.Count)}");
-
-                    UpdateCacheInfo();
-                    UpdateGlossaryInfo();
-
-                    var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                    view?.Refresh();
-
-                    _viewModel.RestoreTranslationProgress(_viewModel.Entries);
-                    _viewModel.RestoreScores(_viewModel.Entries);
-                }
-                else
-                {
-                    _viewModel.Entries.Clear();
-
-                    foreach (var entry in loadedEntries)
-                    {
-                        _viewModel.ProcessEntry(entry);
-                        entry.PropertyChanged += OnEntryPropertyChanged;
-                    }
-
-                    FilterKeyBox.Text = "";
-                    FilterBox.Text = "";
-                    FilterTranslationBox.Text = "";
-
-                    StatusText.Text = LocalizationManager.GetString("LoadedEntries", _viewModel.Entries.Count);
-                    AddLog($"✅ {LocalizationManager.GetString("LogXmlLoaded", _viewModel.Entries.Count)}");
-                    _viewModel.LastLoadedFilePath = fileName;
-                    _viewModel.ConfigService.Config.LastLoadedFilePath = fileName;
-                    _viewModel.ConfigService.SaveConfig();
-                    FilterCountText.Text = LocalizationManager.GetString("TotalCount", _viewModel.Entries.Count);
-
-                    var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                    view?.Refresh();
-
-                    _viewModel.RestoreTranslationProgress(_viewModel.Entries);
-                    _viewModel.RestoreScores(_viewModel.Entries);
-
-                    CurrentFileTab.Text = System.IO.Path.GetFileName(fileName);
-                }
-            }
-            catch (Exception ex)
-            {
-                AddLog($"❌ {LocalizationManager.GetString("ErrorLoadingXml", ex.Message)}");
-                MessageBox.Show(LocalizationManager.GetString("ErrorLoadingXml", ex.Message), LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void SaveXml(string fileName = "stable_us.xml")
-        {
-            if (_viewModel.SaveXml(fileName))
-            {
-                UpdateCacheInfo();
-            }
-            else
-            {
-                MessageBox.Show(LocalizationManager.GetString("ErrorSavingXml", ""), LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-    }
-
-    public class IndexToLetterConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is int index && index >= 0 && index < 26)
-            {
-                return ((char)('A' + index)).ToString();
-            }
-            return value?.ToString() ?? "";
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotSupportedException();
         }
     }
 }

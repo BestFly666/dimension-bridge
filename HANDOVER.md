@@ -210,9 +210,9 @@ foreach batch in CreateBatches():
 
 | 文件 | 路径 | 格式 | 作用 |
 |------|------|------|------|
-| `config.json` | 程序目录 | JSON | AI 提供商、模型、API Key、语言、批次大小、**评估模型配置**（`EvaluationAiProvider`/`EvaluationModel`/`EncryptedEvaluationApiKey`）等 |
-| `translation_cache.json` | 程序目录 | JSON | `{ hash: translation }` 翻译缓存 |
-| `translation_progress.json` | 程序目录 | JSON | 崩溃恢复临时文件 |
+| `config.json` | `%LocalAppData%\SimpleXmlEditor\` | JSON | AI 提供商、模型、API Key、语言、批次大小、**评估模型配置**（`EvaluationAiProvider`/`EvaluationModel`/`EncryptedEvaluationApiKey`）等 |
+| `translation_cache.json` | `%LocalAppData%\SimpleXmlEditor\` | JSON | `{ hash: translation }` 翻译缓存（每条 2 键：`Key` + `MD5(原文)`） |
+| `translation_progress.json` | `%LocalAppData%\SimpleXmlEditor\` | JSON | 崩溃恢复临时文件（2026-08-05 起与主缓存统一，原在 bin 程序目录；QuickSave/翻译完成后删除） |
 | `glossary_terms.json` | `Environment.CurrentDirectory` | JSON | 术语表（数组格式） |
 | `expert_profiles.json` | 程序目录 | JSON | 专家配置文件 |
 
@@ -426,6 +426,33 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 ### 8.24 自动保存是怎么回事
 - **说明**（2026-08-02）：每 5 分钟自动执行 `QuickSave()`（同步翻译缓存 + 评分缓存 + 配置），**不直接写 XML**——源 XML 仍由你手动保存，防止自动覆盖源文件导致数据损坏；仅加载文件后才触发
 
+### 8.25 删除译文后快速保存，重新打开又出现
+- **现象**：删除某条译文 → Ctrl+S → 重启 → 译文列又恢复；且"缓存文件变来变去"
+- **根因**（2026-08-05 五轮排查）：**双轨缓存文件位置不统一**——主缓存 `translation_cache.json` 在 AppData，崩溃恢复 `translation_progress.json` 在 bin 程序目录（Debug/Release 各一份）。加载 XML 时 `RestoreTranslationProgress` 从残留 progress 文件按原文 Value 恢复旧译文，**绕过主缓存的"删除键"状态** → 删除被"复活"；progress 只在翻译中断后残留，QuickSave 从不更新它 → 行为不一致
+- **修复**（2026-08-05）：
+  1. `ConfigService` 新增 `_progressPath` 统一到 AppData；构造函数自动删除 bin 遗留旧文件
+  2. `SaveTranslationProgressAsync`/`RestoreTranslationProgress`/`DeleteProgressFile` 三处路径统一
+  3. QuickSave 成功后删除 progress 文件（用户主动保存 = 主缓存已是最新快照）
+- **注意**：删除一条译文缓存 -2（`Key` + `MD5(原文)` 双键）是正常设计，非 bug
+- **文件**：`ConfigService.cs` / `ConfigService.Cache.cs` / `MainWindow.Events.File.cs`
+
+### 8.26 翻译速度慢 / 大批次失败 / 3 路并发退化为串行
+- **现象**：批次 >30 条时特别慢；3 路并发"感觉一批批处理"
+- **根因 1**（2026-08-06）：分批按固定条目数（50），不估算输出 token → 中文 50 条输出超 max_tokens → 截断 → 拆半重试风暴（最多 7 次串行请求）
+- **修复 1**：改为按估算输出 token 动态分批（3800 token/批），中文约 20-30 条/批，永不截断
+- **根因 2**（2026-08-06）：`MainWindow.Handlers.cs` 全部事件订阅用 `Dispatcher.Invoke`（同步阻塞），后台线程等 UI 线程处理完才继续 → `batchSemaphore.Release()` 延迟 → 下一批干等
+- **修复 2**：`Invoke` → `BeginInvoke`（异步），后台线程立即返回；仅 `ConfirmationRequested` 保留 `Invoke`
+- **根因 3**（2026-08-06）：`SaveTranslationProgressAsync` 在 `finally { Release() }` 之前 await，序列化 25000 条阻塞信号量释放
+- **修复 3**：移到 `Release()` 之后
+- **无法控制**：DeepSeek API 端同时只处理 ~2 个请求（2500 RPM ≠ 并发生成数），客户端无法突破
+- **文件**：`TranslationOrchestrator.cs` / `MainWindow.Handlers.cs` / `MainViewModel.Translation.cs`
+
+### 8.27 本地模型方案（待推进）
+- **需求**：21487 条全量翻译 ~13 小时，API 端并发生成限制为硬瓶颈
+- **方案**：Python FastAPI + vLLM 独立服务，暴露 OpenAI 兼容接口，WPF 端零改动
+- **前提**：需要独立 GPU（7B 需 6GB+，14B 需 12GB+）
+- **状态**：待用户确认 GPU 配置后决定是否推进
+
 ---
 
 ## 9. UI 窗口速查
@@ -464,6 +491,12 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 19. **模型名不硬编码**：静态模型列表是"已知模型缓存"，务必保留厂商 `GET /models` 动态拉取 + 静态兜底（DeepSeek 2026-04 模型升级教训）
 20. **批量异步编排必须兜底**：批量评估/投票（chunk → 逐条 → 跳过）每层 try-catch 降级；`ToDictionary` 遇重复键会崩溃，改用循环赋值
 21. **API 超时**：批量评估 prompt 长，HttpClient 超时设 120s（30s 会频繁超时）
+22. **缓存/进度文件统一在 AppData**（2026-08-05）：`translation_cache.json` 与 `translation_progress.json` 均存于 `%LocalAppData%\SimpleXmlEditor\`，禁止用 `AppDomain.CurrentDomain.BaseDirectory`（bin 目录随构建变化）；**QuickSave 后必须删除 progress 文件**——否则崩溃恢复文件会绕过主缓存的删除状态，导致"删除的译文重开复活"
+23. **高频 UI 事件必须用 BeginInvoke**（2026-08-06）：后台线程通过 `Dispatcher.Invoke` 更新 UI 会阻塞后台线程；如果 Invoke 在 `batchSemaphore.Release()` 之前，有效并发度退化（3 路退化为串行）。`LogMessage`、`TranslationProgressChanged`、`StatusMessageChanged` 等高频事件必须用 `Dispatcher.BeginInvoke`；仅 `ConfirmationRequested`（需返回值）保留 `Invoke`
+24. **分批必须按输出 token 预算**（2026-08-06）：按固定条目数分批无法预防输出截断——中文每条 token 数是英文的 ~5 倍，50 条中文可能超 max_tokens 而截断，触发拆半重试风暴。使用 `EstimateOutputTokens` 按 3800 token/批动态切批
+25. **条目 Key 可注入 Prompt**（2026-08-06）：条目 Key（如 `TEXT_SPEECH_*`、`UNIT_*_DESCRIPTION`）含内容类型/场景线索，注入后帮助模型判断语境。格式 `1. [KEY] "原文"`，Key 经 `SanitizePromptText` 转义，规则明确禁止将 Key 混入译文
+26. **进度保存不阻塞信号量**（2026-08-06）：`SaveTranslationProgressAsync` 必须在 `batchSemaphore.Release()` **之后**执行——先释放信号量让下一批启动，再保存进度。避免序列化大数据 + 写文件阻塞并发管线
+27. **API RPM ≠ 并发生成数**（2026-08-06）：DeepSeek 2500 RPM 是每分钟允许发送的请求数，不等于服务器端同时生成的请求数（观察值 ≈ 2）。客户端并发度再高也无法突破 API 端的并发生成限制
 
 ---
 ## 11. 项目结构

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Xml;
@@ -9,133 +8,7 @@ using SimpleXmlEditor.Localization;
 
 namespace SimpleXmlEditor.Services
 {
-    public enum XmlFormat
-    {
-        LocalisationData,
-        ExcelSpreadsheet
-    }
-
-    public enum ReviewStatus
-    {
-        NotReviewed,
-        Reviewed,
-        NeedsFix
-    }
-
-    public class LocalizationEntry : INotifyPropertyChanged
-    {
-        private int _rowNumber;
-        private string _key = "";
-        private string _value = "";
-        private string _translation = "";
-        private bool _isSelected;
-        private ReviewStatus _reviewStatus = ReviewStatus.NotReviewed;
-        private double _evaluationScore = -1; // -1 表示未评估
-        private string _evaluationImprovement = "";
-
-        public int RowNumber
-        {
-            get => _rowNumber;
-            set { _rowNumber = value; OnPropertyChanged(nameof(RowNumber)); }
-        }
-
-        public string Key
-        {
-            get => _key;
-            set { _key = value; OnPropertyChanged(nameof(Key)); }
-        }
-
-        public string Value
-        {
-            get => _value;
-            set { _value = value; OnPropertyChanged(nameof(Value)); }
-        }
-
-        public string Translation
-        {
-            get => _translation;
-            set
-            {
-                _translation = value;
-                OnPropertyChanged(nameof(Translation));
-                OnPropertyChanged(nameof(StatusIcon));
-            }
-        }
-
-        public bool IsSelected
-        {
-            get => _isSelected;
-            set { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); }
-        }
-
-        /// <summary>静默设置 IsSelected（不触发 PropertyChanged），用于批量操作性能优化。</summary>
-        public void SetIsSelectedSilent(bool value)
-        {
-            _isSelected = value;
-        }
-
-        public ReviewStatus ReviewStatus
-        {
-            get => _reviewStatus;
-            set
-            {
-                _reviewStatus = value;
-                OnPropertyChanged(nameof(ReviewStatus));
-                OnPropertyChanged(nameof(StatusIcon));
-            }
-        }
-
-        /// <summary>
-        /// AI 评估分数（0-10），-1 表示未评估。绑定到 DataGrid 的 Score 列。
-        /// </summary>
-        public double EvaluationScore
-        {
-            get => _evaluationScore;
-            set
-            {
-                _evaluationScore = value;
-                OnPropertyChanged(nameof(EvaluationScore));
-                OnPropertyChanged(nameof(EvaluationScoreDisplay));
-                OnPropertyChanged(nameof(EvaluationScoreColor));
-            }
-        }
-
-        /// <summary>用于显示的分数文本，-1 显示空字符串。</summary>
-        public string EvaluationScoreDisplay => _evaluationScore < 0 ? "" : $"{_evaluationScore:F1}";
-
-        /// <summary>分数颜色：高分绿、中分黄、低分红、未评估灰。</summary>
-        public string EvaluationScoreColor => _evaluationScore switch
-        {
-            >= 8 => "#2E7D32",
-            >= 5 => "#F57F17",
-            >= 0 => "#C62828",
-            _ => "#9E9E9E"
-        };
-
-        /// <summary>AI 评估的改进建议，留空表示无建议。tooltip 显示。</summary>
-        public string EvaluationImprovement
-        {
-            get => _evaluationImprovement;
-            set { _evaluationImprovement = value; OnPropertyChanged(nameof(EvaluationImprovement)); }
-        }
-
-        public string StatusIcon => _reviewStatus switch
-        {
-            ReviewStatus.Reviewed => "✅",
-            ReviewStatus.NeedsFix => "🔧",
-            ReviewStatus.NotReviewed => string.IsNullOrEmpty(Translation) ? "❌" : "📝",
-            _ => "❌"
-        };
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public class XmlRepository : IXmlRepository
+    public partial class XmlRepository : IXmlRepository
     {
         public XmlFormat CurrentFormat { get; private set; } = XmlFormat.ExcelSpreadsheet;
 
@@ -177,10 +50,17 @@ namespace SimpleXmlEditor.Services
                         CurrentFormat = XmlFormat.LocalisationData;
                         entries = ParseLocalisationDataXml(doc, isTranslationFile);
                     }
-                    else
+                    else if (doc.Descendants(XNamespace.Get("urn:schemas-microsoft-com:office:spreadsheet") + "Row").Any())
                     {
                         CurrentFormat = XmlFormat.ExcelSpreadsheet;
                         entries = ParseExcelSpreadsheetXml(doc);
+                    }
+                    else
+                    {
+                        // 无法识别的 XML 方言：明确报错，避免静默按 Excel 解析出空条目
+                        var msg = LocalizationManager.GetString("UnsupportedXmlFormat", root.Name.LocalName);
+                        RaiseLog(msg);
+                        throw new InvalidDataException(msg);
                     }
                 }
 
@@ -298,6 +178,8 @@ namespace SimpleXmlEditor.Services
                     new XAttribute("Language", "ENGLISH")
                 );
 
+                // LocalisationData 格式的特殊设计：<Translation> 元素同时存储原文和译文
+                // 译文为空时必须保留原文，否则下次加载时原文会丢失
                 var textToWrite = !string.IsNullOrEmpty(entry.Translation) ? entry.Translation : entry.Value;
                 translation.Add(new XCData(textToWrite));
                 translationData.Add(translation);

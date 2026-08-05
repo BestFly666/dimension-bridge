@@ -72,6 +72,8 @@ namespace SimpleXmlEditor
             MenuStatistics.Header = $"📊 {L("Stats")}";
             MenuGlossary.Header = $"📖 {L("Glossary")}";
             MenuGlossary.ToolTip = L("TipGlossary");
+            MenuBlacklist.Header = $"🚫 {L("Blacklist")}";
+            MenuBlacklist.ToolTip = L("TipBlacklist");
             MenuUndo.Header = $"↩️ {L("Undo")}";
             MenuUndo.ToolTip = L("TipUndo");
             MenuReplace.Header = $"🔄 {L("BatchReplace")}";
@@ -95,6 +97,7 @@ namespace SimpleXmlEditor
             ClearFilterBtn.ToolTip = L("ClearFilter");
             ClearFilterBtn.Content = $"✕ {L("FilterClear")}";
             UntranslatedToggle.Content = L("ShowUntranslatedOnly");
+            HideBlacklistToggle.Content = L("HideBlacklisted");
 
             CtxCopyKeyMenu.Header = $"📋 {L("CtxCopyKey")}";
             CtxCopyOriginalMenu.Header = $"📋 {L("CtxCopyOriginal")}";

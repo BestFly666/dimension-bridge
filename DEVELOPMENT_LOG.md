@@ -15,6 +15,159 @@
 
 ---
 
+## 2026-08-06 — 翻译速度优化（分批/并发/Key注入）+ 本地模型方案讨论
+
+> 背景：用户反馈"翻译速度慢，大批次时特别慢"、"3 路并发感觉一批批处理"。按代码审查员 + AI 工程师身份审查翻译流水线全链路。
+
+### A. 分批逻辑：固定条目数 → 估算输出 token 预算
+
+**问题**：[CreateBatches](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) 的切批条件是 `currentBatch.Count >= batchSize`——token 预算形同虚设。50 条中文译文输出超 max_tokens → 截断 → 拆半重试风暴（1+2+4=7 次串行请求）→ "特别慢"。
+
+**修复**：改为按"估算输出 token"动态分批（3800 token/批），中文约 20-30 条/批。短文本自动合并到 50 条上限，长文本自动拆小——永不截断、无重试。
+
+**文件**：`TranslationOrchestrator.cs` — 新增 `EstimateOutputTokens`，替换原 `EstimateTokens`
+
+### B. 条目 Key 注入 Prompt
+
+**需求**：用户提出"把 key 也注入了可以提高准确率"——指条目 Key（如 `TEXT_UNIT_BARRACKS_DESCRIPTION`），含内容类型/场景线索。
+
+**实现**：
+- `BuildPrompt`：每行格式改为 `1. [TEXT_XXX] "原文"`
+- `PromptTemplates.cs`：新增规则 8——Key 只用于理解语境，禁止混入译文
+- Key 经 `SanitizePromptText` 转义（防注入）
+- 测试正则适配新格式
+
+**文件**：`TranslationOrchestrator.cs` / `PromptTemplates.cs` / `TranslationOrchestratorTests.cs`
+
+### C. 批次计时器
+
+**需求**：用户要求"检查每批次花了多少时间"。
+
+**实现**：`Stopwatch` 包裹 API 调用（含拆半重试总耗时），批次完成后输出 `⏱️ 批次 N/M 耗时 Xs（Y 条）`。走 LocalizationManager 本地化。
+
+**文件**：`MainViewModel.Translation.cs` / `LocalizationManager.Dicts.{En,Zh}.cs`
+
+### D. 并发退化修复：Dispatcher.Invoke → BeginInvoke
+
+**问题**：用户反馈"3 路并发感觉一批批处理"。审查发现 [MainWindow.Handlers.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Handlers.cs) 全部事件订阅用了 `Dispatcher.Invoke`（同步阻塞）。
+
+**串行化机制**：
+1. 3 个批次并发完成 API 调用 ✅
+2. 每个批次完成后在 `finally { batchSemaphore.Release() }` **之前**调用 `OnLogMessage` / `TranslationProgressChanged` → `Dispatcher.Invoke` **阻塞后台线程等 UI 线程**
+3. UI 线程被 DataGrid（25000 行）重绘占着 → Invoke 等待数百毫秒
+4. 信号量迟迟不释放 → 下一批干等 → **3 路退化为接近串行**
+
+**修复**：`Invoke` → `BeginInvoke`（异步排队），后台线程立即返回。仅 `ConfirmationRequested` 保留 `Invoke`（需同步等待用户确认）。
+
+**文件**：`MainWindow.Handlers.cs`
+
+### E. 进度保存不阻塞信号量
+
+**问题**：`await SaveTranslationProgressAsync(Entries)` 在 `finally { Release() }` 之前，序列化 25000 条 + 写文件阻塞信号量释放。
+
+**修复**：将 `SaveTranslationProgressAsync` 移到 `finally` 中 `Release()` 之后——先释放信号量让下一批启动，再保存进度。
+
+**文件**：`MainViewModel.Translation.cs`
+
+### F. API 端并发限制分析
+
+**用户日志证据**：
+```
+18:17:49  批次 1/2/3 同时启动
+18:20:04  批次 3 完成  135.4s    ← 先处理完
+18:22:05  批次 2 完成  256.3s    ← 慢 121s
+18:22:13  批次 1 完成  264.7s    ← 慢 129s
+```
+
+**结论**：DeepSeek API 端同时只处理 **2 个请求**，第 3 个在服务器排队。2500 RPM = 每分钟允许发送的请求数，不等于同时生成数。客户端已无瓶颈——3 个请求确实同时发出。
+
+**无法控制**：API 端的生成速度（~4.5s/条）是硬瓶颈。21487 条全量翻译估算 ~13 小时。
+
+### G. 本地模型方案讨论（产品评估，未实施）
+
+**用户需求**：引入 Python 部署本地轻量化模型加速翻译。
+
+**产品经理评估**：
+- 痛点成立：13 小时全量翻译不可接受
+- 取舍：速度 vs 质量（7B 模型翻译质量不如 DeepSeek-V4）
+- Non-Goals：不做模型微调、不做 CPU 推理、不强制用户使用
+
+**后端架构师方案**：
+```
+xml-ai-translator-main/
+├── SimpleXmlEditor/           # WPF .NET 8（不改）
+├── LocalModelServer/          # Python FastAPI + vLLM（新增，独立）
+│   ├── server.py              # OpenAI 兼容接口
+│   ├── requirements.txt
+│   └── start.bat              # 一键启动
+└── SimpleXmlEditor.Tests/
+```
+- Python 服务暴露 `/v1/chat/completions`，WPF 端零改动（已支持 OpenAI 兼容格式）
+- 用户在设置里把 API URL 改成 `localhost:8899/v1` 即可
+- vLLM 支持 batch 推理 + PagedAttention，比 Ollama 快 2-3 倍
+- **前提**：需要独立 GPU（7B 需 6GB+，14B 需 12GB+）
+
+**状态**：待用户确认 GPU 配置后决定是否推进
+
+### 验证
+
+- `dotnet test`：40 个测试全部通过（0 警告 0 错误）
+- 用户实测：3 条 `🔄 批次` 同时出现（并发启动生效），批次 4 在批次 3 完成后立即启动（信号量释放正常）
+
+### 经验教训
+
+1. **Dispatcher.Invoke 是并发杀手**：WPF 中后台线程通过 Invoke 更新 UI 会阻塞后台线程，如果 Invoke 在信号量 Release 之前，有效并发度退化。高频事件必须用 BeginInvoke
+2. **API RPM ≠ 并发生成数**：DeepSeek 2500 RPM 是发送频率限制，服务器端同时处理的请求数可能远低于此（观察值 ≈ 2）
+3. **分批必须按输出 token 预算**：按固定条目数分批无法预防输出截断——中文每条 token 数是英文的 ~5 倍，50 条中文可能超 max_tokens 而截断
+4. **Key 注入提升翻译质量**：条目 Key 含内容类型/场景线索（如 TEXT_SPEECH_*、UNIT_*_DESCRIPTION），帮助模型判断语境，成本极低（仅输入 token）
+
+---
+
+## 2026-08-05 — 缓存/进度文件统一 + "删除译文重开复活"根因修复
+
+> 背景：用户多次报告"缓存保存失效"、"删除译文后快速保存，重新打开又出现"、"缓存文件变来变去"。按代码审查员身份通读缓存读写全链路，最终定位为**双轨缓存文件位置不统一 + 崩溃恢复文件绕过主缓存删除状态**。
+
+### A. 根因：双轨缓存文件位置不统一
+
+| 文件 | 原位置 | 写入时机 |
+|------|--------|----------|
+| `translation_cache.json`（主缓存） | `%LOCALAPPDATA%\SimpleXmlEditor\`（稳定） | QuickSave / 翻译完成 |
+| `translation_progress.json`（崩溃恢复） | `AppDomain.CurrentDomain.BaseDirectory`（bin 目录，随 Debug/Release 变化） | 每批翻译后，翻译完成时删除 |
+
+**失效链路**（"删了又出现"）：
+1. 用户删除译文 → QuickSave → `SyncEntriesToCache` 移除主缓存键（Key + MD5）→ 主缓存文件更新 ✅
+2. 重新打开 → `ProcessEntry` 按 Key/MD5 查主缓存 → 键已删，不恢复 ✅
+3. 但加载最后还会调 `RestoreTranslationProgress`，**从残留的 `translation_progress.json` 按原文 Value 恢复旧译文** ❌ → "删除的译文又出现"
+
+**"文件变来变去"的机制**：progress 文件在 bin 目录（Debug/Release 各一份），QuickSave 从不更新也不删除它，只在翻译中断/取消后残留。用户删除译文只改主缓存，残留 progress 里的旧数据在下次加载时把删除状态"复活"。
+
+### B. 修复
+
+1. **[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs)**：新增 `_progressPath`（统一到 `%LOCALAPPDATA%\SimpleXmlEditor\`）；构造函数自动删除 bin 遗留旧 progress 文件（一次性迁移清理）
+2. **[ConfigService.Cache.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.Cache.cs)**：`SaveTranslationProgressAsync` / `RestoreTranslationProgress` / `DeleteProgressFile` 三处路径统一改用 `_progressPath`
+3. **[MainWindow.Events.File.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Events.File.cs)**：QuickSave 成功后删除 progress 文件——**用户主动保存 = 主缓存已是最新快照，旧 progress 失去存在意义**
+4. 手动清理 bin 残留的 86000 字节旧 progress 文件
+
+### C. 附带排查确认（排除误报）
+
+- **删除一条译文缓存 -2 是正常设计**：每条译文在缓存有 2 个键（`Key` 键 + `MD5(原文)` 键），删除时同时移除两个键，不是 bug
+- **用户加载的 `MasterTextFile_ENGLISH.xml` 已被历史 bug 污染**：25271 条中 2737 条 `<Translation>` 存的是中文译文、22527 条为空——英文原文不在这份 XML 里（在 `mastertextfile_english.dat`）。用户看到的部分"中文还在"来自文件原文列，非缓存问题
+- 验证缓存文件键分布：4013 键 = 2762 Key 键 + 1251 MD5 键，与日志计数一致，QuickSave 写盘正常
+
+### D. 经验教训
+
+1. **崩溃恢复文件必须与主缓存同目录、同生命周期**——任何"绕过主缓存删除状态"的恢复路径都会让用户的删除操作失效
+2. **QuickSave 语义 = 用户确认的完整快照**：保存时应清理过期中间态（progress 文件），而不是只写新数据
+3. **排查"删除又复活"类问题的清单**：列出加载时所有给 `entry.Translation` 赋值的路径（ProcessEntry / RestoreTranslationProgress / TryApplyDictionary / isTranslationFile 合并），逐一核对删除后是否还会被填回
+4. **文件被译文覆盖是历史遗留的最大数据破坏风险**：QuickSave 不写 XML 是正确的防线（LocalisationData 单列结构无法同时存原文+译文，写回即覆盖原文）
+
+### 验证
+
+- `dotnet build`：0 警告 0 错误
+- 用户实测：删除译文 → Ctrl+S → 重启 → 译文列保持为空（问题关闭）
+
+---
+
 ## 2026-07-30 — Phase 1+2: 架构稳固
 
 ### 产品规划
@@ -1138,6 +1291,74 @@ project-root/
 
 - 反选（不规则选择）仍走分片方案，大数据量下耗时较长但界面不冻结，可后续优化
 - `[perf]` 计时日志为调试保留，确认稳定后可移除
+
+---
+
+## 2026-08-04 — 架构全量治理 + 黑名单隐藏 + 术语注入放宽 + 大批次翻译稳定性
+
+> 背景：项目文件日益膨胀（MainWindow.xaml.cs 等超 400 行、解析逻辑重复），按用户要求执行"全量治理（1+2+3）"架构重构；随后针对黑名单、术语注入、大批次翻译失败三个实际使用痛点进行优化。
+
+### A. 架构重构全量治理（1+2+3）✅
+
+**阶段 1：目录整理**
+- 窗口统一收纳到 `Windows/`，删除重复文件，重建 [PROJECT_INDEX.md](file:///e:/translate/xml-ai-translator-main/PROJECT_INDEX.md)（16 个目录章节 + 全部文件职责索引）
+
+**阶段 2：400 行超标文件拆分（partial class）**
+- **LocalizationManager** → `LocalizationManager.Dicts.En.cs` / `LocalizationManager.Dicts.Zh.cs`（各 666 行纯静态文案字典，作为数据文件例外保留）
+- **MainViewModel** → 10 个 partial（Properties/Undo/Config/Cache/EntryProcessing/Translation/Evaluation/Voting/Consistency）
+- **MainWindow 系列** → Events.File / Events.Translation / Events.Tools / Grid.Sorting / Grid.ContextMenu / Grid.Editing / Handlers / FileOps
+- **SettingsWindow** → Save / Models / Profiles；**GlossaryWindow** → Filter / ImportExport / TermOps
+- **服务层** → AiTranslationService（Models/Providers）、ConfigService（Cache/Scores）、XmlRepository（Models）、TranslationEvaluator（Prompts/Parsing/Utils）、GlossaryManager（Persistence/Index/Conflict/Crud）
+- 修复子代理拆分遗漏的 3 处 using 缺失（System.Windows.Data / Localization / System）
+
+**阶段 3：AI 响应解析收敛**
+- 新建 [AiResponseParser.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiResponseParser.cs)：统一 `StripCodeFence` + `ParseTranslations`（标准 JSON + 三级回退）
+- [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) / [TranslationEvaluator.Parsing.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.Parsing.cs) 统一走 AiResponseParser，删除各自内联/重复解析（含私有 TrimCodeFence）
+- 一致性/冲突检测核对：`ScanConsistencyIssues`（同源译文不一致）与 `DetectConflicts`（术语未按术语表翻译）语义独立，未强行合并
+
+### B. 黑名单：UI 隐藏 + 原文匹配放宽 ✅
+
+**黑名单条目 UI 隐藏（不被选中）**
+- 筛选行新增"隐藏黑名单"开关（默认勾选，[MainWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.xaml)），`ApplyFilter` 过滤 `IsBlacklisted` 条目
+- 因全选/整列/行头选择均基于过滤后视图（`EntriesGrid.Items`），隐藏条目**天然不会被选中**
+- "翻译全部"排除黑名单条目（确认框数字与实际执行一致）；加载/黑名单规则变更后自动应用筛选
+
+**原文匹配从"全串精确"放宽为"精确或后缀"**（[BlacklistManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/BlacklistManager.cs)）
+- 规则 `UNUSED` 现可命中 `Borga Besadii Diori:  UNUSED`（后缀、忽略大小写/空白）、`unused`（忽略大小写）
+- 词在中间的正常文本（`The unused unit remains`）不命中，保留防误伤底线
+- 黑名单窗口文案同步更新为"精确或结尾匹配（忽略大小写）"
+
+### C. 术语注入：匹配放宽 + 提示词语境例外 ✅
+
+**整词匹配放宽**（[GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs)）
+- 正则 `\bJedi\b` → `(?<![A-Za-z0-9])Jedi(?:es|s|'s)?(?![A-Za-z0-9])`：覆盖 `Jedis`、`Jedi's`、`dark_jedi`、`Stormtroopers`（规则 Stormtrooper）
+- 候选阶段补充复数去尾查询（`stormtroopers` → `stormtrooper`），因倒排索引是精确词查询
+- 词内拼接（`JediMaster`、`JedisX`）仍不匹配，避免误伤；每批上限保持 50
+- 影响面：术语注入 + 冲突检测统一放宽，`TryGetValue`（整串直填）不受影响
+
+**提示词从"强制"改为"默认遵循 + 语境冲突例外"**
+- 主注入（TranslationOrchestrator）：`CRITICAL/MUST/EXACT` → `Preferred translations (follow unless the context clearly conflicts)`，新增例外条款（比喻用法/专有名称组合/不同词义时可自然翻译，存疑时优先术语表）
+- 专家配置（[ExpertProfile.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ExpertProfiles/ExpertProfile.cs)）：`MUST/non-negotiable` → `preferred` + 同款例外条款
+- 直填路径（`TryApplyDictionary`/`SmartPreTranslate`）仅整串相等时生效，无语境冲突风险，未改
+
+### D. 大批次翻译失败修复（50 条失败、30 条成功）✅
+
+- **根因**：请求 `max_tokens=4096`（[AiTranslationService.Providers.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.Providers.cs)），50 条中文译文 + JSON 结构易超 4096 token → 输出截断 → JSON 解析 0 条 → 整批失败；且 HttpClient 超时仅 120s，大批次生成常超时
+- **修复 1**：HttpClient 超时 120s → 300s（[AiTranslationService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.cs)）
+- **修复 2**：批次失败自动拆半递归重试（`RetryHalvedAsync`，[TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs)）——空响应/解析 0 条/异常均触发，逐条兜底，无需再手动把 50 改成 30；新增 `LogBatchRetryHalve` 本地化日志
+- **刻意不动 max_tokens**：各模型输出上限不一，改 8192 会让上限 4096 的模型每次请求直接 400；降批兜底更通用
+- 新增 [TranslationOrchestratorTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/TranslationOrchestratorTests.cs)（2 个测试：空响应降批、异常降批；fake 服务模拟多条目失败/单条目成功）
+
+### 验证
+
+- `dotnet test SimpleXmlEditor.sln`：**40/40 通过**（架构重构 36 + 术语注入 2 + 翻译降批 2），0 失败
+- 新增测试：术语匹配宽容 2 个、TranslationOrchestrator 降批 2 个；黑名单/术语表既有测试断言同步更新
+
+### 遗留
+
+- 术语 `y→ies` 变体（`story→stories`）未覆盖，如遇再补
+- 部分成功场景（解析出部分译文）不触发降批，缺失条目不重试，可后续优化
+- "减少失败的小技巧"日志提示仍建议手动降批，与自动降批并存，可后续调整文案
 
 ---
 

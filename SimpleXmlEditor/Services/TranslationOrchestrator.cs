@@ -2,10 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.ExpertProfiles;
 using SimpleXmlEditor.Localization;
@@ -49,30 +46,39 @@ namespace SimpleXmlEditor.Services
 
         // ─── Batch Creation ──────────────────────────────────────
 
+        /// <summary>
+        /// 按"估算输出 token"动态分批，而不是按固定条目数硬切。
+        /// 原因：AI 输出有 max_tokens 上限（4096 或 8192），若一批输出超限，
+        /// 服务端截断 JSON → 解析 0 条 → 拆半重试，时间翻倍甚至多倍。
+        /// 典型文本按 3800 token 预算切批 ≈ 20-30 条/批，一次成功、无重试风暴。
+        /// </summary>
         public List<List<LocalizationEntry>> CreateBatches(
             List<LocalizationEntry> entries, string customPrompt, int batchSize)
         {
+            // 安全输出预算：覆盖 max_tokens=4096 的模型（留 JSON 结构余量），
+            // 8192 模型同样受益——小批输出更快且永不截断。
+            const int maxOutputTokensPerBatch = 3800;
+
             var batches = new List<List<LocalizationEntry>>();
             var currentBatch = new List<LocalizationEntry>();
-            int currentTokens = 0;
-
-            int effectivePromptOverhead = 500; // rough estimate for prompt template
+            int currentOutputTokens = 0;
 
             foreach (var entry in entries)
             {
-                int entryTokens = EstimateTokens(entry.Key) + EstimateTokens(entry.Value) + 10;
+                int entryOutputTokens = EstimateOutputTokens(entry.Value);
 
-                // If adding this entry exceeds the batch size and we already have entries
-                if (currentTokens + entryTokens > effectivePromptOverhead &&
-                    currentBatch.Count > 0 && currentBatch.Count >= batchSize)
+                // 切批：输出预算超限（防截断）或条目数达 batchSize 硬上限
+                if (currentBatch.Count > 0 &&
+                    (currentOutputTokens + entryOutputTokens > maxOutputTokensPerBatch ||
+                     currentBatch.Count >= batchSize))
                 {
                     batches.Add(currentBatch);
                     currentBatch = new List<LocalizationEntry>();
-                    currentTokens = 0;
+                    currentOutputTokens = 0;
                 }
 
                 currentBatch.Add(entry);
-                currentTokens += entryTokens;
+                currentOutputTokens += entryOutputTokens;
             }
 
             if (currentBatch.Count > 0)
@@ -81,9 +87,17 @@ namespace SimpleXmlEditor.Services
             return batches;
         }
 
-        private static int EstimateTokens(string text)
+        /// <summary>估算一条文本翻译成中文后占用的输出 token（含 JSON 条目结构开销）。</summary>
+        private static int EstimateOutputTokens(string text)
         {
-            return string.IsNullOrEmpty(text) ? 1 : text.Length / 4 + 1;
+            // 每条 JSON 条目开销：序号 + 引号 + 冒号 + 换行 ≈ 12 token
+            const int perEntryOverhead = 12;
+            if (string.IsNullOrEmpty(text)) return perEntryOverhead;
+
+            // 中文 1 字符 ≈ 1.2 token；英文 ≈ 4 字符/token（保守估，防截断优先）
+            return text.HasChineseChars()
+                ? (int)(text.Length * 1.2) + perEntryOverhead
+                : text.Length / 4 + perEntryOverhead;
         }
 
         // ─── Batch Translation Core ─────────────────────────────
@@ -159,25 +173,56 @@ namespace SimpleXmlEditor.Services
                 {
                     var batchResults = ParseResponse(response, uncachedEntries);
 
-                    foreach (var kvp in batchResults)
+                    if (batchResults.Count > 0)
                     {
-                        var cacheKey = _configService.GetCacheKey(kvp.Key);
-                        if (cacheKey != null)
-                            _configService.Cache[cacheKey] = kvp.Value;
-                        results[kvp.Key] = kvp.Value;
-                    }
+                        foreach (var kvp in batchResults)
+                        {
+                            var cacheKey = _configService.GetCacheKey(kvp.Key);
+                            if (cacheKey != null)
+                                _configService.Cache[cacheKey] = kvp.Value;
+                            results[kvp.Key] = kvp.Value;
+                        }
 
-                    OnApiCall?.Invoke(1);
-                    OnApiChars?.Invoke(prompt.Length, response.Length);
+                        OnApiCall?.Invoke(1);
+                        OnApiChars?.Invoke(prompt.Length, response.Length);
+                        return results;
+                    }
                 }
+
+                // 响应为空或解析出 0 条：通常是输出 token 超限导致 JSON 截断。
+                // 自动拆半重试，避免大批次（如 50 条）整体失败、只能手动降批量的问题。
+                if (uncachedEntries.Count > 1)
+                    return await RetryHalvedAsync(uncachedEntries, forceRefresh, customPrompt);
 
                 return results;
             }
             catch (Exception ex)
             {
                 Log(LocalizationManager.GetString("TranslationError", ex.Message));
+
+                // 异常（超时 / 400 长度超限）同样拆半重试
+                if (uncachedEntries.Count > 1)
+                    return await RetryHalvedAsync(uncachedEntries, forceRefresh, customPrompt);
+
                 return results;
             }
+        }
+
+        /// <summary>将失败的批次拆成两半递归重试，合并两半结果。</summary>
+        private async Task<Dictionary<string, string>> RetryHalvedAsync(
+            List<LocalizationEntry> entries, bool forceRefresh, string customPrompt)
+        {
+            var half = entries.Count / 2;
+            Log(LocalizationManager.GetString("LogBatchRetryHalve", entries.Count));
+
+            var left = await TranslateBatchAsync(entries.GetRange(0, half), forceRefresh, customPrompt);
+            var right = await TranslateBatchAsync(
+                entries.GetRange(half, entries.Count - half), forceRefresh, customPrompt);
+
+            var merged = new Dictionary<string, string>(left);
+            foreach (var kvp in right)
+                merged[kvp.Key] = kvp.Value;
+            return merged;
         }
 
         // ─── Prompt Building ────────────────────────────────────
@@ -201,15 +246,18 @@ namespace SimpleXmlEditor.Services
             var hasChineseSource = false;
             for (int i = 0; i < entries.Count; i++)
             {
-                var isChinese = HasChineseChars(entries[i].Value);
+                var isChinese = entries[i].Value.HasChineseChars();
                 if (isChinese) hasChineseSource = true;
 
                 // Sanitize text: escape quotes and limit length to prevent prompt injection
+                var safeKey = SanitizePromptText(entries[i].Key);
                 var safeText = SanitizePromptText(entries[i].Value);
                 var tag = isChinese
                     ? " [EXISTING ZH — review & correct, NOT re-translate from scratch]"
                     : "";
-                textsBuilder.AppendLine($"{i + 1}. \"{safeText}\"{tag}");
+                // 方括号内为条目 Key（如 TEXT_SPEECH_* / UNIT_*_DESCRIPTION），
+                // 提供内容类型与场景线索，帮助模型判断语境、保持术语一致。
+                textsBuilder.AppendLine($"{i + 1}. [{safeKey}] \"{safeText}\"{tag}");
             }
 
             prompt = prompt.Replace("{TEXTS}", textsBuilder.ToString().TrimEnd());
@@ -264,22 +312,13 @@ namespace SimpleXmlEditor.Services
                 return "";
 
             var sb = new StringBuilder();
-            sb.AppendLine("\n!! CRITICAL GLOSSARY — Use these EXACT translations for the following terms:");
+            sb.AppendLine("\n!! GLOSSARY — Preferred translations (follow unless the context clearly conflicts):");
             foreach (var term in relevantTerms)
                 sb.AppendLine($"  \"{term.Key}\" = \"{term.Value}\"");
-            sb.AppendLine("When these terms appear in ANY translated text, you MUST use the glossary translation above.");
+            sb.AppendLine("When these terms appear in the text, use the glossary translation by default to keep terminology consistent.");
+            sb.AppendLine("EXCEPTION: if a term is clearly used with a different meaning in this specific context (figurative use, part of a proper name, or a different sense), translate it naturally for that context instead. When in doubt, prefer the glossary translation.");
 
             return sb.ToString();
-        }
-
-        private static bool HasChineseChars(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return false;
-            foreach (char c in text)
-            {
-                if (c >= 0x4E00 && c <= 0x9FFF) return true;
-            }
-            return false;
         }
 
         // ─── Response Parsing ───────────────────────────────────
@@ -287,103 +326,13 @@ namespace SimpleXmlEditor.Services
         private Dictionary<string, string> ParseResponse(string response, List<LocalizationEntry> entries)
         {
             var results = new Dictionary<string, string>();
-
-            try
+            var parsed = AiResponseParser.ParseTranslations(response, entries.Count);
+            foreach (var kvp in parsed)
             {
-                var clean = response.Trim();
-                if (clean.StartsWith("```json"))
-                    clean = clean[7..];
-                if (clean.EndsWith("```"))
-                    clean = clean[..^3];
-                clean = clean.Trim();
-
-                var json = JObject.Parse(clean);
-                var translations = json["translations"] as JArray;
-
-                if (translations != null)
-                {
-                    foreach (var t in translations)
-                    {
-                        var idx = t["index"]?.ToObject<int>() ?? 0;
-                        var text = t["translation"]?.ToString()?.Trim();
-                        if (idx > 0 && idx <= entries.Count && !string.IsNullOrEmpty(text))
-                            results[entries[idx - 1].Value] = text;
-                    }
-                }
+                if (kvp.Key >= 1 && kvp.Key <= entries.Count)
+                    results[entries[kvp.Key - 1].Value] = kvp.Value;
             }
-            catch (Exception ex)
-            {
-                Log(LocalizationManager.GetString("LogParseError", ex.Message));
-                ParseFallback(response, entries, results);
-            }
-
             return results;
-        }
-
-        private void ParseFallback(string response, List<LocalizationEntry> entries, Dictionary<string, string> results)
-        {
-            var clean = response.Trim();
-            if (clean.StartsWith("```json")) clean = clean[7..];
-            if (clean.EndsWith("```")) clean = clean[..^3];
-            clean = clean.Trim();
-
-            // Strategy 1: Extract JSON fragment
-            var jsonStart = clean.IndexOf('{');
-            var jsonEnd = clean.LastIndexOf('}');
-            if (jsonStart >= 0 && jsonEnd > jsonStart)
-            {
-                try
-                {
-                    var jsonStr = clean[jsonStart..(jsonEnd + 1)];
-                    var jsonResponse = JObject.Parse(jsonStr);
-                    var translations = jsonResponse["translations"] as JArray;
-                    if (translations != null)
-                    {
-                        foreach (var t in translations)
-                        {
-                            var idx = t["index"]?.ToObject<int>() ?? 0;
-                            var text = t["translation"]?.ToString()?.Trim();
-                            if (idx > 0 && idx <= entries.Count && !string.IsNullOrEmpty(text))
-                                results[entries[idx - 1].Value] = text;
-                        }
-                        return;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Fallback JSON fragment parse failed: {ex.Message}");
-                }
-            }
-
-            // Strategy 2: Regex for "N. \"translation\"" pattern
-            var lines = clean.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-            var regex = new Regex(@"(\d+)[\.\s]\s*[""""](.+?)[""""]");
-            foreach (var line in lines)
-            {
-                var match = regex.Match(line.Trim());
-                if (match.Success && int.TryParse(match.Groups[1].Value, out var idx))
-                {
-                    var text = match.Groups[2].Value.Trim();
-                    if (idx > 0 && idx <= entries.Count && !string.IsNullOrEmpty(text))
-                        results[entries[idx - 1].Value] = text;
-                }
-            }
-
-            // Strategy 3: Line-by-line parsing
-            if (results.Count == 0)
-            {
-                for (int i = 0; i < Math.Min(lines.Length, entries.Count); i++)
-                {
-                    var line = lines[i].Trim();
-                    line = line.Replace($"{i + 1}.", "").Replace("-", "").Trim();
-                    if (line.StartsWith("\"") && line.EndsWith("\""))
-                        line = line[1..^1];
-                    if (line.StartsWith("\u201C") && line.EndsWith("\u201D"))
-                        line = line[1..^1];
-                    if (!string.IsNullOrEmpty(line) && !line.Contains("{") && !line.Contains("}") && !line.Contains("index"))
-                        results[entries[i].Value] = line;
-                }
-            }
         }
     }
 }

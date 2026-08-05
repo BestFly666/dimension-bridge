@@ -12,6 +12,7 @@ IMPORTANT RULES:
 5. Return translations in the exact JSON format shown below
 6. DO NOT include any explanations, comments, or extra text outside the JSON
 7. Ensure all translations are properly escaped with double quotes
+8. Each input line is: index. [KEY] ""original text"" — the [KEY] (e.g. TEXT_SPEECH_*, UNIT_*_DESCRIPTION) is the entry identifier and contains context hints about the entry type/usage. Use it only to understand context; NEVER include the key in the translation.
 
 {EXPERT_CONTEXT}
 
@@ -19,7 +20,7 @@ IMPORTANT RULES:
 
 Context: {CONTEXT}
 
-Input texts to translate:
+Input texts to translate (format: index. [KEY] ""text""):
 {TEXTS}
 
 Return your translations in this exact JSON format:

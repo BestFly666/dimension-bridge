@@ -67,6 +67,7 @@
             <!-- Tools -->
             <MenuItem Name="MenuTools" Header="🔧 Tools">
                 <MenuItem Name="MenuGlossary" Header="📖 Glossary" Click="GlossaryBtn_Click"/>
+                <MenuItem Name="MenuBlacklist" Header="🚫 Blacklist" Click="BlacklistBtn_Click"/>
                 <MenuItem Name="MenuStatistics" Header="📊 Statistics" Click="StatsBtn_Click"/>
                 <Separator/>
                 <MenuItem Name="MenuClearDict" Header="🗑️ Clear Glossary" Click="ClearDictBtn_Click"/>
@@ -246,6 +247,9 @@
                             <CheckBox Name="UntranslatedToggle" Content="Untranslated"
                                       VerticalAlignment="Center" Margin="6,0,0,0"
                                       Click="UntranslatedToggle_Click" FontSize="12"/>
+                            <CheckBox Name="HideBlacklistToggle" Content="Hide Blacklist" IsChecked="True"
+                                      VerticalAlignment="Center" Margin="10,0,0,0"
+                                      Click="HideBlacklistToggle_Click" FontSize="12"/>
                         </StackPanel>
                         <hc:TextBox Grid.Column="1" Name="FilterKeyBox" Margin="2" Padding="7,5" FontSize="13"
                                     hc:InfoElement.Placeholder="筛选 Key…" hc:InfoElement.ShowClearButton="True"

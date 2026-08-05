@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using SimpleXmlEditor.Dictionary;
+using SimpleXmlEditor.Services;
 using Xunit;
 
 namespace SimpleXmlEditor.Tests
@@ -54,6 +56,45 @@ namespace SimpleXmlEditor.Tests
             manager.SetEntry("B", "乙");
             Assert.Equal(2, manager.Count);
             
+            manager.Clear();
+        }
+
+        [Fact]
+        public void ContainsWholeWord_PluralAndUnderscoreVariants_Matches()
+        {
+            // 复数/所有格/下划线变体应命中
+            Assert.True(GlossaryManager.ContainsWholeWord("The Jedis attack", "Jedi"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Jedi's lightsaber", "Jedi"));
+            Assert.True(GlossaryManager.ContainsWholeWord("dark_jedi", "Jedi"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Stormtroopers marching", "Stormtrooper"));
+            Assert.True(GlossaryManager.ContainsWholeWord("three boxes", "box"));
+
+            // 词内拼接不命中，避免误伤
+            Assert.False(GlossaryManager.ContainsWholeWord("JediMaster", "Jedi"));
+            Assert.False(GlossaryManager.ContainsWholeWord("JedisX", "Jedi"));
+            Assert.False(GlossaryManager.ContainsWholeWord("xJedi", "Jedi"));
+        }
+
+        [Fact]
+        public void GetGlossaryContextTerms_PluralAndUnderscore_FindsTerms()
+        {
+            var manager = new GlossaryManager();
+            manager.Clear();
+            manager.SetEntry("Stormtrooper", "暴风兵");
+            manager.SetEntry("Jedi", "绝地");
+            manager.SetEntry("Box", "箱子");
+
+            var entries = new List<LocalizationEntry>
+            {
+                new LocalizationEntry { Key = "K1", Value = "The Stormtroopers and dark_jedi carry three boxes" }
+            };
+
+            var terms = manager.GetGlossaryContextTerms(entries);
+
+            Assert.Contains("Stormtrooper", terms.Keys);
+            Assert.Contains("Jedi", terms.Keys);
+            Assert.Contains("Box", terms.Keys);
+            Assert.Equal("暴风兵", terms["Stormtrooper"]);
             manager.Clear();
         }
     }

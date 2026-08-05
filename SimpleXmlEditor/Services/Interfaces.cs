@@ -57,10 +57,11 @@ namespace SimpleXmlEditor.Services
         void SaveConfig();
         void SaveCache();
         void SaveScoreCache();
+        void ClearScoreCache();
         void SyncScoresToCache(IEnumerable<LocalizationEntry> entries);
         int RestoreScores(IEnumerable<LocalizationEntry> entries);
         void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries);
-        void SaveTranslationProgress(IEnumerable<LocalizationEntry> entries);
+        Task SaveTranslationProgressAsync(IEnumerable<LocalizationEntry> entries);
         Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries);
         int RestoreTranslationProgress(IEnumerable<LocalizationEntry> entries);
         void DeleteProgressFile();
@@ -111,6 +112,40 @@ namespace SimpleXmlEditor.Services
         void DeleteProfile(string name);
         ExpertProfile GetProfile(string name);
         void EnsureDefaultsExist();
+    }
+
+    /// <summary>
+    /// 黑名单规则管理：两种匹配方式，命中即跳过翻译（不调用 API）。
+    /// 1. Key 前缀匹配：Key 以任一前缀开头（Ordinal 大小写敏感）。
+    /// 2. 原文精确匹配：原文文本与任一值完全相等（Ordinal 精确比较，避免误过滤）。
+    /// 规则全局生效，持久化到 AppData 的 blacklist.json。
+    /// </summary>
+    public interface IBlacklistManager
+    {
+        /// <summary>当前 Key 前缀规则列表（只读视图）。</summary>
+        IReadOnlyList<string> Prefixes { get; }
+        /// <summary>当前原文精确匹配规则列表（只读视图）。</summary>
+        IReadOnlyList<string> ExactOriginalTexts { get; }
+        /// <summary>规则总数（前缀 + 原文）。</summary>
+        int Count { get; }
+        event Action<string> LogMessage;
+
+        /// <summary>按 Key 前缀判断是否命中黑名单。</summary>
+        bool IsBlocked(string key);
+        /// <summary>按 Key 前缀 + 原文精确匹配判断是否命中（任一命中即 true）。</summary>
+        bool IsBlocked(string key, string originalText);
+        /// <summary>新增前缀规则（去重）。返回是否实际新增。</summary>
+        bool AddPrefix(string prefix);
+        /// <summary>删除前缀规则。返回是否实际删除。</summary>
+        bool RemovePrefix(string prefix);
+        /// <summary>新增原文精确匹配规则（去重）。返回是否实际新增。</summary>
+        bool AddExactOriginalText(string text);
+        /// <summary>删除原文精确匹配规则。返回是否实际删除。</summary>
+        bool RemoveExactOriginalText(string text);
+        /// <summary>清空全部规则并持久化。</summary>
+        void Clear();
+        void Load();
+        void Save();
     }
 
     public interface ITranslationEvaluator
