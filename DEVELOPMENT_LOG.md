@@ -15,6 +15,193 @@
 
 ---
 
+## 2026-08-06（续 2）— 大批量卡顿根治 + 术语匹配宽容 + DataGrid 打磨 + THR 汉化落地
+
+> 背景：用户反馈"批次多了还是很卡（每批 50、并发 100，到第 100 批次基本卡死）"；术语表"差个空格/标点/单词就匹配不到"（`Procursator Star Destroyer` ↔ `Procursator-class Star Destroyer`）；并推进 THR mod 汉化的 DAT 读写落地。以代码审查员 + AI 工程师 + 后端架构师身份处理。
+
+### A. 大批量卡顿根治：UI 消息风暴 → 合并渲染
+
+**问题**：上一轮已修"进度保存风暴"（节流+合并），但批次多了仍卡死。全链路复查定位到**两个遗留瓶颈**：
+
+1. **UI 消息风暴（主因）**：[MainWindow.Handlers.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Handlers.cs#L23-L34) 每批完成产生 **6 个 `Dispatcher.BeginInvoke` 回调**（日志 ×4 + 进度 ×1 + 状态 ×1），WPF Dispatcher 队列**无合并、无积压上限**。100 批 = 600+ 回调排队：
+   - 每个 `AddLog` 全量重建 30KB 字符串 + 全文重排 + `ScrollToEnd`
+   - 每个进度回调更新 5 个 TextBlock（`UpdateProgressDisplay`）
+   - UI 线程处理速度 < 后台产生速度 → 队列无限增长 → **批次越多越卡**
+2. **进度保存无限追赶（次因）**：[MainViewModel.Translation.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Translation.cs#L65-L92) 的 `while(pending)` 循环在批完成密集时持续全量序列化 5000+ 条 + 写文件，`Task.Run` 线程与 CPU/IO 持续被占
+
+**修复**：
+- **UI 合并渲染**：高频事件（日志/状态/进度）后台线程**只入队/存最新值**，不再逐个 `BeginInvoke`；新增 `_uiFlushTimer`（250ms）在 UI 线程**合并渲染一次**（日志合并 append、状态/进度用最新值）；`TranslationFinished` 兜底 flush
+  - 文件：`MainWindow.xaml.cs`（字段+定时器）/ `MainWindow.Handlers.cs`（订阅改入队）/ `MainWindow.Helpers.cs`（`AddLog` 入队 + `FlushPendingUi`）
+  - 每批 6 个回调 → 每 250ms 合并 1 次渲染，UI 工作量降约 95%
+- **进度保存 2s 最小间隔**：距上次落盘 <2s 的保存直接跳过；最终由 `SaveCache` / `SaveProgressFinalAsync` 兜底，进度不丢
+  - 文件：`MainViewModel.Translation.cs`
+- 保留：低频关键事件（开始/结束/错误/确认框）仍立即处理，交互无延迟感
+
+### B. 术语匹配宽容机制（无需穷举变体）
+
+**问题**：术语匹配把术语当精确字面 token，差一个空格/标点（`Star-Destroyer` ↔ `Star Destroyer`）、差一个修饰词（`Procursator Star Destroyer` ↔ `Procursator-class Star Destroyer`）都匹配不到。
+
+**修复**：[GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs#L45-L119) 的 `GetOrCreateRegex` 重构为**分词构建**：
+- **分隔符互换**：术语中 空格/连字符/下划线/斜杠/句点 → `[\s\-/_.]+`（一个或多个，可互换）
+- **撇号双向可选**：普通字符后允许插入可选撇号；术语中撇号本身可选（`Hutt's` ↔ `Hutts` 两个方向都覆盖）
+- **修饰词宽容**（白名单：class/mark/mk/type/series/version/model/variant/generation/prototype/standard）：
+  - 分隔符处允许插入一个可选修饰词（`Procursator Star Destroyer` ↔ `Procursator-class Star Destroyer`）
+  - 术语本身的修饰词 token 也可选（`Executor-class Star Dreadnought` ↔ `Executor Star Dreadnought`，双向）
+  - 结构细节：修饰词**不吞尾随分隔符**；前导分隔符必选、尾随分隔符可选——避免可选分组与相邻必选分隔符竞争同一字符导致回溯失败
+- 保留：词边界 + 复数/所有格后缀（`Jedi` ↔ `Jedis`/`Jedi's`/`dark_jedi`）；**词内拼接不匹配**（`StarDestroyer` ≠ `Star Destroyer`）、非修饰词插入不匹配（`Jedi High Council` ≠ `Jedi Council`）防误伤
+
+**关键 bug**：`ContainsWholeWord` 的 `term.Length > text.Length` 预检——术语含 `-class` 时比原文长，直接返回 false，而正则本身能匹配（调试打印确认 `match=True`）。**移除该预检**（快速失败条件与"术语含可选成分"语义冲突）。
+
+**文件**：`GlossaryManager.Index.cs` / `GlossaryManagerTests.cs`（新增 2 个测试方法）
+
+### C. DataGrid 交互打磨
+
+- **删除左上角九宫格全选按钮**：`EntriesGrid_Loaded` 中用默认模板 `FindName("SelectAllButton")` + `Visibility=Collapsed`（[MainWindow.Grid.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Grid.cs#L81-L99)），**不动列结构**避免列偏移（此前改 `HeadersVisibility`/新增行号列导致列字母错位，已回退）
+- **行头加宽**：`RowHeaderWidth=70`（约 2.5 倍，[MainWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.xaml)）
+- **选中颜色统一**：逻辑选择高亮背景统一为 `{DynamicResource PrimaryBrush}` 渐变蓝（与整列/全选一致），并补 `Foreground=WhiteBrush` 保证可读
+- **代码去重**：`SelectAllEntries` / `SelectEntireColumn` 提取公共 `ApplyLogicalSelection`
+
+### D. THR mod 汉化落地（Alamo DAT 读写）
+
+- **DAT 读写**：`scripts/datlib.py` 兼容读写 THR 的 Alamo DAT（UTF-16LE + CRC32 索引，与重制版一致，读回验证通过）
+- **中文 DAT 生成**：`MasterTextFile_ENGLISH.dat`（25288 条中文）写入；清理 22 处手写换行（`\n` → 空格，引擎自动折行）；原版英文备份 `.bak`
+- **Credits 提取**：`CreditsText_ENGLISH.DAT` → XML（315 条）
+- **XML 格式转换**：datlib 导出格式（`TranslationData` 根，无中间层）与翻译软件期望的官方格式（`LocalisationData > Localisation > TranslationData > Translation` CDATA）不兼容 → 转换脚本修复导入问题
+
+### 验证
+
+- `dotnet test`：**42 个测试全部通过**（0 失败）
+- `dotnet build`：0 错误 0 警告
+
+### 经验教训
+
+1. **BeginInvoke 不合并也会卡死**：异步不阻塞后台线程，但无节流的异步排队会在 UI 处理不过来的场景下无限积压。高频 UI 更新必须"入队 + 定时合并渲染"（250ms 粒度对进度类 UI 足够）
+2. **快速失败预检要复审**：`term.Length > text.Length` 这类预检在"术语可含可选成分（修饰词）"的语义下不成立——正则能匹配的输入不能被预检短路
+3. **可选正则分组要管理自己的分隔符边界**：可选修饰词若与相邻必选分隔符竞争同一字符，回溯无法同时满足；前导分隔符必选 + 尾随分隔符可选，才覆盖双向省略
+4. **隐藏 DataGrid 功能按钮优先模板查找**：改 `HeadersVisibility`/列结构会连带影响列序号、行号、列字母映射，副作用大；模板 `FindName` + `Collapsed` 是零副作用方案
+
+---
+
+## 2026-08-06（续）— 产品战略讨论：竞品分析 / 定位 / 上下文一致性 / 版权
+
+> 背景：用户看到 LunaTranslator 项目后产生"项目没有优势"的焦虑。以产品经理 + AI 工程师 + 技术文档工程师身份进行战略讨论。
+
+### A. 竞品分析：LunaTranslator vs 本项目
+
+**LunaTranslator**（HIllya51，GPLv3，C++/Python，4500+ commits，69 releases）：
+- 视觉小说实时翻译器（HOOK 内存提取 / OCR / 内嵌翻译）
+- 用户：个人玩家（玩日语 galgame 边玩边翻）
+- 核心价值：让不懂日语的人能玩
+
+**本项目**：
+- 游戏本地化批量翻译工具（XML 文件加载 / AI 批量翻译 / 导出）
+- 用户：汉化组成员（把几万条文本翻译成中文并发布）
+- 核心价值：让汉化组高效产出高质量汉化版
+
+**结论**：不在同一赛道。LunaTranslator 解决"看懂"，本项目解决"发布"。两个需求长期并存。
+
+### B. 本项目的差异化护城河
+
+| 能力 | LunaTranslator | 本项目 |
+|---|---|---|
+| 批量翻译工作流（分批/缓存/断点续传） | 无 | ✅ |
+| 术语表管理 + 冲突检测 | 无 | ✅ |
+| AI 质量评估 + 多代理投票 | 无 | ✅ |
+| 翻译缓存去重 | 无 | ✅ |
+| 专家配置文件（按游戏类型定制） | 无 | ✅ |
+| 黑名单过滤 | 无 | ✅ |
+| 导出游戏可用 XML/DAT | 无（内嵌显示） | ✅ |
+
+### C. AI 趋势对汉化组的影响
+
+```
+过去：人工逐条翻译（汉化组 = 翻译者）
+现在：AI 批量翻译 + 人工审校（汉化组 = 审校者）
+未来：AI 翻译质量更高 + 人工只需抽检（汉化组 = 质量把控者）
+```
+
+**关键洞察**：AI 越强，审校工作流越重要——汉化组对工具的依赖反而增加。本项目应顺应"从翻译者变审校者"趋势。
+
+### D. 本地模型方案讨论（待推进）
+
+**用户需求**：21487 条全量翻译 ~13 小时，API 端并发生成限制为硬瓶颈。
+
+**方案**：Python FastAPI + vLLM 独立服务，暴露 OpenAI 兼容接口，WPF 端零改动（已支持 OpenAI 兼容格式）。
+
+```
+xml-ai-translator-main/
+├── SimpleXmlEditor/           # WPF .NET 8（不改）
+├── LocalModelServer/          # Python FastAPI + vLLM（新增，独立）
+│   ├── server.py              # OpenAI 兼容接口
+│   ├── requirements.txt
+│   └── start.bat              # 一键启动
+└── SimpleXmlEditor.Tests/
+```
+
+**前提**：需要独立 GPU（7B 需 6GB+，14B 需 12GB+）。**状态**：待用户确认 GPU 配置后决定是否推进。
+
+### E. 超长上下文翻译一致性分析
+
+**当前 prompt 注入机制**：
+
+| 层级 | 机制 | 作用范围 | 解决什么 |
+|---|---|---|---|
+| 全局 | 专家配置（世界观/角色/风格） | 每批都注入 | 基调一致 |
+| 全局 | 术语表（按原文匹配） | 每批按需注入 | 术语一致 |
+| 批内 | 30 条同批互为上下文 | 单批次 | 短程连贯 |
+| 单条 | Key 注入（TEXT_SPEECH_*/UNIT_*） | 每条 | 场景语境 |
+| 单条 | [EXISTING ZH] 标记 | 每条 | 中文源审校 |
+
+**未解决**：跨批次上下文断裂（第 1 批和第 100 批无关联）。
+
+**评估**：对游戏本地化场景**够用**——大部分条目是 UI/技能/物品描述（自包含），术语表覆盖了全局一致性需求。
+
+**改善方案排序（按 ROI）**：
+1. **低成本**：分批前按 Key 前缀排序，同章节条目自然分到同一批（一行代码）
+2. **中成本**：每批 prompt 末尾附加前一批摘要（3-5 条 Key+译文作为 few-shot）
+3. **高成本（不推荐）**：RAG——向量数据库存储已翻译条目，每批检索语义相关历史译文。ROI 低：25000 条中仅 ~10% 对话类条目可能受益，术语表已覆盖核心一致性需求
+
+### F. RAG 为什么 ROI 低
+
+| RAG 要加的 | 成本 |
+|---|---|
+| Embedding API（25000 条 × 1 次调用） | 调用费用 + 延迟 |
+| 向量库（ChromaDB/FAISS） | 新依赖 + 数据库文件 |
+| 每批翻译前检索 top-K | 每批 +1 次查询 |
+| 检索结果拼进 prompt | 增加 token 消耗 |
+| 每批翻译完增量写入 | 额外 IO |
+
+**收益**：仅 ~10% 对话类条目可能受益，术语表已解决最关键的全局术语一致性。**结论**：方案 1（Key 排序）一行代码覆盖 80% 需求。
+
+### G. 实时翻译工具为什么不能靠缓存解决上下文
+
+- **延迟约束**：带上下文 = prompt 变长 = API 响应变慢，实时体验崩
+- **成本爆炸**：每次请求多发 N 句上下文，几十万字 = token 翻几倍
+- **非线性对话**：游戏有分支/存档/读档，缓存记录的线性上下文可能失效
+- **缓存淘汰**：局部上下文 ≠ 全局一致性
+
+**结论**：实时翻译的延迟约束与上下文一致性本质矛盾。批量翻译天然适合带上下文——这是本项目存在的理由。
+
+### H. LICENSE 版权更新
+
+LICENSE 文件版权声明从 `Copyright (c) 2025 Veloxcity` 更新为 `Copyright (c) 2025 Veloxcity, 2026 BestFly666`。
+
+**数据**：初始 9710 行（原作者），用户新增 17030 行，删除 6880 行。用户贡献占比约 65%，但约 2830 行仍为原作者代码骨架（XML 解析、翻译调用基础结构、UI 布局）。
+
+**建议**：README 署名从"基于 Veloxcity 的原始项目扩展维护"改为"最初基于 Veloxcity 项目，经大规模重构与扩展"。当 XmlRepository 和 AiTranslationService 基础逻辑全部重写后，可改为"灵感来源于 Veloxcity"。
+
+### 决策记录
+
+| 议题 | 决策 | 理由 |
+|---|---|---|
+| LunaTranslator 竞争 | 不构成威胁 | 不同赛道，不同用户 |
+| 本地模型 | 待用户确认 GPU 后推进 | Python 独立服务，WPF 零改动 |
+| 长上下文 | 不做 RAG，可选 Key 排序 | ROI 低，术语表已覆盖核心需求 |
+| 路线图方向 | 从"AI 翻译工具"进化为"AI 翻译 + 审校工作流" | 顺应汉化组角色转变趋势 |
+| 版权 | LICENSE 加 BestFly666，README 改措辞 | 法律合规 + 道德准确 |
+
+---
+
 ## 2026-08-06 — 翻译速度优化（分批/并发/Key注入）+ 本地模型方案讨论
 
 > 背景：用户反馈"翻译速度慢，大批次时特别慢"、"3 路并发感觉一批批处理"。按代码审查员 + AI 工程师身份审查翻译流水线全链路。

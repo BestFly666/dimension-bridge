@@ -21,11 +21,14 @@ namespace SimpleXmlEditor
     public partial class MainWindow
     {
         /// <summary>
-        /// Excel 式逻辑选择模型：全选/选中整列时只记录标志 + 仅高亮可见行，
-        /// 业务读取时按标志返回全部行（毫秒级，不受数据量影响）。
+        /// Excel 式逻辑选择模型：全选/整列/行范围 只记录标志 + 仅高亮可见行，
+        /// 业务读取时按标志返回选中行（毫秒级，不受数据量影响）。
+        /// 行范围模式（Shift 拖拽/Shift+点击）记录 [lo, hi] 索引，避免逐个 Add cell 的 O(n×m) 卡顿。
         /// </summary>
         private bool _logicalSelectAll = false;
         private DataGridColumn _logicalSelectColumn = null;
+        private int _logicalSelectRangeLo = -1;
+        private int _logicalSelectRangeHi = -1;
         /// <summary>当前被静默勾选（IsSelected=true）的行，用于清理时快速还原，始终与勾选状态同步。</summary>
         private readonly List<LocalizationEntry> _rowHeaderSelected = new();
 
@@ -37,6 +40,18 @@ namespace SimpleXmlEditor
                 return EntriesGrid.Items.Cast<LocalizationEntry>()
                     .Where(e => !string.IsNullOrEmpty(e.Key))
                     .ToList();
+            }
+
+            // 行范围模式：Shift 拖拽/Shift+点击选中的连续行
+            if (_logicalSelectRangeLo >= 0)
+            {
+                var result = new List<LocalizationEntry>(_logicalSelectRangeHi - _logicalSelectRangeLo + 1);
+                for (int i = _logicalSelectRangeLo; i <= _logicalSelectRangeHi; i++)
+                {
+                    if (EntriesGrid.Items[i] is LocalizationEntry e && !string.IsNullOrEmpty(e.Key))
+                        result.Add(e);
+                }
+                return result;
             }
 
             var set = new HashSet<LocalizationEntry>();
@@ -65,8 +80,22 @@ namespace SimpleXmlEditor
 
         private void EntriesGrid_Loaded(object sender, RoutedEventArgs e)
         {
+            HideSelectAllButton(); // 隐藏左上角九宫格全选按钮（仅此按钮，不影响列结构）
             AttachColumnHeaderEvents();
             GetRowsPanel(); // 预热虚拟化面板引用（需在加载完成后获取）
+        }
+
+        /// <summary>
+        /// 隐藏 DataGrid 左上角的九宫格全选按钮（SelectAllButton）。
+        /// 默认模板中该按钮位于行头与列头交汇的角落，通过模板 FindName 找到并折叠，
+        /// 不动 HeadersVisibility/列结构，避免任何偏移。
+        /// </summary>
+        private void HideSelectAllButton()
+        {
+            if (EntriesGrid.Template?.FindName("SelectAllButton", EntriesGrid) is Button btn)
+            {
+                btn.Visibility = Visibility.Collapsed;
+            }
         }
 
         // ===== 行头 Excel 式整行选择 =====
@@ -79,7 +108,12 @@ namespace SimpleXmlEditor
         private void EntriesGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             var header = FindVisualAncestor<DataGridRowHeader>(e.OriginalSource as DependencyObject);
-            if (header == null) return;
+            if (header == null)
+            {
+                // 用户手动点击单元格（非行头）→ 退出逻辑选择模式，清理遗留高亮
+                ExitLogicalSelection();
+                return;
+            }
 
             var row = ItemsControl.ContainerFromElement(EntriesGrid, header) as DataGridRow;
             if (row?.Item is not LocalizationEntry)
@@ -92,9 +126,11 @@ namespace SimpleXmlEditor
             EntriesGrid.Focus();
 
             _rowHeaderSelecting = true;
-            var wasLogical = _logicalSelectAll || _logicalSelectColumn != null;
+            var wasLogical = _logicalSelectAll || _logicalSelectColumn != null || _logicalSelectRangeLo >= 0;
             _logicalSelectAll = false;
             _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
             // 从逻辑全选/整列转入行头选择：清掉之前静默勾选的所有行
             if (wasLogical)
             {
@@ -145,6 +181,35 @@ namespace SimpleXmlEditor
             _rowHeaderSelecting = false;
         }
 
+        /// <summary>
+        /// 退出逻辑选择模式（全选/整列/范围），清理遗留高亮，只保留当前单元格。
+        /// 仅在用户真正手动点击单元格时调用（PreviewMouseLeftButtonDown 非行头分支）。
+        /// </summary>
+        private void ExitLogicalSelection()
+        {
+            if (!(_logicalSelectAll || _logicalSelectColumn != null || _logicalSelectRangeLo >= 0)) return;
+
+            _logicalSelectAll = false;
+            _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
+
+            ClearAllHighlight();
+
+            var current = EntriesGrid.CurrentCell;
+            _suppressSelectionChanged = true;
+            try
+            {
+                EntriesGrid.SelectedCells.Clear();
+                if (current.IsValid && current.Item is LocalizationEntry)
+                    EntriesGrid.SelectedCells.Add(current);
+            }
+            finally
+            {
+                _suppressSelectionChanged = false;
+            }
+        }
+
         /// <summary>选中 [lo, hi] 行区间（整行所有列），Excel 行头拖拽/Shift 语义。</summary>
         private void SelectRowRange(int a, int b)
         {
@@ -152,40 +217,117 @@ namespace SimpleXmlEditor
             var hi = Math.Max(a, b);
             if (lo < 0 || hi >= EntriesGrid.Items.Count) return;
 
-            var columns = EntriesGrid.Columns.ToList();
-            if (columns.Count == 0) return;
+            // Excel 式范围选择：只记录 [lo, hi] 标志 + 数据驱动高亮范围内行
+            _logicalSelectRangeLo = lo;
+            _logicalSelectRangeHi = hi;
+            _logicalSelectAll = false;
+            _logicalSelectColumn = null;
+            LogicalSelectColumnIndex = -1;
 
             _suppressSelectionChanged = true;
+            _suppressSelectionSync = true;
             try
             {
                 EntriesGrid.SelectedCells.Clear();
-                for (int i = lo; i <= hi; i++)
-                {
-                    var entry = EntriesGrid.Items[i];
-                    foreach (var col in columns)
-                        EntriesGrid.SelectedCells.Add(new DataGridCellInfo(entry, col));
-                }
+                SetHighlightRange(lo, hi);
             }
             finally
             {
                 _suppressSelectionChanged = false;
-            }
-
-            // 同步 IsSelected（静默，不触发 UI 联动）：让"翻译选中"等按复选框读取的入口拿到选中行
-            foreach (var en in _rowHeaderSelected)
-                en.SetIsSelectedSilent(false);
-            _rowHeaderSelected.Clear();
-            for (int i = lo; i <= hi; i++)
-            {
-                if (EntriesGrid.Items[i] is LocalizationEntry en)
-                {
-                    en.SetIsSelectedSilent(true);
-                    _rowHeaderSelected.Add(en);
-                }
+                _suppressSelectionSync = false;
             }
 
             EntriesGrid.ScrollIntoView(EntriesGrid.Items[hi]);
             StatusText.Text = $"{LocalizationManager.GetString("SelectedCount")}: {hi - lo + 1}";
+        }
+
+        // ===== 数据驱动逻辑高亮 =====
+        // 视觉高亮走 LocalizationEntry.IsHighlighted + RowStyle DataTrigger：
+        // 高亮是数据属性，虚拟化滚动时行容器重建，绑定自动恢复，无需滚动补选。
+        private int _highlightLo = -1;
+        private int _highlightHi = -1;
+        private bool _highlightAll = false;
+
+        /// <summary>清除所有逻辑高亮标志（全选/整列/范围）。</summary>
+        private void ClearAllHighlight()
+        {
+            LogicalSelectColumnIndex = -1;
+            if (_highlightAll)
+            {
+                foreach (var item in EntriesGrid.Items)
+                    if (item is LocalizationEntry en && en.IsHighlighted)
+                        en.IsHighlighted = false;
+                _highlightAll = false;
+            }
+            if (_highlightLo >= 0)
+            {
+                for (int i = _highlightLo; i <= _highlightHi; i++)
+                    SetEntryHighlight(i, false);
+                _highlightLo = -1;
+                _highlightHi = -1;
+            }
+        }
+
+        /// <summary>高亮所有行（全选/整列）。</summary>
+        private void HighlightAllRows()
+        {
+            if (_highlightAll) return;
+            if (_highlightLo >= 0)
+            {
+                for (int i = _highlightLo; i <= _highlightHi; i++)
+                    SetEntryHighlight(i, false);
+                _highlightLo = -1;
+                _highlightHi = -1;
+            }
+            foreach (var item in EntriesGrid.Items)
+                if (item is LocalizationEntry en)
+                    en.IsHighlighted = true;
+            _highlightAll = true;
+        }
+
+        /// <summary>增量设置 [lo, hi] 行高亮（拖拽扩展时只更新变化部分，性能优化）。</summary>
+        private void SetHighlightRange(int lo, int hi)
+        {
+            if (_highlightAll)
+            {
+                foreach (var item in EntriesGrid.Items)
+                    if (item is LocalizationEntry en && en.IsHighlighted)
+                        en.IsHighlighted = false;
+                _highlightAll = false;
+            }
+            if (_highlightLo >= 0)
+            {
+                for (int i = _highlightLo; i <= _highlightHi; i++)
+                    if (i < lo || i > hi)
+                        SetEntryHighlight(i, false);
+            }
+            for (int i = lo; i <= hi; i++)
+            {
+                if (_highlightLo >= 0 && i >= _highlightLo && i <= _highlightHi) continue;
+                SetEntryHighlight(i, true);
+            }
+            _highlightLo = lo;
+            _highlightHi = hi;
+        }
+
+        private void SetEntryHighlight(int index, bool value)
+        {
+            if (index < 0 || index >= EntriesGrid.Items.Count) return;
+            if (EntriesGrid.Items[index] is LocalizationEntry en && en.IsHighlighted != value)
+                en.IsHighlighted = value;
+        }
+
+        /// <summary>重置选择与高亮状态（加载/清空文件时调用，防止旧数据残留）。</summary>
+        private void ResetSelectionState()
+        {
+            _logicalSelectAll = false;
+            _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
+            _highlightLo = -1;
+            _highlightHi = -1;
+            _highlightAll = false;
+            LogicalSelectColumnIndex = -1;
         }
 
         /// <summary>把所有行的勾选状态（IsSelected）静默设置为 selected，并同步维护 _rowHeaderSelected。</summary>
@@ -207,6 +349,15 @@ namespace SimpleXmlEditor
         {
             var entry = EntriesGrid.Items[index];
             if (entry == null || EntriesGrid.Columns.Count == 0) return;
+
+            // Ctrl+点击的结果是不规则集合，退出范围模式转为显式 cell 集合
+            _logicalSelectAll = false;
+            _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
+
+            ClearAllHighlight();
+
             var columns = EntriesGrid.Columns.ToList();
             var probe = new DataGridCellInfo(entry, columns[0]);
             var isSelected = EntriesGrid.SelectedCells.Contains(probe);
@@ -301,11 +452,13 @@ namespace SimpleXmlEditor
             return null;
         }
 
-        /// <summary>全不选：清空选择 + 清除逻辑选择标志。</summary>
+        /// <summary>全不选：清空选择 + 清除逻辑选择标志 + 清除逻辑高亮。</summary>
         private void UnselectAllEntries()
         {
             _logicalSelectAll = false;
             _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
 
             _suppressSelectionSync = true;
             _suppressSelectionChanged = true;
@@ -313,6 +466,7 @@ namespace SimpleXmlEditor
             {
                 EntriesGrid.SelectedCells.Clear();
                 SetAllEntriesSelectedSilent(false);
+                ClearAllHighlight();
             }
             finally
             {

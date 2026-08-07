@@ -19,6 +19,7 @@ namespace SimpleXmlEditor
         public string CustomPrompt { get; private set; }
         public string ActiveExpertProfile { get; private set; }
         public AIProvider AiProvider { get; private set; }
+        public bool DisableThinking { get; private set; }
         public string EvalAiProvider { get; private set; } = "";
         public string EvalApiKey { get; private set; } = "";
         public string EvalModel { get; private set; } = "";
@@ -32,7 +33,8 @@ namespace SimpleXmlEditor
             string currentProgramLanguage, string currentCustomPrompt, string currentActiveExpertProfile,
             AIProvider currentAiProvider, MainWindow mainWindow, IExpertProfileManager profileManager,
             string currentEvalProvider = "", string currentEvalApiKey = "", string currentEvalModel = "",
-            List<EvaluationModelConfig> currentEvalModels = null)
+            List<EvaluationModelConfig> currentEvalModels = null,
+            bool currentDisableThinking = true)
         {
             InitializeComponent();
             
@@ -61,6 +63,7 @@ namespace SimpleXmlEditor
             }
             
             ApiKeyTextBox.Text = currentApiKey;
+            DisableThinkingCheckBox.IsChecked = currentDisableThinking;
 
             // 评估模型配置
             EvalApiKeyTextBox.Text = currentEvalApiKey;
@@ -182,6 +185,10 @@ namespace SimpleXmlEditor
             // Program language section
             ProgramLangHeader.Text = $"🌐 {L("ProgramLanguage")}";
             ProgramLangHelpText.Text = L("SelectProgramLanguage");
+
+            // Disable thinking section
+            DisableThinkingLabel.Text = $"🧠 {L("DisableThinking")}";
+            DisableThinkingHelpText.Text = L("DisableThinkingHelp");
 
             // Custom prompt section
             CustomPromptHeader.Text = $"📝 {L("CustomPrompt")}";

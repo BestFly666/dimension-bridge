@@ -10,6 +10,15 @@ namespace SimpleXmlEditor.ViewModels
 {
     public partial class MainViewModel
     {
+        // 进度保存节流状态：并发批次高（如 100）时，若每批都全量遍历 Entries + 序列化 + 写文件，
+        // 会同时发生线程池饥饿与并发写同一文件，导致界面卡死。这里用"单飞+合并"控制：
+        // 同一时刻只允许一个保存在执行；保存期间的新请求只置脏标记，等当前保存完成后补一次。
+        // 另加最小间隔（2s）：批次完成密集时避免保存任务无限追赶（每次全量序列化 5000+ 条很贵）。
+        private int _progressSaveInFlight = 0;
+        private volatile bool _progressSavePending = false;
+        private long _lastProgressSaveTicks = 0;
+        private const long MinProgressSaveIntervalTicks = 2 * TimeSpan.TicksPerSecond;
+
         public void StartTranslationTracking(int totalToTranslate)
         {
             _translationStartTime = DateTime.Now;
@@ -46,6 +55,49 @@ namespace SimpleXmlEditor.ViewModels
         {
             if (!IsTranslationRunning) return "⚪";
             return IsTranslationPaused ? "🟡" : "🟢";
+        }
+
+        /// <summary>
+        /// 节流+合并的进度保存（fire-and-forget 安全）。
+        /// 并发批次同时完成时，只允许一个保存在执行；保存期间的新请求置脏标记，
+        /// 当前保存完成后若仍有脏标记则补保存一次，保证最终进度不丢失。
+        /// </summary>
+        private Task SaveProgressThrottledAsync()
+        {
+            _progressSavePending = true;
+            if (Interlocked.Exchange(ref _progressSaveInFlight, 1) == 1)
+                return Task.CompletedTask; // 已有保存在执行，稍后会自动补一次
+
+            return Task.Run(async () =>
+            {
+                try
+                {
+                    while (_progressSavePending)
+                    {
+                        _progressSavePending = false;
+                        // 最小保存间隔：批次完成密集时避免连续全量序列化+写文件（CPU/IO 风暴）。
+                        // 跳过的保存由最终 SaveCache / SaveProgressFinalAsync 兜底，进度不丢。
+                        var now = DateTime.UtcNow.Ticks;
+                        if (now - Interlocked.Read(ref _lastProgressSaveTicks) < MinProgressSaveIntervalTicks)
+                            break;
+                        Interlocked.Exchange(ref _lastProgressSaveTicks, now);
+                        await _configService.SaveTranslationProgressAsync(Entries);
+                    }
+                }
+                finally
+                {
+                    Interlocked.Exchange(ref _progressSaveInFlight, 0);
+                }
+            });
+        }
+
+        /// <summary>
+        /// 强制保存一次最新进度（全部批次完成后调用，等待落盘）。
+        /// </summary>
+        private async Task SaveProgressFinalAsync()
+        {
+            await SaveProgressThrottledAsync();
+            await _configService.SaveTranslationProgressAsync(Entries);
         }
 
         public void TrackRequest()
@@ -117,7 +169,7 @@ namespace SimpleXmlEditor.ViewModels
                 OnLogMessage($"📊 {LocalizationManager.GetString("LogBatchModel", _aiTranslationService.Model)}");
 
                 // 并发批次处理：初始并发度 3，429 时动态降低，配额恢复后回升
-                var maxConcurrentBatches = 3;
+                var maxConcurrentBatches = MaxConcurrentBatches;
                 var batchSemaphore = new SemaphoreSlim(maxConcurrentBatches, maxConcurrentBatches);
                 var runningTasks = new List<Task>();
 
@@ -198,9 +250,9 @@ namespace SimpleXmlEditor.ViewModels
                         }
                         finally
                         {
-                            // 先释放信号量，让下一批立即启动；再保存进度（不阻塞并发调度）
+                            // 先释放信号量，让下一批立即启动；再保存进度（节流合并，不阻塞并发调度）
                             batchSemaphore.Release();
-                            await _configService.SaveTranslationProgressAsync(Entries);
+                            _ = SaveProgressThrottledAsync();
                         }
                     }, _translationCts.Token);
 
@@ -238,6 +290,11 @@ namespace SimpleXmlEditor.ViewModels
                         OnLogMessage($"💾 {LocalizationManager.GetString("LogCacheSaved")}");
                         // Translation complete — delete recovery file
                         _configService.DeleteProgressFile();
+                    }
+                    else
+                    {
+                        // 全失败/取消：保留最后一次进度文件，便于崩溃恢复
+                        await SaveProgressFinalAsync();
                     }
                 }
 

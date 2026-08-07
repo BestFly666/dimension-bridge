@@ -17,6 +17,7 @@ namespace SimpleXmlEditor.ViewModels
             if (_configService.Config.LastLoadedFilePath != null)
                 LastLoadedFilePath = _configService.Config.LastLoadedFilePath;
             BatchSize = _configService.Config.BatchSize;
+            MaxConcurrentBatches = _configService.Config.MaxConcurrentBatches;
             AiProvider = Enum.TryParse<AIProvider>(_configService.Config.AiProvider, out var provider) ? provider : AIProvider.GoogleGemini;
             if (_configService.Config.ProgramLanguage != null)
                 ProgramLanguage = _configService.Config.ProgramLanguage;
@@ -35,6 +36,7 @@ namespace SimpleXmlEditor.ViewModels
             _configService.Config.CustomPrompt = CustomPrompt;
             _configService.Config.LastLoadedFilePath = LastLoadedFilePath;
             _configService.Config.BatchSize = BatchSize;
+            _configService.Config.MaxConcurrentBatches = MaxConcurrentBatches;
             _configService.Config.AiProvider = AiProvider.ToString();
             _configService.Config.ProgramLanguage = ProgramLanguage;
             _configService.SetApiKey(_aiTranslationService.ApiKey);

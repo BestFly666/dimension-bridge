@@ -72,6 +72,7 @@ namespace SimpleXmlEditor.ViewModels
         private string _customPrompt = "";
         private string _activeExpertProfileName = "";
         private int _batchSize = 50;
+        private int _maxConcurrentBatches = 3;
         private AIProvider _aiProvider = AIProvider.GoogleGemini;
         private int _cacheHits = 0;
         private DateTime _lastRequestTime = DateTime.MinValue;

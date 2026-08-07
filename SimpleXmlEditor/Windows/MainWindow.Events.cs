@@ -215,12 +215,16 @@ namespace SimpleXmlEditor
         /// </summary>
         private void EntriesGrid_BeginningEdit(object sender, DataGridBeginningEditEventArgs e)
         {
-            // 编辑开始时强制退出逻辑选择模式并清理高亮 cells，
-            // 防止编辑过程中的自动滚动触发 ScrollChanged 补选，导致其他单元格全部变色
-            if (_logicalSelectAll || _logicalSelectColumn != null)
+            // 编辑开始时强制退出逻辑选择模式并清理高亮，
+            // 防止编辑过程中其他选中行残留高亮干扰视觉
+            if (_logicalSelectAll || _logicalSelectColumn != null || _logicalSelectRangeLo >= 0)
             {
                 _logicalSelectAll = false;
                 _logicalSelectColumn = null;
+                _logicalSelectRangeLo = -1;
+                _logicalSelectRangeHi = -1;
+
+                ClearAllHighlight();
 
                 _suppressSelectionChanged = true;
                 try

@@ -52,6 +52,7 @@ namespace SimpleXmlEditor
             }
 
             CustomPrompt = CustomPromptTextBox.Text.Trim();
+            DisableThinking = DisableThinkingCheckBox.IsChecked == true;
 
             // 评估模型配置
             if (EvalProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem evalItem)

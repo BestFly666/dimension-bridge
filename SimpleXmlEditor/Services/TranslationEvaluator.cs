@@ -181,7 +181,7 @@ namespace SimpleXmlEditor.Services
                 foreach (var service in GetActiveAiServices())
                 {
                     var prompt = BuildBatchedVotingPrompt(originalText, candidateTranslations, targetLanguage, context);
-                    var response = await service.TranslateBatchAsync(prompt, 2);
+                    var response = await service.TranslateBatchAsync(prompt, 2, disableThinking: false);
                     allResults.AddRange(ParseBatchedVotingResponse(response, originalText, candidateTranslations));
                 }
 
@@ -213,7 +213,7 @@ namespace SimpleXmlEditor.Services
             try
             {
                 var prompt = BuildCandidatePrompt(originalText, targetLanguage, context, count);
-                var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2);
+                var response = await GetActiveAiService().TranslateBatchAsync(prompt, 2, disableThinking: false);
                 var candidates = ParseCandidateResponse(response);
                 return candidates.Take(count).ToArray();
             }
@@ -299,7 +299,7 @@ namespace SimpleXmlEditor.Services
                     foreach (var service in GetActiveAiServices())
                     {
                         var prompt = BuildBatchVotingPrompt(chunk, targetLanguage, context);
-                        var response = await service.TranslateBatchAsync(prompt, 2);
+                        var response = await service.TranslateBatchAsync(prompt, 2, disableThinking: false);
                         parsedList.AddRange(ParseBatchVotingResponse(response, chunk));
                     }
 

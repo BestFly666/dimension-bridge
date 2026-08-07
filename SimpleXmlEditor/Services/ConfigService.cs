@@ -22,6 +22,8 @@ namespace SimpleXmlEditor.Services
         public string AiProvider { get; set; } = "GoogleGemini";
         public string LastLoadedFilePath { get; set; } = "";
         public int BatchSize { get; set; } = 50;
+        public int MaxConcurrentBatches { get; set; } = 3;
+        public bool DisableThinking { get; set; } = true;
 
         // 评估/投票专用模型配置（留空则使用翻译模型）
         public string EvaluationAiProvider { get; set; } = "";

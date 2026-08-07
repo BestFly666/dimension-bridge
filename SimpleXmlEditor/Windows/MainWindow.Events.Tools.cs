@@ -61,7 +61,8 @@ namespace SimpleXmlEditor
                 cfg.EvaluationAiProvider,
                 _viewModel.ConfigService.GetEvaluationApiKey(),
                 cfg.EvaluationModel,
-                cfg.EvaluationModels);
+                cfg.EvaluationModels,
+                cfg.DisableThinking);
             if (settings.ShowDialog() == true)
             {
                 _viewModel.AiTranslationService.ApiKey = settings.ApiKey;
@@ -74,6 +75,7 @@ namespace SimpleXmlEditor
                 {
                     c.EvaluationAiProvider = settings.EvalAiProvider;
                     c.EvaluationModel = settings.EvalModel;
+                    c.DisableThinking = settings.DisableThinking;
                 });
                 _viewModel.ConfigService.SetEvaluationApiKey(settings.EvalApiKey);
                 _viewModel.ConfigService.SaveEvaluationModels(settings.EvalModels);

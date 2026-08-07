@@ -178,6 +178,8 @@ namespace SimpleXmlEditor.Localization
                 ["SelectTargetLanguage"] = "选择翻译目标语言",
                 ["ProgramLanguage"] = "界面语言",
                 ["SelectProgramLanguage"] = "选择程序界面语言",
+                ["DisableThinking"] = "禁用思考模式（推荐）",
+                ["DisableThinkingHelp"] = "DeepSeek V4 等模型默认启用思考模式，翻译任务无需推理，禁用可提速约 7 倍",
                 ["CustomPrompt"] = "自定义提示词",
                 ["CustomPromptHelp"] = "自定义 AI 翻译提示词。可用变量：{LANGUAGE}、{CONTEXT}、{TEXTS}、{EXPERT_CONTEXT}、{GLOSSARY}、{MIXED_SOURCE_NOTE}。",
                 ["Reset"] = "重置",

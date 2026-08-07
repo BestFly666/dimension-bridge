@@ -18,7 +18,21 @@ namespace SimpleXmlEditor
     {
         private void TranslateSelectedBtn_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel.TranslateSelectedCommand.Execute(null);
+            // 统一走 GetSelectedEntries（支持逻辑选择标志），不依赖 IsSelected
+            var entries = GetSelectedEntries();
+            if (entries.Count == 0)
+            {
+                MessageBox.Show(LocalizationManager.GetString("SelectEntriesFirst"), LocalizationManager.GetString("MsgTip"));
+                return;
+            }
+            var toClear = entries.Where(en => !string.IsNullOrEmpty(en.Translation)).ToList();
+            if (toClear.Count > 0)
+                _viewModel.PushUndoSnapshot(toClear);
+            foreach (var entry in entries)
+            {
+                entry.Translation = "";
+            }
+            _ = _viewModel.TranslateEntriesAsync(entries, forceRefresh: true);
         }
 
         private void TranslateAllBtn_Click(object sender, RoutedEventArgs e)
@@ -51,6 +65,16 @@ namespace SimpleXmlEditor
             if (int.TryParse(BatchSizeTxt.Text, out int value) && value > 0 && value <= 500)
             {
                 _viewModel.BatchSize = value;
+            }
+        }
+
+        private void ConcurrentBatchesTxt_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_viewModel == null) return;
+
+            if (int.TryParse(ConcurrentBatchesTxt.Text, out int value) && value >= 1 && value <= 50)
+            {
+                _viewModel.MaxConcurrentBatches = value;
             }
         }
 
@@ -114,6 +138,7 @@ namespace SimpleXmlEditor
                 _viewModel.ConfigService.ClearScoreCache();
 
                 _viewModel.Entries.Clear();
+                ResetSelectionState();
                 _viewModel.LastLoadedFilePath = null;
                 _viewModel.ConfigService.Config.LastLoadedFilePath = null;
                 _viewModel.SaveConfig();

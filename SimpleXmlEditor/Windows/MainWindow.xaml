@@ -10,6 +10,7 @@
     <Window.Resources>
         <!-- Convert DataGrid column DisplayIndex to an Excel-style letter (A, B, C, ...) -->
         <local:IndexToLetterConverter x:Key="IndexToLetter"/>
+        <local:CellHighlightConverter x:Key="CellHighlight"/>
     </Window.Resources>
 
     <Grid>
@@ -160,6 +161,9 @@
                                 <TextBlock Name="BatchLabelText" Text="Batch:" Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                 <hc:TextBox Name="BatchSizeTxt" Text="50" Width="42" FontSize="13"
                                             VerticalAlignment="Center" TextChanged="BatchSizeTxt_TextChanged" TextAlignment="Center"/>
+                                <TextBlock Name="ConcurrentLabelText" Text=" 并发:" Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                <hc:TextBox Name="ConcurrentBatchesTxt" Text="3" Width="36" FontSize="13"
+                                            VerticalAlignment="Center" TextChanged="ConcurrentBatchesTxt_TextChanged" TextAlignment="Center"/>
                             </StackPanel>
                         </Border>
 
@@ -267,6 +271,7 @@
                              AutoGenerateColumns="False" CanUserAddRows="False"
                              SelectionMode="Extended" SelectionUnit="CellOrRowHeader"
                              HeadersVisibility="All"
+                             RowHeaderWidth="70"
                              GridLinesVisibility="All"
                              Background="{DynamicResource RegionBrush}"
                              RowBackground="{DynamicResource RegionBrush}"
@@ -274,7 +279,6 @@
                              Foreground="{DynamicResource TextBrush}"
                              BorderBrush="{DynamicResource BorderBrush}"
                              HorizontalGridLinesBrush="{DynamicResource ThirdlyBorderBrush}" VerticalGridLinesBrush="{DynamicResource ThirdlyBorderBrush}"
-                             RowHeaderWidth="52"
                              BorderThickness="0"
                              Loaded="EntriesGrid_Loaded"
                              BeginningEdit="EntriesGrid_BeginningEdit"
@@ -325,7 +329,7 @@
                                                 </Grid.RowDefinitions>
                                                 <!-- Column letter strip: same size as the cell below (Excel-style),
                                                      letter centered inside; click anywhere in this row = select the whole column -->
-                                                <Button Grid.Row="0" Padding="0" Cursor="Hand"
+                                                <Button x:Name="ColLetterBtn" Grid.Row="0" Padding="0" Cursor="Hand"
                                                         HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                                         Foreground="{DynamicResource ColHeaderLetterForegroundBrush}" FontWeight="Bold" FontSize="10"
                                                         Background="{DynamicResource ColHeaderLetterBackgroundBrush}" BorderBrush="{DynamicResource ColHeaderLetterBorderBrush}" BorderThickness="0,0,0,1"
@@ -442,6 +446,20 @@
                                         <Setter Property="Background" Value="{DynamicResource DefaultBrush}"/>
                                         <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                     </Trigger>
+                                    <!-- 逻辑选择（全选/整列/Shift 范围）高亮：cell 级数据驱动，虚拟化滚动容器重建自动恢复。
+                                         整列模式（LogicalSelectColumnIndex>=0）仅高亮该列，与 Ctrl+A 全选区分 -->
+                                    <DataTrigger>
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource CellHighlight}">
+                                                <Binding Path="IsHighlighted"/>
+                                                <Binding RelativeSource="{RelativeSource Self}" Path="Column.DisplayIndex"/>
+                                                <Binding RelativeSource="{RelativeSource AncestorType={x:Type Window}}" Path="LogicalSelectColumnIndex"/>
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <DataTrigger.Value>True</DataTrigger.Value>
+                                        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource WhiteBrush}"/>
+                                    </DataTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.CellStyle>

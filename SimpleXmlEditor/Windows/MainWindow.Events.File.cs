@@ -176,6 +176,7 @@ namespace SimpleXmlEditor
         private void CloseFileBtn_Click(object sender, RoutedEventArgs e)
         {
             _viewModel.Entries.Clear();
+            ResetSelectionState();
             _viewModel.LastLoadedFilePath = null;
             _viewModel.ConfigService.Config.LastLoadedFilePath = null;
             _viewModel.SaveConfig();

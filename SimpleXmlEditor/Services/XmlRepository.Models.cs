@@ -69,6 +69,27 @@ namespace SimpleXmlEditor.Services
             _isSelected = value;
         }
 
+        /// <summary>
+        /// 逻辑选择（全选/整列/行范围）的视觉高亮标志，仅运行时使用，不参与序列化。
+        /// 数据驱动高亮：DataGrid 虚拟化滚动时行容器重建，绑定自动恢复高亮，
+        /// 规避 SelectedCells 在虚拟化下的滚动补选问题。
+        /// </summary>
+        private bool _isHighlighted;
+
+        [Newtonsoft.Json.JsonIgnore]
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set
+            {
+                if (_isHighlighted != value)
+                {
+                    _isHighlighted = value;
+                    OnPropertyChanged(nameof(IsHighlighted));
+                }
+            }
+        }
+
         /// <summary>是否命中黑名单前缀规则（命中条目在翻译时被跳过，状态列显示 🚫）。</summary>
         public bool IsBlacklisted
         {

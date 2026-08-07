@@ -42,7 +42,18 @@ namespace SimpleXmlEditor
         private ReviewExporter _reviewExporter = new ReviewExporter();
         private System.Windows.Threading.DispatcherTimer _filterTimer;
         private System.Windows.Threading.DispatcherTimer _autoSaveTimer;
+        private System.Windows.Threading.DispatcherTimer _uiFlushTimer;
         private static readonly TimeSpan AutoSaveInterval = TimeSpan.FromMinutes(5);
+
+        // ── UI 更新合并 ─────────────────────────────────────────────
+        // 后台线程的高频事件（日志/状态/进度）只写入队列与最新值，由 _uiFlushTimer
+        // 在 UI 线程合并渲染（每 250ms 一次）。此前每批完成产生 6+ 个 BeginInvoke
+        // 回调且无合并，UI 线程处理速度跟不上时队列无限积压 → 批次越多越卡。
+        private const int UiFlushIntervalMs = 250;
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _pendingLogs = new();
+        private volatile string _pendingStatusText;
+        private volatile int _pendingProgressTranslated = -1;
+        private volatile int _pendingProgressTotal = -1;
 
         private bool _isDarkMode = false;
         private bool _showUntranslatedOnly = false;
@@ -51,6 +62,20 @@ namespace SimpleXmlEditor
         private bool _suppressSelectionChanged = false;
         private bool _logCollapsed = false;
         private const double LogPanelDefaultWidth = 380;
+
+        /// <summary>
+        /// 当前逻辑整列选择的列 DisplayIndex（-1 表示非整列模式）。
+        /// CellStyle 的 MultiBinding 依赖此值在整列/全选切换时重新求值高亮。
+        /// </summary>
+        public static readonly DependencyProperty LogicalSelectColumnIndexProperty =
+            DependencyProperty.Register(
+                nameof(LogicalSelectColumnIndex), typeof(int), typeof(MainWindow), new PropertyMetadata(-1));
+
+        public int LogicalSelectColumnIndex
+        {
+            get => (int)GetValue(LogicalSelectColumnIndexProperty);
+            set => SetValue(LogicalSelectColumnIndexProperty, value);
+        }
 
         public MainWindow()
         {
@@ -77,6 +102,14 @@ namespace SimpleXmlEditor
             _autoSaveTimer.Tick += AutoSaveTimer_Tick;
             _autoSaveTimer.Start();
 
+            // UI 合并刷新定时器：高频日志/状态/进度事件合并渲染，防止 BeginInvoke 积压
+            _uiFlushTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(UiFlushIntervalMs)
+            };
+            _uiFlushTimer.Tick += UiFlushTimer_Tick;
+            _uiFlushTimer.Start();
+
             this.KeyDown += MainWindow_KeyDown;
 
             InitializeFromConfig();
@@ -95,6 +128,31 @@ namespace SimpleXmlEditor
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    /// 单元格高亮判定：IsHighlighted 为 true 且（无整列模式，或单元格属于被选中的整列）。
+    /// 使点击列字母只高亮该列，而非所有列（与 Ctrl+A 全选区分）。
+    /// 输入：values[0]=IsHighlighted, values[1]=单元格 Column.DisplayIndex, values[2]=LogicalSelectColumnIndex
+    /// </summary>
+    public class CellHighlightConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (values.Length >= 3
+                && values[0] is bool highlighted && highlighted
+                && values[2] is int columnIndex)
+            {
+                if (columnIndex < 0) return true;          // 非整列模式：全部列高亮
+                return values[1] is int cellIndex && cellIndex == columnIndex;
+            }
+            return false;
+        }
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         {
             throw new NotSupportedException();
         }

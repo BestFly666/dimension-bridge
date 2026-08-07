@@ -76,6 +76,40 @@ namespace SimpleXmlEditor.Tests
         }
 
         [Fact]
+        public void ContainsWholeWord_SpacePunctuationVariants_Matches()
+        {
+            // 术语值差一个空格/标点时也应命中（空格 ↔ 连字符/下划线/斜杠/句点 互换）
+            Assert.True(GlossaryManager.ContainsWholeWord("Star-Destroyer approaches", "Star Destroyer"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Star_Destroyer approaches", "Star Destroyer"));
+            Assert.True(GlossaryManager.ContainsWholeWord("The Star Destroyer approaches", "Star-Destroyer"));
+            Assert.True(GlossaryManager.ContainsWholeWord("TIE/Fighter squadron", "TIE Fighter"));
+            Assert.True(GlossaryManager.ContainsWholeWord("attack on the Death Star.", "Death Star"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Attack  of  the  Clones", "Attack of the Clones"));
+
+            // 撇号差异（Hutt's ↔ Hutts）
+            Assert.True(GlossaryManager.ContainsWholeWord("The Hutts control the sector", "Hutt's"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Hutt's palace", "Hutts"));
+
+            // 词内拼接仍不命中（保持原语义）
+            Assert.False(GlossaryManager.ContainsWholeWord("StarDestroyer", "Star Destroyer"));
+        }
+
+        [Fact]
+        public void ContainsWholeWord_InsertedModifierWord_Matches()
+        {
+            // 差一个修饰词（class/mk/type 等）也应命中
+            Assert.True(GlossaryManager.ContainsWholeWord("Procursator-class Star Destroyer", "Procursator Star Destroyer"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Procursator-class Star Destroyer", "Procursator-class Star Destroyer"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Executor Star Dreadnought", "Executor-class Star Dreadnought"));
+            Assert.True(GlossaryManager.ContainsWholeWord("TIE-class Fighter", "TIE Fighter"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Acclamator-type assault ship", "Acclamator assault ship"));
+            Assert.True(GlossaryManager.ContainsWholeWord("Nebula-class Star Destroyer", "Nebula Star Destroyer"));
+
+            // 插入非修饰词不算（避免过度宽松）：High 不在修饰词白名单
+            Assert.False(GlossaryManager.ContainsWholeWord("Jedi High Council", "Jedi Council"));
+        }
+
+        [Fact]
         public void GetGlossaryContextTerms_PluralAndUnderscore_FindsTerms()
         {
             var manager = new GlossaryManager();

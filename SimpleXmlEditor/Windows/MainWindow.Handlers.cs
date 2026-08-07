@@ -20,11 +20,20 @@ namespace SimpleXmlEditor
     {
         private void SubscribeViewModelEvents()
         {
-            // BeginInvoke（异步）：后台线程不阻塞等待 UI 线程，立即返回继续执行。
-            // 此前用 Invoke（同步）导致批次完成时后台线程被 UI 线程阻塞，
-            // batchSemaphore.Release() 延迟执行 → 有效并发度退化（3 路退化为串行）。
-            _viewModel.LogMessage += msg => Dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
-            _viewModel.StatusMessageChanged += msg => Dispatcher.BeginInvoke(new Action(() => StatusText.Text = msg));
+            // 高频事件（日志/状态/进度）→ 只入队/存最新值，由 _uiFlushTimer 合并渲染。
+            // 此前每个事件都 Dispatcher.BeginInvoke，无合并无积压上限，批次多时 UI 线程
+            // 处理不过来 → 队列积压 → 越来越卡。
+            _viewModel.LogMessage += msg => _pendingLogs.Enqueue(msg);
+            _viewModel.StatusMessageChanged += msg => _pendingStatusText = msg;
+
+            // TranslationProgressChanged 只记录最新值，flush 时渲染一次
+            _viewModel.TranslationProgressChanged += (translated, total) =>
+            {
+                _pendingProgressTranslated = translated;
+                _pendingProgressTotal = total;
+            };
+
+            // 低频/关键事件仍立即处理（BeginInvoke 保证后台线程不阻塞）
 
             _viewModel.TranslationStarted += total => Dispatcher.BeginInvoke(new Action(() =>
             {
@@ -36,15 +45,10 @@ namespace SimpleXmlEditor
                 StatusIndicator.Text = _viewModel.GetTranslationStatusIndicator();
             }));
 
-            _viewModel.TranslationProgressChanged += (translated, total) => Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (total > 0) ProgressBar.Maximum = total;
-                ProgressBar.Value = translated;
-                UpdateProgressDisplay();
-            }));
-
             _viewModel.TranslationFinished += () => Dispatcher.BeginInvoke(new Action(() =>
             {
+                // 翻译结束：先同步 flush 残留的日志/进度，再恢复 UI
+                FlushPendingUi();
                 ShowControlButtons(false);
                 PauseBtn.Content = $"⏸️ {LocalizationManager.GetString("Pause")}";
                 StatusIndicator.Text = "⚪";

@@ -24,6 +24,7 @@ namespace SimpleXmlEditor
             _viewModel.AiTranslationService.ApiKey = _viewModel.ConfigService.GetApiKey();
 
             BatchSizeTxt.Text = _viewModel.BatchSize.ToString();
+            ConcurrentBatchesTxt.Text = _viewModel.MaxConcurrentBatches.ToString();
             _viewModel.ProfileManager.EnsureDefaultsExist();
             RefreshExpertProfileCombo();
             ApplyLocalization();
@@ -177,6 +178,7 @@ namespace SimpleXmlEditor
                 else
                 {
                     _viewModel.Entries.Clear();
+                    ResetSelectionState();
 
                     foreach (var entry in loadedEntries)
                     {

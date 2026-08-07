@@ -201,8 +201,9 @@ namespace SimpleXmlEditor.Services
             RecentRequests.Enqueue(DateTime.Now);
         }
 
-        public async Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3)
+        public async Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null)
         {
+            var actualDisableThinking = disableThinking ?? _configService.Config.DisableThinking;
             try
             {
                 if (_currentProvider == AIProvider.GoogleGemini)
@@ -211,7 +212,7 @@ namespace SimpleXmlEditor.Services
                 }
                 else if (ProviderConfig.UsesOpenAiFormat[_currentProvider])
                 {
-                    return await TranslateBatchOpenAiCompatAsync(prompt, maxRetries);
+                    return await TranslateBatchOpenAiCompatAsync(prompt, maxRetries, actualDisableThinking);
                 }
                 else
                 {

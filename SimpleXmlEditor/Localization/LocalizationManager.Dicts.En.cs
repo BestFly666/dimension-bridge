@@ -178,6 +178,8 @@ namespace SimpleXmlEditor.Localization
                 ["SelectTargetLanguage"] = "Select the target language for translation",
                 ["ProgramLanguage"] = "Program Language",
                 ["SelectProgramLanguage"] = "Select the interface language",
+                ["DisableThinking"] = "Disable Thinking Mode (Recommended)",
+                ["DisableThinkingHelp"] = "DeepSeek V4 models enable thinking by default. Translation doesn't need reasoning. Disabling can speed up ~7x",
                 ["CustomPrompt"] = "Custom Prompt",
                 ["CustomPromptHelp"] = "Custom AI translation prompt. Available variables: {LANGUAGE}, {CONTEXT}, {TEXTS}, {EXPERT_CONTEXT}, {GLOSSARY}, {MIXED_SOURCE_NOTE}.",
                 ["Reset"] = "Reset",

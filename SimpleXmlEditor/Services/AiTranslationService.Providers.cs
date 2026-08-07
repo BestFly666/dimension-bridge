@@ -49,13 +49,14 @@ namespace SimpleXmlEditor.Services
             return responseJson["candidates"]?[0]?["content"]?["parts"]?[0]?["text"]?.ToString()?.Trim();
         }
 
-        private async Task<string> TranslateBatchOpenAiCompatAsync(string prompt, int maxRetries)
+        private async Task<string> TranslateBatchOpenAiCompatAsync(string prompt, int maxRetries, bool disableThinking)
         {
             var baseUrl = ProviderConfig.ApiBaseUrls[_currentProvider];
             var url = $"{baseUrl}/chat/completions";
 
             // 8192 让单次输出容纳更多译文（如 100 条/批），显著减少批次数与限流等待
             var maxTokens = 8192;
+            var thinkingDisabled = disableThinking;
 
             for (int attempt = 0; attempt < maxRetries; attempt++)
             {
@@ -72,6 +73,14 @@ namespace SimpleXmlEditor.Services
                 };
 
                 var json = JsonConvert.SerializeObject(requestBody);
+
+                // 禁用思考模式（DeepSeek V4 等模型默认启用思考，翻译任务无需推理，可提速 ~7x）
+                if (thinkingDisabled)
+                {
+                    var jsonObj = JObject.Parse(json);
+                    jsonObj["thinking"] = new JObject { ["type"] = "disabled" };
+                    json = jsonObj.ToString();
+                }
 
                 using var request = new HttpRequestMessage(HttpMethod.Post, url)
                 {
@@ -90,6 +99,13 @@ namespace SimpleXmlEditor.Services
 
                 var errorBody = await response.Content.ReadAsStringAsync();
                 var statusCode = (int)response.StatusCode;
+
+                // 不支持 thinking 参数的模型返回 400：自动移除后重试
+                if (statusCode == 400 && thinkingDisabled)
+                {
+                    thinkingDisabled = false;
+                    continue;
+                }
 
                 if (statusCode == 400 && maxTokens > 4096)
                 {

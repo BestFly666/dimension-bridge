@@ -97,8 +97,17 @@
                                     <ComboBoxItem Content="🇺🇸 English" Tag="en"/>
                                     <ComboBoxItem Content="🇨🇳 中文" Tag="zh"/>
                                 </hc:ComboBox>
-                                <TextBlock Name="ProgramLangHelpText" Text="选择程序界面语言" 
+                                <TextBlock Name="ProgramLangHelpText" Text="选择程序界面语言"
                                           FontSize="11" Foreground="#666" Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <!-- Disable Thinking Mode -->
+                            <StackPanel Margin="0,0,0,20">
+                                <CheckBox Name="DisableThinkingCheckBox" FontSize="14" VerticalContentAlignment="Center" Margin="0,0,0,4">
+                                    <TextBlock Name="DisableThinkingLabel" Text="🧠 禁用思考模式（推荐）" FontSize="14" FontWeight="Bold" Foreground="#424242"/>
+                                </CheckBox>
+                                <TextBlock Name="DisableThinkingHelpText" Text="DeepSeek V4 等模型默认启用思考模式，翻译任务无需推理，禁用可提速约 7 倍"
+                                          FontSize="11" Foreground="#666" Margin="24,0,0,0"/>
                             </StackPanel>
 
                             <!-- Custom Prompt Section -->

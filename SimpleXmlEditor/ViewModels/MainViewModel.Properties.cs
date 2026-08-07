@@ -59,6 +59,16 @@ namespace SimpleXmlEditor.ViewModels
             }
         }
 
+        public int MaxConcurrentBatches
+        {
+            get => _maxConcurrentBatches;
+            set
+            {
+                _maxConcurrentBatches = value;
+                OnPropertyChanged();
+            }
+        }
+
         public AIProvider AiProvider
         {
             get => _aiProvider;

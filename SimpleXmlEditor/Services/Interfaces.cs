@@ -29,7 +29,7 @@ namespace SimpleXmlEditor.Services
         
         Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null);
         Task<string> TranslateSingleAsync(string text, int maxRetries = 3);
-        Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3);
+        Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null);
         double CalculateCost(int inputChars, int outputChars, string modelName);
         int CalculateOptimalDelay();
         int GetModelTokenLimit(string modelName);

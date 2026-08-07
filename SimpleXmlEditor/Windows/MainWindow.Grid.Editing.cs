@@ -23,18 +23,13 @@ namespace SimpleXmlEditor
         {
             if (_suppressSelectionChanged) return;
 
-            // 用户手动交互选择 → 退出 Excel 式逻辑选择模式，并清理其遗留的高亮 cells，
-            // 只保留用户当前点击的单元格（否则全选/整列后点单格编辑时其他单元格仍保持高亮）
-            if (_logicalSelectAll || _logicalSelectColumn != null)
-            {
-                _logicalSelectAll = false;
-                _logicalSelectColumn = null;
-
-                var current = EntriesGrid.CurrentCell;
-                EntriesGrid.SelectedCells.Clear();
-                if (current.IsValid && current.Item is LocalizationEntry)
-                    EntriesGrid.SelectedCells.Add(current);
-            }
+            // 注意：不能在此处退出逻辑选择模式（全选/整列/范围）——
+            // WPF DataGrid 的程序化 SelectedCells 修改会延迟触发本事件（在 _suppressSelectionChanged
+            // 恢复之后才进来），若在此清标志会把刚设置的范围/全选标志误清除，导致选中回退为仅可见行。
+            // 逻辑模式的退出统一由用户交互点处理：
+            //   单元格点击 → PreviewMouseLeftButtonDown 非行头分支（ExitLogicalSelection）
+            //   行头 Ctrl 加选 → ToggleRowSelection
+            //   编辑单元格 → EntriesGrid_BeginningEdit
 
             // 注意：不再在此处同步 entry.IsSelected —— 点击单元格只应选中格子（Excel 行为），
             // 不该联动勾选整行复选框；复选框状态由用户点击 checkbox（双向绑定）或 SetIsSelectedSilent 维护。
@@ -63,7 +58,6 @@ namespace SimpleXmlEditor
         private void RowResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
         {
             var thumb = (Thumb)sender;
-            var rowHeader = FindVisualAncestor<DataGridRowHeader>(thumb);
             _resizingRow = FindVisualAncestor<DataGridRow>(thumb);
             if (_resizingRow != null)
                 _resizingRow.Height = _resizingRow.ActualHeight;

@@ -70,81 +70,62 @@ namespace SimpleXmlEditor
         }
 
         /// <summary>
-        /// 选中整列（Excel 式）：记录逻辑选择标志，只高亮当前可见行的该列 cell。
-        /// 滚动时通过 EntriesGrid_ScrollChanged 动态补选新进入视野的行。
+        /// 选中整列（Excel 式）：记录逻辑选择标志 + 数据驱动高亮全部行。
         /// 业务读取 GetSelectedEntries 时直接返回全部行，毫秒级完成。
         /// </summary>
         private void SelectEntireColumn(DataGridColumn column)
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-
-            var entries = EntriesGrid.Items.Cast<LocalizationEntry>().ToList();
-            if (entries.Count == 0) return;
-
-            // 逻辑选择：整列 → 所有行选中（只记标志，不逐个操作）
-            _logicalSelectColumn = column;
-            _logicalSelectAll = false;
-
-            _suppressSelectionSync = true;
-            _suppressSelectionChanged = true;
-            try
-            {
-                sw.Restart();
-                EntriesGrid.SelectedCells.Clear();
-                System.Diagnostics.Debug.WriteLine($"[perf] SelectEntireColumn.Clear = {sw.ElapsedMilliseconds}ms, count={EntriesGrid.SelectedCells.Count}");
-
-                // 同步勾选状态：让"翻译选中"等按 IsSelected 读取的入口拿到整列所有行
-                SetAllEntriesSelectedSilent(true);
-
-                // 只高亮可见行（虚拟化下数量很少，毫秒级）
-                sw.Restart();
-                HighlightVisibleCells(column, selectAll: false);
-                System.Diagnostics.Debug.WriteLine($"[perf] SelectEntireColumn.Highlight = {sw.ElapsedMilliseconds}ms, cells={EntriesGrid.SelectedCells.Count}");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"SelectEntireColumn: {ex.Message}");
-            }
-            finally
-            {
-                _suppressSelectionSync = false;
-                _suppressSelectionChanged = false;
-            }
-
-            StatusText.Text = $"{LocalizationManager.GetString("SelectedCount")}: {entries.Count}";
+            ApplyLogicalSelection(
+                logicalSelectAll: false,
+                logicalSelectColumn: column,
+                logicalSelectColumnIndex: column.DisplayIndex);
         }
 
         /// <summary>
-        /// 全选（Excel 式）：记录逻辑全选标志，只高亮可见行，滚动时动态补选。
+        /// 全选（Excel 式）：记录逻辑全选标志 + 数据驱动高亮全部行。
         /// </summary>
         private void SelectAllEntries()
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            ApplyLogicalSelection(
+                logicalSelectAll: true,
+                logicalSelectColumn: null,
+                logicalSelectColumnIndex: -1);
+        }
 
+        /// <summary>
+        /// 统一的逻辑选择执行方法：设置标志、清除 WPF 选择、同步勾选、高亮全部行。
+        /// </summary>
+        private void ApplyLogicalSelection(
+            bool logicalSelectAll,
+            DataGridColumn logicalSelectColumn,
+            int logicalSelectColumnIndex)
+        {
             var entries = EntriesGrid.Items.Cast<LocalizationEntry>().ToList();
             if (entries.Count == 0) return;
 
-            _logicalSelectAll = true;
-            _logicalSelectColumn = null;
+            _logicalSelectAll = logicalSelectAll;
+            _logicalSelectColumn = logicalSelectColumn;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
+            LogicalSelectColumnIndex = logicalSelectColumnIndex;
 
             _suppressSelectionSync = true;
             _suppressSelectionChanged = true;
             try
             {
-                sw.Restart();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 EntriesGrid.SelectedCells.Clear();
-                System.Diagnostics.Debug.WriteLine($"[perf] SelectAll.Clear = {sw.ElapsedMilliseconds}ms, count={EntriesGrid.SelectedCells.Count}");
+                System.Diagnostics.Debug.WriteLine($"[perf] LogicalSelection.Clear = {sw.ElapsedMilliseconds}ms");
 
-                // 同步勾选状态：让"翻译选中"等按 IsSelected 读取的入口拿到全部行
                 SetAllEntriesSelectedSilent(true);
 
                 sw.Restart();
-                HighlightVisibleCells(null, selectAll: true);
-                System.Diagnostics.Debug.WriteLine($"[perf] SelectAll.Highlight = {sw.ElapsedMilliseconds}ms, cells={EntriesGrid.SelectedCells.Count}");
+                HighlightAllRows();
+                System.Diagnostics.Debug.WriteLine($"[perf] LogicalSelection.Highlight = {sw.ElapsedMilliseconds}ms");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"SelectAllEntries: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"ApplyLogicalSelection: {ex.Message}");
             }
             finally
             {
@@ -153,49 +134,6 @@ namespace SimpleXmlEditor
             }
 
             StatusText.Text = $"{LocalizationManager.GetString("SelectedCount")}: {entries.Count}";
-        }
-
-        /// <summary>
-        /// 只把当前可见行的 cell 添加到 SelectedCells（视觉高亮）。
-        /// 直接遍历虚拟化已生成的容器（仅可见行），避免 ContainerFromIndex 全量遍历。
-        /// 整列模式传 column，全选模式传 null + selectAll=true。
-        /// </summary>
-        private void HighlightVisibleCells(DataGridColumn column, bool selectAll)
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-
-            var panel = GetRowsPanel();
-            if (panel == null) return;
-
-            var columns = EntriesGrid.Columns;
-            var addCount = 0;
-            foreach (var child in panel.Children)
-            {
-                if (child is not DataGridRow row || row.Item is not LocalizationEntry entry) continue;
-
-                if (selectAll)
-                {
-                    for (int c = 0; c < columns.Count; c++)
-                    {
-                        var info = new DataGridCellInfo(entry, columns[c]);
-                        if (!EntriesGrid.SelectedCells.Contains(info))
-                        {
-                            EntriesGrid.SelectedCells.Add(info);
-                            addCount++;
-                        }
-                    }
-                }
-                else if (column != null)
-                {
-                    var info = new DataGridCellInfo(entry, column);
-                    if (!EntriesGrid.SelectedCells.Contains(info))
-                    {
-                        EntriesGrid.SelectedCells.Add(info);
-                        addCount++;
-                    }
-                }
-            }
-            System.Diagnostics.Debug.WriteLine($"[perf] Highlight: {sw.ElapsedMilliseconds}ms, containers={panel.Children.Count}, added={addCount}, totalCells={EntriesGrid.SelectedCells.Count}");
         }
     }
 }

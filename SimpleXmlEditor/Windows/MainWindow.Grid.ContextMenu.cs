@@ -32,20 +32,20 @@ namespace SimpleXmlEditor
         /// <summary>反选：先记录当前选中集合，再分片选中未选中的行（所有列）。</summary>
         private async void InvertSelectionAsync()
         {
-            // 逻辑选择模式下反选无意义（全选反选=全不选），先退出逻辑模式
+            // 在退出逻辑模式之前，先用 GetSelectedEntries 记录真实选中集
+            // （逻辑模式下 SelectedItems/SelectedCells 只有可见行，直接读会丢失全选语义）
+            var selectedSet = new HashSet<LocalizationEntry>(GetSelectedEntries());
+
+            // 退出逻辑选择模式
             _logicalSelectAll = false;
             _logicalSelectColumn = null;
+            _logicalSelectRangeLo = -1;
+            _logicalSelectRangeHi = -1;
+
+            ClearAllHighlight();
 
             var entries = EntriesGrid.Items.Cast<LocalizationEntry>().ToList();
             if (entries.Count == 0) return;
-
-            // 在 Clear 之前记录当前选中的 entry 集合
-            var selectedSet = new HashSet<LocalizationEntry>();
-            foreach (var item in EntriesGrid.SelectedItems)
-            {
-                if (GetEntryFromSelectionItem(item) is LocalizationEntry entry)
-                    selectedSet.Add(entry);
-            }
 
             StatusText.Text = $"⏳ {LocalizationManager.GetString("InvertingSelection")}...";
 

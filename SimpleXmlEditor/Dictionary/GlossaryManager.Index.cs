@@ -51,12 +51,75 @@ namespace SimpleXmlEditor.Dictionary
                     // 宽容边界：下划线/撇号/连字符等视为边界（覆盖 dark_jedi、Jedi's），
                     // 可选复数/所有格后缀（覆盖 Jedis、Stormtroopers、boxes）。
                     // 词内拼接（JediMaster、JedisX）仍不匹配，避免误伤。
-                    var pattern = $@"(?<![A-Za-z0-9]){Regex.Escape(term)}(?:es|s|'s)?(?![A-Za-z0-9])";
+                    //
+                    // 空格/标点宽容（解决"术语值差了个空格或标点就匹配不到"）：
+                    //   1) 术语中的 空格/连字符/下划线/斜杠/句点 → [\s\-/_.]+（一个或多个分隔符可互换）
+                    //      覆盖 "Star Destroyer" ↔ "Star-Destroyer" ↔ "Star_Destroyer" 等写法差异
+                    //   2) 分隔符处允许插入一个可选修饰词（class/mk/mark/type 等），
+                    //      覆盖 "Procursator Star Destroyer" ↔ "Procursator-class Star Destroyer"
+                    //   3) 术语本身的修饰词 token 也可选（当术语还有其他核心词时），
+                    //      覆盖反向 "Executor-class Star Dreadnought" ↔ "Executor Star Dreadnought"
+                    //   4) 术语中的撇号 → ['']?（可有可无），覆盖 "Hutt's" ↔ "Hutts"
+                    const string modifierToken = @"(?:class|mark|mk|type|series|version|model|variant|generation|prototype|standard)";
+                    var parts = new StringBuilder();
+                    // 按分隔符分词（保留分隔符），如 "Executor-class Star" → [Executor, -, class, ' ', Star]
+                    var tokens = Regex.Split(term, @"([\s\-/_.]+)").Where(t => t.Length > 0).ToArray();
+                    // 术语中是否含"核心词"（非修饰词）——只有含核心词时修饰词才可省略
+                    bool hasCoreWord = tokens.Any(t =>
+                        !Regex.IsMatch(t, @"^[\s\-/_.]+$") &&
+                        !Regex.IsMatch(t, $"^{modifierToken}$", RegexOptions.IgnoreCase));
+
+                    for (int i = 0; i < tokens.Length; i++)
+                    {
+                        var tok = tokens[i];
+                        if (Regex.IsMatch(tok, @"^[\s\-/_.]+$"))
+                        {
+                            // 分隔符：前一 token 是可选修饰词时本分隔符也可选（修饰词被省略时仍能衔接），
+                            // 否则必选；后一 token 非可选修饰词时允许插入一个修饰词
+                            bool prevIsOptionalModifier = i > 0 && IsModifierToken(tokens[i - 1], modifierToken) && hasCoreWord;
+                            bool nextIsOptionalModifier = i + 1 < tokens.Length && IsModifierToken(tokens[i + 1], modifierToken) && hasCoreWord;
+                            parts.Append(prevIsOptionalModifier ? @"[\s\-/_.]*" : @"[\s\-/_.]+");
+                            if (!nextIsOptionalModifier)
+                                parts.Append($@"({modifierToken}[\s\-/_.]+)?");
+                        }
+                        else
+                        {
+                            var escaped = EscapeTermToken(tok);
+                            bool isModifier = IsModifierToken(tok, modifierToken) && hasCoreWord;
+                            // 修饰词可选但不吞尾随分隔符（分隔符由后续 token 提供）
+                            parts.Append(isModifier
+                                ? $@"(?:{escaped}(?:es|s|'s)?)?"
+                                : escaped);
+                        }
+                    }
+                    var pattern = $@"(?<![A-Za-z0-9]){parts}(?:es|s|'s)?(?![A-Za-z0-9])";
                     regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
                     _regexCache[term] = regex;
                 }
                 return regex;
             }
+        }
+
+        private static bool IsModifierToken(string tok, string modifierToken) =>
+            Regex.IsMatch(tok, $"^{modifierToken}$", RegexOptions.IgnoreCase);
+
+        /// <summary>术语 token 转义：逐字符转义，每个普通字符后允许插入一个可选撇号（Hutts ↔ Hutt's 双向）；撇号本身可选。</summary>
+        private static string EscapeTermToken(string tok)
+        {
+            var sb = new StringBuilder();
+            foreach (char ch in tok)
+            {
+                if (ch == '\'' || ch == '\u2019')
+                {
+                    sb.Append(@"['\u2019]?");
+                }
+                else
+                {
+                    sb.Append(Regex.Escape(ch.ToString()));
+                    sb.Append(@"['\u2019]?");
+                }
+            }
+            return sb.ToString();
         }
 
         // ─── Exact match lookup ─────────────────────────────────────
@@ -260,8 +323,8 @@ namespace SimpleXmlEditor.Dictionary
         {
             if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(term))
                 return false;
-            if (term.Length > text.Length)
-                return false;
+            // 注意：不做 term.Length > text.Length 的预检——宽容匹配下
+            // 术语可能因含修饰词（如 "Executor-class"）而比原文长，仍可能语义匹配。
 
             var regex = GetOrCreateRegex(term);
             return regex.IsMatch(text);

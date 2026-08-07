@@ -98,7 +98,7 @@ namespace SimpleXmlEditor.Tests
             public Task<string> TranslateSingleAsync(string text, int maxRetries = 3)
                 => Task.FromResult("");
 
-            public Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3)
+            public Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null)
             {
                 Calls++;
                 // 匹配新格式：index. [KEY] "text"（KEY 为条目标识，测试中不校验其内容）

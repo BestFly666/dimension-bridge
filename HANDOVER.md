@@ -497,6 +497,9 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 25. **条目 Key 可注入 Prompt**（2026-08-06）：条目 Key（如 `TEXT_SPEECH_*`、`UNIT_*_DESCRIPTION`）含内容类型/场景线索，注入后帮助模型判断语境。格式 `1. [KEY] "原文"`，Key 经 `SanitizePromptText` 转义，规则明确禁止将 Key 混入译文
 26. **进度保存不阻塞信号量**（2026-08-06）：`SaveTranslationProgressAsync` 必须在 `batchSemaphore.Release()` **之后**执行——先释放信号量让下一批启动，再保存进度。避免序列化大数据 + 写文件阻塞并发管线
 27. **API RPM ≠ 并发生成数**（2026-08-06）：DeepSeek 2500 RPM 是每分钟允许发送的请求数，不等于服务器端同时生成的请求数（观察值 ≈ 2）。客户端并发度再高也无法突破 API 端的并发生成限制
+28. **项目定位与竞品**（2026-08-06）：本项目面向游戏汉化组批量翻译，与 LunaTranslator（视觉小说实时翻译）不在同一赛道。护城河是批量工作流 + 术语管理 + 质量评估 + 导出游戏格式——实时翻译工具不会做这些
+29. **长上下文一致性**（2026-08-06）：当前不做 RAG（ROI 低，仅 ~10% 对话类条目可能受益）。术语表 + Key 注入 + 专家配置已覆盖核心全局一致性。低成本改善：分批前按 Key 前缀排序（一行代码 `OrderBy(e => e.Key)`）
+30. **版权**（2026-08-06）：LICENSE 已更新为 `Copyright (c) 2025 Veloxcity, 2026 BestFly666`。用户贡献约 65%，但约 2830 行仍为原作者代码骨架。README 署名建议从"基于"改为"最初基于...经大规模重构"
 
 ---
 ## 11. 项目结构
