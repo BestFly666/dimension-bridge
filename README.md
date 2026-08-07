@@ -1,8 +1,8 @@
-# XML AI Translator
+# AI Translator
 
-🌐 **基于 AI 批量翻译的现代化 XML 本地化工具**
+🌐 **基于 AI 批量翻译的现代化多格式本地化工具**
 
-一款功能强大的 WPF 桌面应用，专为中文游戏本地化人员设计，支持**国内主流 AI 大模型**批量翻译 XML 本地化文件。具备智能分批、翻译缓存、术语表管理、AI 质量评估等完善的本地化工作流功能。
+一款功能强大的 WPF 桌面应用，专为中文游戏本地化人员设计，支持**国内主流 AI 大模型**批量翻译主流本地化文件格式（XML / CSV / JSON / INI / YAML / RESX / PO / TXT / Android）。具备智能分批、翻译缓存、术语表管理、AI 质量评估等完善的本地化工作流功能。
 
 ![平台](https://img.shields.io/badge/平台-.NET%208.0-blue)
 ![许可](https://img.shields.io/badge/许可-MIT-green)
@@ -10,7 +10,7 @@
 ![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
 
 > [!IMPORTANT]
-> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 星球大战重制版模组4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与文件格式尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
+> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 星球大战重制版模组4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与二进制格式（.dat 等）尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
 
 ---
 
@@ -81,10 +81,10 @@
 - Excel 式选择：单元格/整行/整列/全选（Ctrl+A），大文件毫秒级响应
 - 实时翻译进度、支持暂停/继续/停止
 - 崩溃恢复：意外退出后重启可继续翻译
-- **自动保存**：每 5 分钟自动保存缓存与配置（不覆盖源 XML），类似 Excel 的 AutoRecover
+- **自动保存**：每 5 分钟自动保存缓存与配置（不覆盖源文件），类似 Excel 的 AutoRecover
 - 批量替换：支持正则搜索替换
 - 撤销：批量替换、AI 应用、手动编辑均可 Ctrl+Z 撤销，撤销后自动跳转到对应行
-- Ctrl+S 快速保存缓存（只写缓存，不覆盖源 XML）
+- Ctrl+S 快速保存缓存（只写缓存，不覆盖源文件）
 
 ### 黑名单过滤
 - 按 Key 前缀匹配跳过指定条目（如 `TEXT_SPEECH_` 语音文本），不消耗 API 配额
@@ -103,13 +103,31 @@
 
 1. **获取 API Key**：前往任一支持的大模型平台注册并获取 API 密钥
 2. **配置工具**：点击右上角 ⚙️ → 选择提供商 → 填入 API Key → 刷新模型 → 选择模型
-3. **开始翻译**：加载 XML 文件 → 选中条目或全部翻译 → 导出译文
+3. **开始翻译**：加载文件（XML / CSV / JSON / INI / YAML / RESX 等）→ 选中条目或全部翻译 → 导出译文
 
 > **可选**：设置 → "评估模型"Tab 可配置与翻译不同的厂商/模型（如用 DeepSeek 翻译、用智谱评估），打破"AI 自己检查自己"的同源偏差；留空则评估复用翻译模型。
 
-### 支持的 XML 格式
+### 支持的文件格式
 
-适用于游戏本地化常用的 Excel XML 格式：
+通过插件系统（`IFileFormatPlugin`）支持主流本地化文件格式，打开/保存时自动识别，编码自动检测并按原编码写回：
+
+| 格式 | 扩展名 | 说明 |
+|------|--------|------|
+| Excel XML | .xml | 游戏本地化常用 Excel Spreadsheet XML（`<?mso-application progid="Excel.Sheet"?>`，自动识别） |
+| 自定义 XML | .xml | `LocalisationData` 结构（Key / 原文 / 译文 CDATA） |
+| Android | .xml | `strings.xml` 资源文件 |
+| CSV | .csv | 自动识别 3 列（Key / 原文 / 译文）或 2 列（Key / Value） |
+| JSON | .json | i18n 格式，扁平或嵌套 key-value |
+| INI | .ini | `[Section]` 段 + `key=value` |
+| YAML | .yaml / .yml | 嵌套字典 / 数组 |
+| RESX | .resx | .NET 资源文件 |
+| Java Properties | .properties | Java 规范转义（`\uXXXX` / `\:` / 续行） |
+| PO | .po | Gettext 翻译文件 |
+| TXT | .txt | 键值对文本 |
+
+> 编码处理：文本格式自动检测 UTF-8（含 BOM）与 GBK，保存时按原编码写回，国内 Excel 打开不乱码。
+
+示例 — Excel XML 格式：
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -130,15 +148,15 @@
 
 ## 已知问题与限制
 
-- **已验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏上实测通过；**其他游戏、XML 结构或二进制格式未验证**，请先用副本测试。
-- **数据安全**：Ctrl+S / 自动保存只更新本地缓存（`translation_cache.json`，存于 `%LocalAppData%\SimpleXmlEditor\`），**不会覆盖源 XML**；只有显式点击"保存"按钮才导出 XML（译文替换原文值供游戏使用）。仍建议定期备份源文件。
+- **已验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏上实测通过；**其他游戏与二进制格式（.dat 等）未验证**，请先用副本测试。
+- **数据安全**：Ctrl+S / 自动保存只更新本地缓存（`translation_cache.json`，存于 `%LocalAppData%\SimpleXmlEditor\`），**不会覆盖源文件**；只有显式点击"保存"按钮才导出（译文替换原文值供游戏使用）。仍建议定期备份源文件。
 - **游戏内断行适配**：中文在游戏引擎内的断行处理（如 4.0 的 79 字符强制换行）是**引擎专用**的，由独立脚本维护（`scripts/` 目录，不在本工具内），换行参数需按游戏自行调整。
 - **语音/界面文本**：`TEXT_SPEECH` 等语音文本与单位描述类条目不支持手动换行，游戏使用自动换行。
 
 ## 反馈与支持
 
 - 报告 Bug / 建议功能：前往 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 创建 Issue
-- 反馈前请提供：使用的 AI 提供商/模型、XML 样例片段、操作步骤、预期结果与实际结果
+- 反馈前请提供：使用的 AI 提供商/模型、文件样例片段、操作步骤、预期结果与实际结果
 
 ---
 
@@ -157,7 +175,7 @@ dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 
 ```bash
 dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
-# 当前: 40/40 通过，0 失败，0 跳过
+# 当前: 58/58 通过，0 失败，0 跳过
 ```
 
 ### CI/CD
@@ -182,7 +200,8 @@ project-root/
 │   │   ├── Interfaces.cs                # 服务接口定义
 │   │   ├── TranslationEvaluator.cs      # ITranslationEvaluator — 质量评估 + 多代理投票
 │   │   ├── TranslationOrchestrator.cs   # 翻译流程编排（token预算分批/术语/缓存/prompt）
-│   │   └── XmlRepository.cs             # IXmlRepository — XML 数据访问
+│   │   ├── XmlRepository.cs             # IXmlRepository — XML 数据访问
+│   │   └── PluginLoader.cs              # IFileFormatPlugin 插件加载器（动态收集扩展名）
 │   ├── ViewModels/
 │   │   ├── MainViewModel.cs             # MVVM ViewModel（主类）
 │   │   ├── MainViewModel.Translation.cs # 翻译流水线（并发/暂停/进度/计时）
@@ -209,10 +228,20 @@ project-root/
 │   ├── Utils/
 │   │   └── PromptTemplates.cs           # AI 提示词模板
 │   ├── Plugins/
-│   │   └── TxtFilePlugin.cs             # TXT 文件格式插件
+│   │   ├── XmlFilePlugin.cs            # Excel / 自定义 XML 格式插件
+│   │   ├── AndroidStringsPlugin.cs     # Android strings.xml 插件
+│   │   ├── CsvFilePlugin.cs            # CSV 插件（列结构自动识别）
+│   │   ├── JsonI18nPlugin.cs           # JSON i18n 插件
+│   │   ├── IniFilePlugin.cs            # INI 插件（[Section] 段）
+│   │   ├── YamlFilePlugin.cs           # YAML 插件（YamlDotNet）
+│   │   ├── ResxFilePlugin.cs           # .NET RESX 插件
+│   │   ├── PropertiesFilePlugin.cs     # Java Properties 插件
+│   │   ├── PoFilePlugin.cs             # Gettext PO 插件
+│   │   ├── TxtFilePlugin.cs            # TXT 键值对插件
+│   │   └── TextEncodingDetector.cs     # 共享编码检测（UTF-8/GBK）
 │   ├── ExpertProfiles/                  # 专家配置
 │   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
-├── SimpleXmlEditor.Tests/               # xUnit 测试项目（40 个测试）
+├── SimpleXmlEditor.Tests/               # xUnit 测试项目（58 个测试）
 │   ├── TranslationOrchestratorTests.cs  # 分批/翻译/Key注入 测试
 │   ├── BlacklistManagerTests.cs         # 黑名单过滤测试
 │   ├── XmlRepositoryTests.cs            # XML 读写测试
