@@ -35,6 +35,27 @@ namespace SimpleXmlEditor.ViewModels
             }
         }
 
+        /// <summary>
+        /// 撤销编辑提交时调用：若栈顶是该条目的单条快照且值未变（用户没改就提交/按 Esc 取消），
+        /// 丢弃该快照，避免无意义快照挤占 50 条上限导致批量操作快照被挤出、Ctrl+Z 失效。
+        /// </summary>
+        public bool DiscardUndoSnapshotIfUnchanged(string key, string editedValue)
+        {
+            lock (_undoLock)
+            {
+                if (_undoStack.Count == 0) return false;
+                var top = _undoStack.Peek();
+                if (top.Count != 1) return false; // 只处理单条编辑快照
+                if (!top.TryGetValue(key, out var oldValue)) return false;
+                if (string.Equals(oldValue, editedValue, StringComparison.Ordinal))
+                {
+                    _undoStack.Pop();
+                    return true;
+                }
+                return false;
+            }
+        }
+
         /// <summary>Revert the most recent mutation. Returns the list of restored entries (empty if nothing to undo).</summary>
         public List<LocalizationEntry> UndoLast()
         {
@@ -46,11 +67,12 @@ namespace SimpleXmlEditor.ViewModels
             }
 
             var restored = new List<LocalizationEntry>();
+            // 静默还原 + 调用方统一 view.Refresh()：避免逐条触发 PropertyChanged 导致大批量撤销时 UI 假死
             foreach (var entry in Entries)
             {
                 if (snapshot.TryGetValue(entry.Key, out var original))
                 {
-                    entry.Translation = original;
+                    entry.SetTranslationSilent(original);
                     restored.Add(entry);
                 }
             }

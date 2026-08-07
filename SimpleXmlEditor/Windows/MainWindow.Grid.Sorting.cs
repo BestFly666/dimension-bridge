@@ -81,8 +81,11 @@ namespace SimpleXmlEditor
 
                 e.Handled = true;
                 _viewModel.PushUndoSnapshot(entries);
+                // 静默清空 + 末尾 Refresh：全选时 entries 可能是全部行，逐条触发 PropertyChanged 会假死
                 foreach (var entry in entries)
-                    entry.Translation = "";
+                    entry.SetTranslationSilent("");
+                var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
+                view?.Refresh();
                 EntriesGrid.Focus();
                 return;
             }

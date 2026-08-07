@@ -282,6 +282,7 @@
                              BorderThickness="0"
                              Loaded="EntriesGrid_Loaded"
                              BeginningEdit="EntriesGrid_BeginningEdit"
+                             CellEditEnding="EntriesGrid_CellEditEnding"
                              PreviewKeyDown="EntriesGrid_PreviewKeyDown"
                              PreviewMouseLeftButtonDown="EntriesGrid_PreviewMouseLeftButtonDown"
                              PreviewMouseMove="EntriesGrid_PreviewMouseMove"

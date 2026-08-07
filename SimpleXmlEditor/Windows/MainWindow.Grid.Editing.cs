@@ -53,6 +53,21 @@ namespace SimpleXmlEditor
             }
         }
 
+        /// <summary>
+        /// 编辑提交/取消时，若译文值未变化（没改就提交、或 Esc 取消），丢弃 BeginningEdit 时压入的
+        /// 单条撤销快照——避免无意义快照挤占 Undo 栈上限，导致批量操作快照被挤出、Ctrl+Z 无法撤销批量操作。
+        /// </summary>
+        private void EntriesGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e)
+        {
+            // Translation 列的 DisplayIndex 是 4（✓/Status/Key/Original/Translation/Score）
+            if (e.Column?.DisplayIndex == 4 && e.EditingElement is TextBox tb)
+            {
+                var editedKey = (e.Row.Item as LocalizationEntry)?.Key;
+                if (!string.IsNullOrEmpty(editedKey))
+                    _viewModel.DiscardUndoSnapshotIfUnchanged(editedKey, tb.Text);
+            }
+        }
+
         private DataGridRow _resizingRow;
 
         private void RowResizeThumb_DragStarted(object sender, DragStartedEventArgs e)

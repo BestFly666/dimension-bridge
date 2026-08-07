@@ -169,12 +169,14 @@ namespace SimpleXmlEditor
                 }
 
                 var matchCount = 0;
+                // 静默批量赋值：避免逐条触发 PropertyChanged（大文件下 DataGrid 逐行重绘导致假死），
+                // 统一由末尾 view.Refresh() 一次刷新。
                 foreach (var entry in _viewModel.Entries)
                 {
                     if (!string.IsNullOrEmpty(entry.Translation) &&
                         entry.Translation.Contains(searchText))
                     {
-                        entry.Translation = entry.Translation.Replace(searchText, replaceText);
+                        entry.SetTranslationSilent(entry.Translation.Replace(searchText, replaceText));
                         matchCount++;
                     }
                 }

@@ -57,6 +57,12 @@ namespace SimpleXmlEditor.Services
             }
         }
 
+        /// <summary>静默设置 Translation（不触发 PropertyChanged），用于批量操作性能优化（对标 SetIsSelectedSilent）。</summary>
+        public void SetTranslationSilent(string value)
+        {
+            _translation = value;
+        }
+
         public bool IsSelected
         {
             get => _isSelected;
