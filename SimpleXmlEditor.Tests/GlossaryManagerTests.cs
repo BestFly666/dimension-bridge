@@ -131,5 +131,90 @@ namespace SimpleXmlEditor.Tests
             Assert.Equal("暴风兵", terms["Stormtrooper"]);
             manager.Clear();
         }
+
+        // ─── 宽松相关判定（AI 提示词注入，覆盖核心词省略变体） ──────
+
+        [Fact]
+        public void IsTermRelated_FirstCoreWordPlusClassModifier_Matches()
+        {
+            // 原文 "Xyston-class" 只含术语首核心词 + class 修饰词
+            Assert.True(GlossaryManager.IsTermRelated("Xyston-class", "Xyston-class Star Destroyer"));
+            Assert.True(GlossaryManager.IsTermRelated("Quasar Fire-class", "Quasar Fire-class cruiser-carrier"));
+        }
+
+        [Fact]
+        public void IsTermRelated_CoreWordSubsetInOrder_Matches()
+        {
+            // 原文省略术语的部分核心词（Xyston Siege Destroyer Upkeep 缺 Star）
+            Assert.True(GlossaryManager.IsTermRelated(
+                "Xyston Siege Destroyer Upkeep", "Xyston-class Star Destroyer"));
+            // 原文省略术语的部分核心词（Quasar Fire-class Carrier 缺 cruiser）
+            Assert.True(GlossaryManager.IsTermRelated(
+                "Quasar Fire-class Carrier", "Quasar Fire-class cruiser-carrier"));
+        }
+
+        [Fact]
+        public void IsTermRelated_UnrelatedText_DoesNotMatch()
+        {
+            // 缺 Destroyer/Star 且无 class 修饰词：不相关
+            Assert.False(GlossaryManager.IsTermRelated(
+                "Xyston Siege Upkeep Battery", "Xyston-class Star Destroyer"));
+            Assert.False(GlossaryManager.IsTermRelated(
+                "The Quasar Nebula", "Quasar Fire-class cruiser-carrier"));
+            Assert.False(GlossaryManager.IsTermRelated("", "Xyston-class Star Destroyer"));
+        }
+
+        [Fact]
+        public void IsTermRelated_SingleCoreWordTerm_Matches()
+        {
+            // 单核心词术语（"Executor-class" 只剩 executor）：含首核心词即宽松命中
+            Assert.True(GlossaryManager.IsTermRelated("Executor Dreadnought", "Executor-class"));
+            Assert.True(GlossaryManager.IsTermRelated("Executor's bridge", "Executor-class"));
+
+            // 不含首核心词仍不命中
+            Assert.False(GlossaryManager.IsTermRelated("Dreadnought", "Executor-class"));
+        }
+
+        [Fact]
+        public void Skipray_Variants_Match()
+        {
+            // 标准写法（大小写差异）严格命中
+            Assert.True(GlossaryManager.ContainsWholeWord("Skipray Blastboat", "Skipray blastboat"));
+            Assert.True(GlossaryManager.ContainsWholeWord("The Skipray Blastboat squadron", "Skipray blastboat"));
+
+            // 单独短名 "Skipray"（2 核心词术语只命中首核心词）应宽松命中提示注入
+            Assert.True(GlossaryManager.IsTermRelated("2 Skipray (6)", "Skipray blastboat"));
+            Assert.True(GlossaryManager.IsTermRelated("The GAT-12 Skipray is durable", "Skipray blastboat"));
+
+            // 空格拆分 "Blast Boat(s)" 应宽松命中（首核心词 Skipray 命中即相关）
+            Assert.True(GlossaryManager.IsTermRelated("Skipray Blast Boat here", "Skipray blastboat"));
+            Assert.True(GlossaryManager.IsTermRelated("Skipray Blast Boats can be used", "Skipray blastboat"));
+
+            // 不含 Skipray 不命中
+            Assert.False(GlossaryManager.IsTermRelated("Blastboat", "Skipray blastboat"));
+        }
+
+        [Fact]
+        public void GetGlossaryContextTerms_LooseVariant_FindsTerm()
+        {
+            var manager = new GlossaryManager();
+            manager.Clear();
+            manager.SetEntry("Xyston-class Star Destroyer", "长矛级歼星舰");
+            manager.SetEntry("Quasar Fire-class cruiser-carrier", "“类星体火级”载机巡洋舰");
+
+            var entries = new List<LocalizationEntry>
+            {
+                new LocalizationEntry { Key = "K1", Value = "Xyston-class" },
+                new LocalizationEntry { Key = "K2", Value = "Xyston Siege Destroyer Upkeep" },
+                new LocalizationEntry { Key = "K3", Value = "Quasar Fire-class Carrier." }
+            };
+
+            var terms = manager.GetGlossaryContextTerms(entries);
+
+            Assert.Contains("Xyston-class Star Destroyer", terms.Keys);
+            Assert.Contains("Quasar Fire-class cruiser-carrier", terms.Keys);
+            Assert.Equal("长矛级歼星舰", terms["Xyston-class Star Destroyer"]);
+            manager.Clear();
+        }
     }
 }

@@ -82,6 +82,54 @@
 
 ---
 
+## 2026-08-07 — 术语宽松相关判定（AI 提示注入）+ 日志显示修复
+
+> 背景：用户报术语表"首核心词省略变体"匹配不上——`Xyston-class Star Destroyer` 匹配不到原文 `Xyston-class` / `Xyston Siege Destroyer Upkeep`；`Quasar Fire-class cruiser-carrier` 匹配不到 `Quasar Fire-class Carrier`；`Skipray blastboat` 匹配不到原文大量出现的单独 `Skipray` 短名与 `Skipray Blast Boat(s)`。用户确认是 **AI 提示词注入**路径失效（`GetGlossaryContextTerms` 候选验证用严格 `ContainsWholeWord`），而非替换/冲突检测。以 AI 工程师 + 代码审查员身份处理。
+
+### A. 术语宽松相关判定 `IsTermRelated`（仅用于 AI 提示注入）
+
+**设计**：[GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs#L320-L432) 新增静态方法 `IsTermRelated(text, term)`，宽松判定"原文与术语相关"（替换/冲突检测仍走严格 `ContainsWholeWord`，不受影响）：
+
+1. **条件 2 — 首核心词 + 类名修饰词**：命中术语首核心词后紧邻 `class/mk/type` 等修饰词即相关（覆盖 `Xyston-class`、`Quasar Fire-class` 单位名）
+2. **条件 1 — 核心词按序子集命中**：按序命中 ≥ ceil(核心词数/2) 个核心词（封顶核心词数）。2 核心词 → 1（命中首核心词即相关，覆盖 `Skipray` 单独短名）；3 → 2；4+ → 半数以上
+3. **复数/所有格宽容**：`WordMatches` 支持 `s/es` 后缀与去撇号比较（`Executors` ↔ `Executor`、`Executor's` ↔ `Executor`）
+
+**关键 bug 修复**：minHits 原为 `Math.Max(2, ceil(n/2))`——单核心词术语（`Executor-class`）被抬到 2 而 hits 上限是 1，**永远无法宽松命中**；且 2 核心词术语要求全命中，宽松等价于严格。改为 `Math.Min(ceil(n/2), n)` 后单核心词命中首核心词即相关。
+
+**接线**：`GetGlossaryContextTerms` 候选验证从 `ContainsWholeWord(entry.Value, termKey)` 改为 `IsTermRelated(entry.Value, termKey)`——倒排索引候选收集不变（`Skipray`/`Xyston` 等词命中即进候选，`Blast Boat` 拆分场景靠首核心词 `Skipray` 兜底）。
+
+**共享常量**：`ModifierTokenPattern`（class/mark/mk/type/series/version/model/variant/generation/prototype/standard）提取到 [GlossaryManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.cs#L47)，`GetOrCreateRegex` 与 `IsTermRelated` 共用。
+
+**已知取舍**：宽松匹配只影响提示注入（AI 参考，非强制替换），误报注入的代价仅是提示里多一两条术语，AI 靠上下文判断，错译概率极小；术语表以专有名词为主，首核心词误报风险低。
+
+### B. 日志显示修复（换行 + 自动滚动）
+
+**问题**：日志区一行超出显示区域，后面内容看不到（无自动换行）；自动滚动不跟随底部。
+
+**根因**：
+- [MainWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.xaml#L580-L587) 外层 `ScrollViewer` 的 `HorizontalScrollBarVisibility="Auto"` 给了 TextBox **无限宽度** → `TextWrapping="Wrap"` 不生效，长行水平溢出
+- `LogTextBox.ScrollToEnd()`（[MainWindow.Helpers.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Helpers.cs#L43)）调用的是 TextBox 内部滚动，但滚动条实际在外层 ScrollViewer（TextBox 为 `VerticalScrollBarVisibility="Disabled"`）→ 自动滚动失效
+
+**修复**：移除多余的外层 ScrollViewer，TextBox 直接撑满容器（Wrap 生效），`VerticalScrollBarVisibility="Auto"` 自管滚动，`ScrollToEnd()` 作用于实际滚动条（250ms 合并渲染时自动跟随底部）。
+
+### C. DataGrid 交互打磨补记（上个会话遗留，一并提交）
+
+- **左上角全选按钮改为"重置排序"**：点击行头/列头交汇处按钮触发 `ResetSorting()`（清所有列 `SortDirection` + `SortDescriptions.Clear()` + `Refresh()`，恢复 XML 原始顺序，保留筛选）；移除原先的 `HideSelectAllButton`
+- **Excel 式 Del**：选中行按 `Del` 清空译文（先 `PushUndoSnapshot` 可撤销；单元格编辑模式下放行，保留 TextBox 自身 Del 行为）
+
+### 验证
+
+- `dotnet test`：**48 个测试全部通过**（0 失败；新增 6 个：Xyston/Quasar 宽松命中、单核心词 bug、Skipray 变体、端到端 `GetGlossaryContextTerms`、反例）
+- `dotnet build`：0 错误 0 警告
+
+### 经验教训
+
+1. **宽松阈值要与语义匹配**：`Math.Max(2, ceil(n/2))` 把 2 核心词术语的宽松阈值抬到"全命中"，使宽松等价于严格，单独首核心词短名（`Skipray`）永远匹配不上。阈值应随核心词数缩放并封顶
+2. **ScrollViewer 包自滚动控件是双滚动画布**：外层 `ScrollViewer` + 子控件 `VerticalScrollBarVisibility=Disabled` 时，代码里对子控件调 `ScrollToEnd()` 调错对象；自管滚动的控件不要外包滚动容器
+3. **提示注入与替换要分离语义**：注入路径可宽松（AI 参考，误报无害），替换/冲突检测必须严格（直接改译文，误报有害）——两套判定并存
+
+---
+
 ## 2026-08-06（续）— 产品战略讨论：竞品分析 / 定位 / 上下文一致性 / 版权
 
 > 背景：用户看到 LunaTranslator 项目后产生"项目没有优势"的焦虑。以产品经理 + AI 工程师 + 技术文档工程师身份进行战略讨论。

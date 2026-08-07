@@ -80,22 +80,8 @@ namespace SimpleXmlEditor
 
         private void EntriesGrid_Loaded(object sender, RoutedEventArgs e)
         {
-            HideSelectAllButton(); // 隐藏左上角九宫格全选按钮（仅此按钮，不影响列结构）
             AttachColumnHeaderEvents();
             GetRowsPanel(); // 预热虚拟化面板引用（需在加载完成后获取）
-        }
-
-        /// <summary>
-        /// 隐藏 DataGrid 左上角的九宫格全选按钮（SelectAllButton）。
-        /// 默认模板中该按钮位于行头与列头交汇的角落，通过模板 FindName 找到并折叠，
-        /// 不动 HeadersVisibility/列结构，避免任何偏移。
-        /// </summary>
-        private void HideSelectAllButton()
-        {
-            if (EntriesGrid.Template?.FindName("SelectAllButton", EntriesGrid) is Button btn)
-            {
-                btn.Visibility = Visibility.Collapsed;
-            }
         }
 
         // ===== 行头 Excel 式整行选择 =====
@@ -107,6 +93,16 @@ namespace SimpleXmlEditor
 
         private void EntriesGrid_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // 左上角全选按钮（行头与列头交汇处，x 在行头宽度内、命中 Button）→ 改为重置排序
+            var pt = e.GetPosition(EntriesGrid);
+            if (pt.X <= EntriesGrid.RowHeaderWidth && pt.Y <= 60 &&
+                FindVisualAncestor<Button>(e.OriginalSource as DependencyObject) != null)
+            {
+                ResetSorting();
+                e.Handled = true; // 阻止 DataGrid 默认的全选行为
+                return;
+            }
+
             var header = FindVisualAncestor<DataGridRowHeader>(e.OriginalSource as DependencyObject);
             if (header == null)
             {

@@ -578,14 +578,12 @@
 
                     <!-- Console -->
                     <Border Grid.Row="1" Background="#1E1E1E" CornerRadius="6" Padding="0">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                            <TextBox Name="LogTextBox" TextWrapping="Wrap"
-                                    FontFamily="Consolas, 'Cascadia Code', monospace"
-                                    FontSize="11.5" IsReadOnly="True" Background="Transparent"
-                                    Foreground="#00FF00" BorderThickness="0" Padding="12"
-                                    VerticalContentAlignment="Top"
-                                    AcceptsReturn="True" VerticalScrollBarVisibility="Disabled"/>
-                        </ScrollViewer>
+                        <TextBox Name="LogTextBox" TextWrapping="Wrap"
+                                FontFamily="Consolas, 'Cascadia Code', monospace"
+                                FontSize="11.5" IsReadOnly="True" Background="Transparent"
+                                Foreground="#00FF00" BorderThickness="0" Padding="12"
+                                VerticalContentAlignment="Top"
+                                AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
                     </Border>
 
                     <!-- Log Stats -->

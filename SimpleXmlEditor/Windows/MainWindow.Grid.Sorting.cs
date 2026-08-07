@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using SimpleXmlEditor.Localization;
@@ -19,6 +20,23 @@ namespace SimpleXmlEditor
     /// </summary>
     public partial class MainWindow
     {
+        /// <summary>
+        /// 重置排序：清除所有列的排序箭头与排序描述，恢复 XML 原始顺序（保留筛选）。
+        /// 由左上角全选按钮点击触发（该按钮原为全选功能，已改为重置排序）。
+        /// </summary>
+        private void ResetSorting()
+        {
+            foreach (var column in EntriesGrid.Columns)
+                column.SortDirection = null;
+
+            var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
+            view?.SortDescriptions.Clear();
+            view?.Refresh();
+
+            AddLog("已重置排序（恢复原始顺序）");
+            EntriesGrid.Focus();
+        }
+
         private void AttachColumnHeaderEvents()
         {
             if (VisualTreeHelper.GetChildrenCount(EntriesGrid) == 0) return;
@@ -49,9 +67,26 @@ namespace SimpleXmlEditor
         /// <summary>
         /// 拦截 DataGrid 内置 Ctrl+A（会 SelectAll 所有 cell，大数据量下卡死），
         /// 改为 Excel 式逻辑全选（毫秒级）。编辑模式下放行以保留文本框全选文本。
+        /// 另支持 Excel 式 Del：清空选中行的译文。
         /// </summary>
         private void EntriesGrid_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Key == Key.Delete)
+            {
+                // 编辑模式下放行，让 TextBox 自身的 Del 删除光标后字符/选中文本
+                if (Keyboard.FocusedElement is TextBox) return;
+
+                var entries = GetSelectedEntries();
+                if (entries.Count == 0) return;
+
+                e.Handled = true;
+                _viewModel.PushUndoSnapshot(entries);
+                foreach (var entry in entries)
+                    entry.Translation = "";
+                EntriesGrid.Focus();
+                return;
+            }
+
             if (e.Key != Key.A) return;
             if ((Keyboard.Modifiers & ModifierKeys.Control) != ModifierKeys.Control) return;
             if (Keyboard.FocusedElement is TextBox) return; // 编辑单元格时保留 Ctrl+A 全选文本

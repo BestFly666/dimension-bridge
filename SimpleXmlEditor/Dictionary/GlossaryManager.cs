@@ -43,6 +43,9 @@ namespace SimpleXmlEditor.Dictionary
         /// <summary>Regex cache shared across all methods (thread-safe reads, rebuild on import)</summary>
         private static readonly Dictionary<string, Regex> _regexCache = new();
 
+        /// <summary>类名/型号修饰词（class/mk/type 等），匹配宽容与宽松判定共用。</summary>
+        private static readonly string ModifierTokenPattern = @"(?:class|mark|mk|type|series|version|model|variant|generation|prototype|standard)";
+
         public int Count => Terms.Count;
 
         public GlossaryManager()
