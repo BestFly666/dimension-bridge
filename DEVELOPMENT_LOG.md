@@ -82,6 +82,44 @@
 
 ---
 
+## 2026-08-07（续）— 主流文件格式扩展：CSV / INI / YAML / RESX / PROPERTIES
+
+> 需求："增加支持的文件格式，起码主流文件格式要支持"。产品决策：CSV/INI/YAML/RESX/PROPERTIES 五格式（XLIFF 未选、格式互转 Non-Goal）；CSV 列结构自动识别；文本格式编码自动检测 + 原编码写回；YAML 引入 YamlDotNet；译文为空回退原文（"导出替换原值"约定）。
+
+### A. 新增 5 个格式插件（IFileFormatPlugin 模型，零 UI 改动自动生效）
+
+| 插件 | 扩展名 | 说明 |
+|---|---|---|
+| [CsvFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/CsvFilePlugin.cs) | .csv | 列结构自动识别（3 列 Key/Original/Translation 或 2 列 Key/Value，表头关键词判定）；字符级解析器（引号包裹、"" 转义、引号内逗号/换行安全） |
+| [IniFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/IniFilePlugin.cs) | .ini | [Section] 段 + key=value；带段 Key 存 "[Section]key"，保存按段前缀还原结构 |
+| [YamlFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/YamlFilePlugin.cs) | .yaml/.yml | YamlDotNet 18.1.0 解析；嵌套字典点分拼接 Key、数组 [i] 展开（与 JsonI18nPlugin 一致） |
+| [ResxFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/ResxFilePlugin.cs) | .resx | data name/value 读写；保存输出标准 resheader 保证资源编译器可用；XDocument 默认禁 DTD（防 XXE） |
+| [PropertiesFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/PropertiesFilePlugin.cs) | .properties | Java 规范转义（\\ \n \t \r \uXXXX \: \=）、行尾反斜杠续行、# ! 注释 |
+
+### B. 共享编码检测 + TxtFilePlugin 重构
+
+- [TextEncodingDetector.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/TextEncodingDetector.cs) 静态类：UTF-8 BOM → 严格 UTF-8 校验 → GBK 兜底（CodePages 注册一次）
+- TxtFilePlugin 删除自带 DetectEncoding/GetGbEncoding，改调共享类——CSV/INI/PROPERTIES/TXT 四格式统一"加载原编码、保存原编码写回"，国内 Excel 打开不乱码
+
+### C. 行为约定（产品决策落地）
+
+- **两列模型**（INI/YAML/RESX/PROPERTIES/2 列 CSV）：保存时译文写入 Value 列（回退原文约定）；**三列模型**（3 列 CSV）：译文写入 Translation 列
+- 保存编码 = 加载检测编码（UTF-8 BOM 保留 BOM）
+- 打开/保存对话框过滤器自动包含新扩展名（PluginLoader.GetAllSupportedExtensions 动态收集）
+
+### 验证
+
+- `dotnet test`：**58 个测试全部通过**（新增 10 个：CSV 三列往返/引号转义/两列/GBK 编码、INI 段往返/无段、YAML 嵌套往返、RESX 往返、PROPERTIES 转义往返、编码检测器；既有 48 个无回归，含 TxtFilePlugin 重构）
+- `dotnet build`：0 错误 0 警告（测试工程既有 nullability 警告与本次改动无关）
+
+### 经验教训
+
+1. **插件测试的"模型意识"**：两列格式（INI/YAML/RESX/PROPERTIES）保存后译文落在 Value 而非 Translation——断言必须按插件的数据模型写，否则误判失败
+2. **共享编码逻辑应收敛为单一静态类**：Txt 原实现散落在插件内部，扩展第 2/3/4 个文本格式时必然要复用，提前提取避免四份重复
+3. **表头识别要宽容但防误判**：CSV 表头判定锚定第一列为 key/id + 常见列名，数据行恰好第一列叫 Key 的误判可接受（V1）
+
+---
+
 ## 2026-08-07 — 术语宽松相关判定（AI 提示注入）+ 日志显示修复
 
 > 背景：用户报术语表"首核心词省略变体"匹配不上——`Xyston-class Star Destroyer` 匹配不到原文 `Xyston-class` / `Xyston Siege Destroyer Upkeep`；`Quasar Fire-class cruiser-carrier` 匹配不到 `Quasar Fire-class Carrier`；`Skipray blastboat` 匹配不到原文大量出现的单独 `Skipray` 短名与 `Skipray Blast Boat(s)`。用户确认是 **AI 提示词注入**路径失效（`GetGlossaryContextTerms` 候选验证用严格 `ContainsWholeWord`），而非替换/冲突检测。以 AI 工程师 + 代码审查员身份处理。

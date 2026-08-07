@@ -20,15 +20,12 @@ namespace SimpleXmlEditor.Plugins
         public string FormatName => "Key-Value TXT";
         public string[] FileExtensions => new[] { ".txt" };
 
-        private static bool _codePagesRegistered;
-        private static readonly object _registerLock = new object();
-
         /// <summary>加载时的编码，保存时复用（保持原编码写回）。</summary>
         private Encoding _loadedEncoding = new UTF8Encoding(false);
 
         public List<LocalizationEntry> Load(string filePath)
         {
-            var encoding = DetectEncoding(filePath);
+            var encoding = TextEncodingDetector.Detect(filePath);
             _loadedEncoding = encoding;
 
             var entries = new List<LocalizationEntry>();
@@ -81,39 +78,6 @@ namespace SimpleXmlEditor.Plugins
             if (eq < 0) return colon;
             if (colon < 0) return eq;
             return Math.Min(eq, colon);
-        }
-
-        /// <summary>自动识别编码：UTF-8 BOM → 严格 UTF-8 校验 → GBK 兜底。</summary>
-        private static Encoding DetectEncoding(string filePath)
-        {
-            var bytes = File.ReadAllBytes(filePath);
-
-            if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-                return new UTF8Encoding(true);
-
-            try
-            {
-                var strict = new UTF8Encoding(false, true);
-                strict.GetString(bytes);
-                return new UTF8Encoding(false);
-            }
-            catch (DecoderFallbackException)
-            {
-                return GetGbEncoding();
-            }
-        }
-
-        private static Encoding GetGbEncoding()
-        {
-            lock (_registerLock)
-            {
-                if (!_codePagesRegistered)
-                {
-                    Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-                    _codePagesRegistered = true;
-                }
-            }
-            return Encoding.GetEncoding(936); // GBK
         }
     }
 }
