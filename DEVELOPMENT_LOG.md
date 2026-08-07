@@ -120,6 +120,29 @@
 
 ---
 
+## 2026-08-07（续二）— 批量替换 / Ctrl+Z / Del 大批量操作崩溃修复
+
+> 用户报告"批量替换和 Ctrl+Z 容易崩溃"。以代码审查员身份定位：三处结构性缺陷——UI 线程同步循环触发海量 PropertyChanged 导致 DataGrid 逐行重绘假死（Windows 判"未响应"）、每次编辑都入栈污染 Undo 栈、快照被挤出后 Ctrl+Z 失效。
+
+### 根因
+
+1. **🔴 UI 假死（用户感知"崩溃"）**：`LocalizationEntry.Translation` setter 每次触发 2 个 PropertyChanged（Translation + StatusIcon）。批量替换 / `UndoLast` / Del 清空都是 UI 线程 for 循环逐条赋值——几万条文件每条触发 DataGrid 行重绘，界面假死数秒
+2. **🟡 Undo 栈污染**：`EntriesGrid_BeginningEdit` 每次编辑都 Push 快照（哪怕值没变），连续编辑 50 次后栈被无意义快照填满，批量操作快照被挤出，Ctrl+Z 无法撤销批量操作
+
+### 修复
+
+- [XmlRepository.Models.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/XmlRepository.Models.cs#L60-L64) 新增 `SetTranslationSilent`（静默赋值，对标既有 `SetIsSelectedSilent`）
+- 批量替换 / `UndoLast` / Del 清空改为**静默批量赋值 + 末尾一次 `view.Refresh()`**，不再逐条触发 UI 更新
+- [MainViewModel.Undo.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Undo.cs#L38-L57) 新增 `DiscardUndoSnapshotIfUnchanged`：栈顶若是该条目单条快照且值未变 → 丢弃
+- [MainWindow.Grid.Editing.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Grid.Editing.cs#L56-L69) 新增 `EntriesGrid_CellEditEnding`（XAML 绑定）：提交/取消时自动丢弃"值未变"的无意义快照
+
+### 验证
+
+- 48 个既有测试全部通过，0 警告 0 错误
+- 批量替换/撤销/清空译文不再逐行刷新；编辑未改内容不再污染撤销栈
+
+---
+
 ## 2026-08-07 — 术语宽松相关判定（AI 提示注入）+ 日志显示修复
 
 > 背景：用户报术语表"首核心词省略变体"匹配不上——`Xyston-class Star Destroyer` 匹配不到原文 `Xyston-class` / `Xyston Siege Destroyer Upkeep`；`Quasar Fire-class cruiser-carrier` 匹配不到 `Quasar Fire-class Carrier`；`Skipray blastboat` 匹配不到原文大量出现的单独 `Skipray` 短名与 `Skipray Blast Boat(s)`。用户确认是 **AI 提示词注入**路径失效（`GetGlossaryContextTerms` 候选验证用严格 `ContainsWholeWord`），而非替换/冲突检测。以 AI 工程师 + 代码审查员身份处理。

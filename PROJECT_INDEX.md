@@ -185,6 +185,12 @@
 | **JsonI18nPlugin.cs** | JSON i18n 格式解析/导出 | [JsonI18nPlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/JsonI18nPlugin.cs) |
 | **PoFilePlugin.cs** | Gettext `.po` 格式解析/导出 | [PoFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/PoFilePlugin.cs) |
 | **TxtFilePlugin.cs** | 通用键值对 `.txt` 解析/导出（KEY=value、UTF-8/GBK 自动识别 + 原编码写回） | [TxtFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/TxtFilePlugin.cs) |
+| **TextEncodingDetector.cs** | 共享文本编码检测（UTF-8 BOM → 严格 UTF-8 → GBK），CSV/INI/PROPERTIES/TXT 统一复用 | [TextEncodingDetector.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/TextEncodingDetector.cs) |
+| **CsvFilePlugin.cs** | CSV 解析/导出：列结构自动识别（3 列 Key/Original/Translation 或 2 列）、引号转义、GBK 兼容 | [CsvFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/CsvFilePlugin.cs) |
+| **IniFilePlugin.cs** | INI 解析/导出：`[Section]` 段 + key=value，带段 Key 存 `[Section]key` 并还原段结构 | [IniFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/IniFilePlugin.cs) |
+| **YamlFilePlugin.cs** | YAML 解析/导出（YamlDotNet）：嵌套字典点分展平、数组 `[i]` 展开 | [YamlFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/YamlFilePlugin.cs) |
+| **ResxFilePlugin.cs** | RESX 解析/导出：data name/value 读写，输出标准 resheader | [ResxFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/ResxFilePlugin.cs) |
+| **PropertiesFilePlugin.cs** | Java Properties 解析/导出：`\\ \n \t \uXXXX` 转义、续行、注释 | [PropertiesFilePlugin.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Plugins/PropertiesFilePlugin.cs) |
 
 ---
 
@@ -242,16 +248,18 @@
 
 ## 12. 测试项目
 
-> 使用 xUnit + Moq，**36 个测试用例全部通过**（2026-08-04 核对）。
+> 使用 xUnit + Moq，**58 个测试用例全部通过**（2026-08-07 核对）。
 
 | 文件 | 测试数 | 测试内容 | 路径 |
 |------|--------|----------|------|
 | **BlacklistManagerTests.cs** | 13 | 黑名单：前缀匹配、原文精确匹配、去重、持久化、旧格式兼容 | [BlacklistManagerTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/BlacklistManagerTests.cs) |
+| **GlossaryManagerTests.cs** | 15 | 术语表 CRUD、CSV 读写、宽松相关判定（Xyston/Quasar/Skipray 省略变体） | [GlossaryManagerTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/GlossaryManagerTests.cs) |
+| **FileFormatPluginsTests.cs** | 10 | 五格式插件：CSV 列识别/引号/GBK、INI 段往返、YAML 嵌套、RESX、PROPERTIES 转义、编码检测 | [FileFormatPluginsTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/FileFormatPluginsTests.cs) |
 | **TxtFilePluginTests.cs** | 7 | 键值对 TXT：分隔符、注释、GBK 编码、保存编码保持 | [TxtFilePluginTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/TxtFilePluginTests.cs) |
-| **GlossaryManagerTests.cs** | 5 | 术语表 CRUD、CSV 读写 | [GlossaryManagerTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/GlossaryManagerTests.cs) |
 | **ConfigServiceTests.cs** | 4 | 配置读写、加密存储 | [ConfigServiceTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/ConfigServiceTests.cs) |
 | **StringExtensionsTests.cs** | 4 | `HasChineseChars()` 边界条件、`GetCacheKey()` 空值处理 | [StringExtensionsTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/StringExtensionsTests.cs) |
 | **XmlRepositoryTests.cs** | 3 | XML 格式嗅探：LocalisationData / Excel / 未知格式 | [XmlRepositoryTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/XmlRepositoryTests.cs) |
+| **TranslationOrchestratorTests.cs** | 2 | 翻译编排：批次切分、动态批大小 | [TranslationOrchestratorTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/TranslationOrchestratorTests.cs) |
 
 ---
 
@@ -346,7 +354,13 @@ xml-ai-translator-main/
 │   │   ├── AndroidStringsPlugin.cs              ← Android strings.xml
 │   │   ├── JsonI18nPlugin.cs                    ← JSON i18n
 │   │   ├── PoFilePlugin.cs                      ← Gettext PO
-│   │   └── TxtFilePlugin.cs                     ← 通用键值对 TXT
+│   │   ├── TxtFilePlugin.cs                     ← 通用键值对 TXT
+│   │   ├── TextEncodingDetector.cs              ← 共享编码检测（UTF-8/GBK）
+│   │   ├── CsvFilePlugin.cs                     ← CSV（列自动识别）
+│   │   ├── IniFilePlugin.cs                     ← INI（[Section] 段）
+│   │   ├── YamlFilePlugin.cs                    ← YAML（YamlDotNet）
+│   │   ├── ResxFilePlugin.cs                    ← RESX（.NET 资源）
+│   │   └── PropertiesFilePlugin.cs              ← Java Properties
 │   ├── Dictionary/                              ← 字典 / 规则 / 术语
 │   │   ├── GlossaryManager.cs                   ← 术语表逻辑
 │   │   ├── BlacklistManager.cs                  ← 黑名单规则
