@@ -1,4 +1,4 @@
-# 项目交接文档 — XML AI Translator
+# 项目交接文档 — 次元译桥
 
 > **最后更新**：2026-08-02  
 > **项目状态**：架构稳固（MVVM 100%、审计清零、测试就绪、MainWindow 拆分完成、DataGrid 全面对齐 Excel、Excel 式选择模型、评估换厂商落地、评分持久化 + 自动保存）  
@@ -10,7 +10,7 @@
 
 ## 1. 项目定位
 
-**XML AI Translator** 是一款专为**游戏本地化**设计的桌面工具。核心功能：
+**次元译桥（Dimension Bridge）** 是一款专为**游戏本地化**设计的桌面工具。核心功能：
 - 加载 Excel Spreadsheet XML 本地化文件（`mastertextfile_english.xml` 等）
 - 通过 AI（8 个提供商）批量翻译英文原文到目标语言
 - 术语表管理、专家配置、翻译缓存、速率限制、崩溃恢复

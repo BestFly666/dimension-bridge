@@ -59,8 +59,9 @@ namespace SimpleXmlEditor.Services
         private string _model = "";
         private string _targetLanguage = "Turkish";
 
-        public Dictionary<string, (double input, double output)> ModelPricing { get; private set; } = new();
-        public Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits { get; private set; } = new();
+        // 并发安全：模型列表由拉取线程写、翻译/统计线程读，普通 Dictionary 并发读写会抛异常
+        public ConcurrentDictionary<string, (double input, double output)> ModelPricing { get; private set; } = new();
+        public ConcurrentDictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits { get; private set; } = new();
         public ConcurrentQueue<DateTime> RecentRequests { get; private set; } = new();
 
         public event Action<string> LogMessage;
@@ -166,36 +167,6 @@ namespace SimpleXmlEditor.Services
             return (inputChars * genericInputPrice / 1000.0) + (outputChars * genericOutputPrice / 1000.0);
         }
 
-        public int CalculateOptimalDelay()
-        {
-            // 未知模型：不强制等待，靠 429 退避兜底
-            if (!ModelLimits.ContainsKey(_model))
-                return 0;
-
-            var (requestsPerMinute, _, _) = ModelLimits[_model];
-
-            var oneMinuteAgo = DateTime.Now.AddMinutes(-1);
-            while (RecentRequests.Count > 0 && RecentRequests.TryPeek(out var oldestTime) && oldestTime < oneMinuteAgo)
-            {
-                RecentRequests.TryDequeue(out _);
-            }
-
-            var requestsInLastMinute = RecentRequests.Count;
-            var remainingRequests = Math.Max(0, requestsPerMinute - requestsInLastMinute);
-
-            // 配额尚未用完：无需等待（批次生成本身耗时已天然限流），避免"结果已出却被硬等"
-            if (remainingRequests > 0)
-                return 0;
-
-            // 配额耗尽：等到最旧请求滑出一分钟窗口
-            if (RecentRequests.TryPeek(out var oldestRequest))
-            {
-                var waitTime = (int)(60000 - (DateTime.Now - oldestRequest).TotalMilliseconds);
-                return Math.Max(waitTime, 1000);
-            }
-            return 3000;
-        }
-
         public void TrackRequest()
         {
             RecentRequests.Enqueue(DateTime.Now);
@@ -224,79 +195,6 @@ namespace SimpleXmlEditor.Services
                 RaiseLog(LocalizationManager.GetString("TranslationError", ex.Message));
                 return null;
             }
-        }
-
-        public async Task<string> TranslateSingleAsync(string text, int maxRetries = 3)
-        {
-            if (string.IsNullOrEmpty(_apiKey) || string.IsNullOrEmpty(_model))
-                return null;
-
-            // Check cache first (skip API call when a cached translation exists)
-            var cacheKey = _configService?.GetCacheKey(text);
-            if (cacheKey != null && _configService != null
-                && _configService.Cache.TryGetValue(cacheKey, out var cachedValue))
-            {
-                CacheHit?.Invoke(1);
-                return cachedValue;
-            }
-
-            var prompt = string.Format(PromptTemplates.SingleTranslatePrompt, _targetLanguage, text);
-
-            for (int attempt = 0; attempt < maxRetries; attempt++)
-            {
-                try
-                {
-                    TrackRequest();
-
-                    string result;
-                    if (_currentProvider == AIProvider.GoogleGemini)
-                    {
-                        result = await TranslateSingleGeminiAsync(text, prompt);
-                    }
-                    else if (ProviderConfig.UsesOpenAiFormat[_currentProvider])
-                    {
-                        result = await TranslateSingleOpenAiCompatAsync(text, prompt);
-                    }
-                    else
-                    {
-                        result = await TranslateSingleGeminiAsync(text, prompt);
-                    }
-
-                    if (!string.IsNullOrEmpty(result))
-                    {
-                        // Write to cache and raise cost/billing statistics
-                        if (cacheKey != null && _configService != null)
-                            _configService.Cache[cacheKey] = result;
-                        ApiCallCounted?.Invoke(1);
-                        ApiCharsCounted?.Invoke(text.Length, result.Length);
-                    }
-
-                    return result;
-                }
-                catch (HttpRequestException ex) when (ex.Message.Contains("429"))
-                {
-                    if (attempt < maxRetries - 1)
-                    {
-                        var delay = 3000 * (attempt + 2);
-                        RaiseLog(LocalizationManager.GetString("LogRateLimit429", delay / 1000, attempt + 1, maxRetries));
-                        await Task.Delay(delay);
-                        continue;
-                    }
-                    return null;
-                }
-                catch (Exception)
-                {
-                    if (attempt < maxRetries - 1)
-                    {
-                        var delay = CalculateOptimalDelay();
-                        await Task.Delay(delay);
-                        continue;
-                    }
-                    return null;
-                }
-            }
-
-            return null;
         }
 
         public void Dispose()

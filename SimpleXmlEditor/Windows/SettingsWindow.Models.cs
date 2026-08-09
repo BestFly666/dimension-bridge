@@ -18,7 +18,7 @@ namespace SimpleXmlEditor
                 
                 if (currentProvider != AIProvider.GoogleGemini)
                 {
-                    var apiKey = ApiKeyTextBox.Text.Trim();
+                    var apiKey = ApiKeyTextBox.Password.Trim();
                     if (!string.IsNullOrEmpty(apiKey))
                     {
                         await RefreshModelsInternalAsync(apiKey);
@@ -39,7 +39,7 @@ namespace SimpleXmlEditor
                     return;
                 }
                 
-                var geminiApiKey = ApiKeyTextBox.Text.Trim();
+                var geminiApiKey = ApiKeyTextBox.Password.Trim();
                 if (!string.IsNullOrEmpty(geminiApiKey))
                 {
                     await RefreshModelsInternalAsync(geminiApiKey);
@@ -87,7 +87,7 @@ namespace SimpleXmlEditor
             {
                 var newProvider = GetSelectedProvider();
                 
-                var apiKey = ApiKeyTextBox.Text.Trim();
+                var apiKey = ApiKeyTextBox.Password.Trim();
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     await RefreshModelsInternalAsync(apiKey);
@@ -103,7 +103,7 @@ namespace SimpleXmlEditor
 
         private async void RefreshModelsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var apiKey = ApiKeyTextBox.Text.Trim();
+            var apiKey = ApiKeyTextBox.Password.Trim();
             if (string.IsNullOrEmpty(apiKey))
             {
                 MessageBox.Show(LocalizationManager.GetString("EnterAPIKeyFirst"), LocalizationManager.GetString("MsgError"), MessageBoxButton.OK, MessageBoxImage.Error);
@@ -211,9 +211,9 @@ namespace SimpleXmlEditor
                 return;
             }
 
-            var apiKey = EvalApiKeyTextBox.Text.Trim();
+            var apiKey = EvalApiKeyTextBox.Password.Trim();
             if (string.IsNullOrEmpty(apiKey))
-                apiKey = ApiKeyTextBox.Text.Trim();
+                apiKey = ApiKeyTextBox.Password.Trim();
             if (string.IsNullOrEmpty(apiKey))
             {
                 MessageBox.Show(LocalizationManager.GetString("EnterAPIKeyFirst"), LocalizationManager.GetString("MsgError"),
@@ -282,7 +282,7 @@ namespace SimpleXmlEditor
             {
                 Provider = provider,
                 Model = model,
-                ApiKey = EvalApiKeyTextBox.Text.Trim()
+                ApiKey = EvalApiKeyTextBox.Password.Trim()
             });
             EvalModelsListBox.ItemsSource = null;
             EvalModelsListBox.ItemsSource = _evalModels;

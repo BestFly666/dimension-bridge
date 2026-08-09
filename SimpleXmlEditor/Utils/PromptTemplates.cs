@@ -33,13 +33,6 @@ Return your translations in this exact JSON format:
 
 IMPORTANT: ONLY return the JSON object above. NO other text. Make sure the JSON is valid and properly formatted.";
 
-        public const string SingleTranslatePrompt = @"Translate the following English text to {0}. 
-This is for game localization, so keep it natural and fluent. 
-Only provide the translation, no explanations.
-
-English: {1}
-{0}:";
-
         public const string SystemPrompt = "You are a professional game localization translator.";
     }
 }

@@ -104,9 +104,14 @@ namespace SimpleXmlEditor
 
         protected override void OnClosed(EventArgs e)
         {
+            // 停止所有 DispatcherTimer（否则窗口关闭后仍被 timer 引用，无法回收）
             _filterTimer?.Stop();
             _autoSaveTimer?.Stop();
+            _uiFlushTimer?.Stop();
             _viewModel.AiTranslationService.Dispose();
+            // 释放评估专用服务（各持有独立 HttpClient）
+            if (_viewModel.Evaluator is TranslationEvaluator eval)
+                eval.Dispose();
             base.OnClosed(e);
         }
 
@@ -169,8 +174,7 @@ namespace SimpleXmlEditor
                     UpdateCacheInfo();
                     UpdateGlossaryInfo();
 
-                    var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                    view?.Refresh();
+                    SafeRefreshDataGrid();
 
                     _viewModel.RestoreTranslationProgress(_viewModel.Entries);
                     _viewModel.RestoreScores(_viewModel.Entries);
@@ -197,8 +201,7 @@ namespace SimpleXmlEditor
                     _viewModel.ConfigService.SaveConfig();
                     FilterCountText.Text = LocalizationManager.GetString("TotalCount", _viewModel.Entries.Count);
 
-                    var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                    view?.Refresh();
+                    SafeRefreshDataGrid();
 
                     _viewModel.RestoreTranslationProgress(_viewModel.Entries);
                     _viewModel.RestoreScores(_viewModel.Entries);

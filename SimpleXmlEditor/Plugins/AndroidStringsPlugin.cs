@@ -17,7 +17,8 @@ namespace SimpleXmlEditor.Plugins
 
         public List<LocalizationEntry> Load(string filePath)
         {
-            // Only load if the root element is <resources>
+            // 安全：XDocument.Load 在 .NET Core 3.0+ 默认禁止 DTD/外部实体（DtdProcessing.Prohibit），防 XXE；
+            // 与 XmlRepository 的显式 XmlReaderSettings 防护一致（纵深防御）
             var doc = XDocument.Load(filePath);
             if (doc.Root?.Name.LocalName != "resources")
                 return new List<LocalizationEntry>(); // Not an Android file

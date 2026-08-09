@@ -12,8 +12,8 @@ namespace SimpleXmlEditor.Localization
             _translations["en"] = new Dictionary<string, string>
             {
                 // === Window titles ===
-                ["WindowTitle"] = "XML AI Translator by Veloxcity",
-                ["SettingsTitle"] = "Settings - XML AI Translator",
+                ["WindowTitle"] = "Dimension Bridge by Veloxcity & BestFly666",
+                ["SettingsTitle"] = "Settings - Dimension Bridge",
 
                 // === Main UI buttons ===
                 ["Load"] = "Load",
@@ -291,6 +291,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogBatchEfficiency"] = "Batch efficiency: {0} API calls instead of {1} (saved {2} calls)",
                 ["LogRateLimitStatus"] = "Rate limit status: {0}/{1} used this minute",
                 ["LogTranslationCancelled"] = "Translation cancelled",
+                ["LogTranslationAlreadyRunning"] = "Translation is already running. Please wait for the current task to finish.",
                 ["LogProgressSaveError"] = "Progress save failed: {0}",
                 ["LogCrashRecovery"] = "Restored {0} translations from crash recovery file",
                 ["LogRecoveryError"] = "Recovery file error: {0}",
@@ -319,7 +320,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogRateLimitedRetry"] = "Rate limited (HTTP 429), retry {0}/{1} after {2}s",
                 ["LogScoreCacheLoaded"] = "Score cache loaded - {0} entries",
                 ["LogApiKeyEncryptFailed"] = "API key encryption failed: {0}",
-                ["LogApiKeyPlaintextWarning"] = "WARNING: API key stored in plaintext due to DPAPI failure (non-Windows environment?)",
+                ["LogApiKeyPlaintextWarning"] = "WARNING: DPAPI encryption failed. The API key will NOT be saved to disk (session only).",
                 ["LogApiKeyDecryptFailed"] = "API key decryption failed: {0}",
                 ["LogMigratedLegacyKey"] = "Migrated legacy plaintext API key to encrypted storage",
                 ["LogMigrationFailed"] = "Migration failed: {0}",
@@ -371,7 +372,7 @@ namespace SimpleXmlEditor.Localization
                 ["ExpertSystemTitle"] = "Expert Profile System",
                 ["ExpertSystemDesc"] = "Expert profiles let you define domain-specific knowledge. Each contains thinking instructions and a terminology glossary. When activated, this knowledge is injected into every translation request for maximum accuracy.",
                 ["BatchLabel"] = "Batch",
-                ["AppName"] = "XML AI Translator",
+                ["AppName"] = "Dimension Bridge",
 
                 // === Find bar ===
                 ["FindLabel"] = "Find:",
@@ -641,8 +642,8 @@ namespace SimpleXmlEditor.Localization
                 ["CloseTab"] = "Close",
 
                 // === About ===
-                ["AboutTitle"] = "About XML AI Translator",
-                ["AboutText"] = "XML AI Translator v1.0\n\nAI-powered game localization tool.\nSupports XML, PO, JSON, Android Strings.\n\n8 AI providers, 30+ languages.",
+                ["AboutTitle"] = "About Dimension Bridge",
+                ["AboutText"] = "Dimension Bridge v1.0\n\nAI-powered game localization tool.\nSupports XML, CSV, JSON, INI, YAML, RESX, PO, TXT, Android.\n\n8 AI providers, 30+ languages.",
 
                 // === Shortcuts ===
                 ["ShortcutsTitle"] = "Keyboard Shortcuts",

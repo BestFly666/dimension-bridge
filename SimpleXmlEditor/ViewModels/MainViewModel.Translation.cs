@@ -14,7 +14,8 @@ namespace SimpleXmlEditor.ViewModels
         // 会同时发生线程池饥饿与并发写同一文件，导致界面卡死。这里用"单飞+合并"控制：
         // 同一时刻只允许一个保存在执行；保存期间的新请求只置脏标记，等当前保存完成后补一次。
         // 另加最小间隔（2s）：批次完成密集时避免保存任务无限追赶（每次全量序列化 5000+ 条很贵）。
-        private int _progressSaveInFlight = 0;
+        private Task _progressSaveTask;
+        private readonly object _progressSaveGate = new();
         private volatile bool _progressSavePending = false;
         private long _lastProgressSaveTicks = 0;
         private const long MinProgressSaveIntervalTicks = 2 * TimeSpan.TicksPerSecond;
@@ -61,42 +62,71 @@ namespace SimpleXmlEditor.ViewModels
         /// 节流+合并的进度保存（fire-and-forget 安全）。
         /// 并发批次同时完成时，只允许一个保存在执行；保存期间的新请求置脏标记，
         /// 当前保存完成后若仍有脏标记则补保存一次，保证最终进度不丢失。
+        /// 返回当前在途的保存任务，调用方可 await 以等待排空。
         /// </summary>
         private Task SaveProgressThrottledAsync()
         {
-            _progressSavePending = true;
-            if (Interlocked.Exchange(ref _progressSaveInFlight, 1) == 1)
-                return Task.CompletedTask; // 已有保存在执行，稍后会自动补一次
-
-            return Task.Run(async () =>
+            lock (_progressSaveGate)
             {
-                try
+                _progressSavePending = true;
+                if (_progressSaveTask != null)
+                    return _progressSaveTask; // 已有保存在执行，稍后会自动补一次
+                _progressSaveTask = RunProgressSaveLoop();
+                return _progressSaveTask;
+            }
+        }
+
+        private async Task RunProgressSaveLoop()
+        {
+            try
+            {
+                while (_progressSavePending)
                 {
-                    while (_progressSavePending)
-                    {
-                        _progressSavePending = false;
-                        // 最小保存间隔：批次完成密集时避免连续全量序列化+写文件（CPU/IO 风暴）。
-                        // 跳过的保存由最终 SaveCache / SaveProgressFinalAsync 兜底，进度不丢。
-                        var now = DateTime.UtcNow.Ticks;
-                        if (now - Interlocked.Read(ref _lastProgressSaveTicks) < MinProgressSaveIntervalTicks)
-                            break;
-                        Interlocked.Exchange(ref _lastProgressSaveTicks, now);
-                        await _configService.SaveTranslationProgressAsync(Entries);
-                    }
+                    _progressSavePending = false;
+                    // 最小保存间隔：批次完成密集时避免连续全量序列化+写文件（CPU/IO 风暴）。
+                    // 跳过的保存由最终 SaveCache / SaveProgressFinalAsync 兜底，进度不丢。
+                    var now = DateTime.UtcNow.Ticks;
+                    if (now - Interlocked.Read(ref _lastProgressSaveTicks) < MinProgressSaveIntervalTicks)
+                        break;
+                    Interlocked.Exchange(ref _lastProgressSaveTicks, now);
+                    await _configService.SaveTranslationProgressAsync(Entries);
                 }
-                finally
+            }
+            finally
+            {
+                lock (_progressSaveGate)
                 {
-                    Interlocked.Exchange(ref _progressSaveInFlight, 0);
+                    _progressSaveTask = null;
                 }
-            });
+            }
+        }
+
+        /// <summary>
+        /// 排空在途的节流保存：等待当前保存任务结束。
+        /// 用于 DeleteProgressFile / 最终保存前，避免与后台写并发操作同一进度文件。
+        /// </summary>
+        private async Task DrainProgressSavesAsync()
+        {
+            while (true)
+            {
+                Task current;
+                lock (_progressSaveGate)
+                {
+                    current = _progressSaveTask;
+                }
+                if (current == null) break;
+                await current;
+            }
         }
 
         /// <summary>
         /// 强制保存一次最新进度（全部批次完成后调用，等待落盘）。
+        /// 先排空在途的节流保存，再写一次，避免并发写同一文件；若被最小间隔跳过，
+        /// 这里的直接写保证最新进度一定落盘。
         /// </summary>
         private async Task SaveProgressFinalAsync()
         {
-            await SaveProgressThrottledAsync();
+            await DrainProgressSavesAsync();
             await _configService.SaveTranslationProgressAsync(Entries);
         }
 
@@ -118,7 +148,19 @@ namespace SimpleXmlEditor.ViewModels
         /// </summary>
         public async Task TranslateEntriesAsync(List<LocalizationEntry> entries, bool forceRefresh = false)
         {
-            _translationCts = new CancellationTokenSource();
+            // 防重入：翻译运行中禁止再启动第二条流水线。
+            // 否则 _translationCts 会被覆盖，旧流水线的 finally 可能误 Dispose 新 CTS、
+            // 且两条流水线并发写同一批条目的 Translation 字段导致数据竞争。
+            if (IsTranslationRunning)
+            {
+                OnLogMessage($"⚠️ {LocalizationManager.GetString("LogTranslationAlreadyRunning")}");
+                return;
+            }
+
+            // 使用局部 CTS：finally 中仅当字段仍指向本流水线的 CTS 时才清空，
+            // 避免（理论上）并发启动时旧流水线误 Dispose 新流水线的取消令牌。
+            var cts = new CancellationTokenSource();
+            _translationCts = cts;
             IsTranslationRunning = true;
             IsTranslationPaused = false;
 
@@ -139,14 +181,12 @@ namespace SimpleXmlEditor.ViewModels
                 var entriesToTranslate = entries.Where(e => !string.IsNullOrEmpty(e.Value) && string.IsNullOrEmpty(e.Translation)).ToList();
 
                 // Blacklist: exclude entries whose Key matches a blacklist prefix (no API calls)
-                if (_blacklistManager.Count > 0)
+                // 使用加载/刷新时预计算的 IsBlacklisted 标志，单次遍历即可，避免 O(条目数 × 黑名单数)
+                var blocked = entriesToTranslate.Where(e => e.IsBlacklisted).ToList();
+                if (blocked.Count > 0)
                 {
-                    var blocked = entriesToTranslate.Where(e => _blacklistManager.IsBlocked(e.Key, e.Value)).ToList();
-                    if (blocked.Count > 0)
-                    {
-                        OnLogMessage($"🚫 {LocalizationManager.GetString("LogBlacklistSkipped", blocked.Count)}");
-                        entriesToTranslate = entriesToTranslate.Where(e => !blocked.Contains(e)).ToList();
-                    }
+                    OnLogMessage($"🚫 {LocalizationManager.GetString("LogBlacklistSkipped", blocked.Count)}");
+                    entriesToTranslate = entriesToTranslate.Where(e => !e.IsBlacklisted).ToList();
                 }
 
                 if (!entriesToTranslate.Any())
@@ -157,7 +197,8 @@ namespace SimpleXmlEditor.ViewModels
                 }
 
                 // Record undo snapshot before mutating translations
-                PushUndoSnapshot(entriesToTranslate);
+                // 注意：快照由调用方（清空译文的入口）在清空前记录，
+                // 此处不再重复入栈，避免同一操作产生双快照导致首次撤销无效。
 
                 // Create batches based on token limits
                 var batches = _orchestrator.CreateBatches(entriesToTranslate, CustomPrompt, BatchSize);
@@ -176,26 +217,26 @@ namespace SimpleXmlEditor.ViewModels
                 for (int batchIndex = 0; batchIndex < batches.Count; batchIndex++)
                 {
                     // Check for cancellation before starting new batch
-                    if (_translationCts.Token.IsCancellationRequested)
+                    if (cts.Token.IsCancellationRequested)
                     {
                         OnLogMessage($"⏹️ {LocalizationManager.GetString("LogBatchCancelled", batchIndex + 1, batches.Count)}");
                         break;
                     }
 
                     // Handle pause
-                    while (IsTranslationPaused && !_translationCts.Token.IsCancellationRequested)
+                    while (IsTranslationPaused && !cts.Token.IsCancellationRequested)
                     {
-                        await Task.Delay(500, _translationCts.Token);
+                        await Task.Delay(500, cts.Token);
                     }
 
-                    if (_translationCts.Token.IsCancellationRequested)
+                    if (cts.Token.IsCancellationRequested)
                         break;
 
                     var batch = batches[batchIndex];
                     var localBatchIndex = batchIndex;
 
                     // Wait for a slot (limit concurrent batches)
-                    await batchSemaphore.WaitAsync(_translationCts.Token);
+                    await batchSemaphore.WaitAsync(cts.Token);
 
                     // Start batch task (returns immediately, runs in background)
                     var batchTask = Task.Run(async () =>
@@ -254,7 +295,7 @@ namespace SimpleXmlEditor.ViewModels
                             batchSemaphore.Release();
                             _ = SaveProgressThrottledAsync();
                         }
-                    }, _translationCts.Token);
+                    }, cts.Token);
 
                     runningTasks.Add(batchTask);
 
@@ -288,6 +329,8 @@ namespace SimpleXmlEditor.ViewModels
                     {
                         SaveCache();
                         OnLogMessage($"💾 {LocalizationManager.GetString("LogCacheSaved")}");
+                        // 排空在途的节流保存，避免 DeleteProgressFile 与后台写并发操作同一进度文件
+                        await DrainProgressSavesAsync();
                         // Translation complete — delete recovery file
                         _configService.DeleteProgressFile();
                     }
@@ -298,7 +341,7 @@ namespace SimpleXmlEditor.ViewModels
                     }
                 }
 
-                var statusMessage = _translationCts.Token.IsCancellationRequested
+                var statusMessage = cts.Token.IsCancellationRequested
                     ? LocalizationManager.GetString("StatusStoppedResult", successCount, failCount)
                     : LocalizationManager.GetString("StatusBatchComplete", successCount, failCount);
 
@@ -341,31 +384,12 @@ namespace SimpleXmlEditor.ViewModels
             {
                 IsTranslationRunning = false;
                 IsTranslationPaused = false;
-                _translationCts?.Dispose();
-                _translationCts = null;
+                // 仅当字段仍指向本流水线的 CTS 时才清空，避免误 Dispose 后续流水线的令牌
+                if (ReferenceEquals(_translationCts, cts))
+                    _translationCts = null;
+                cts.Dispose();
                 TranslationFinished?.Invoke();
             }
-        }
-
-        private async void ExecuteTranslateSelected()
-        {
-            var selected = Entries.Where(entry => entry.IsSelected).ToList();
-            if (!selected.Any())
-            {
-                MessageRequested?.Invoke(LocalizationManager.GetString("SelectEntriesFirst"), LocalizationManager.GetString("MsgTip"));
-                return;
-            }
-
-            var toClear = selected.Where(en => !string.IsNullOrEmpty(en.Translation)).ToList();
-            if (toClear.Count > 0)
-                PushUndoSnapshot(toClear);
-
-            foreach (var entry in selected)
-            {
-                entry.Translation = "";
-            }
-
-            await TranslateEntriesAsync(selected, forceRefresh: true);
         }
 
         private async Task ExecuteTranslateAllAsync()
@@ -383,7 +407,11 @@ namespace SimpleXmlEditor.ViewModels
                 LocalizationManager.GetString("MsgConfirm")) ?? Task.FromResult(true));
 
             if (confirmed)
+            {
+                // 快照在清空前记录（翻译全部不预先清空，但撤销时需能恢复原状）
+                PushUndoSnapshot(untranslated);
                 await TranslateEntriesAsync(untranslated);
+            }
         }
     }
 }

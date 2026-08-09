@@ -108,6 +108,7 @@ namespace SimpleXmlEditor.ExpertProfiles
             if (Profiles.Count == 0)
             {
                 AddProfile(CreateStarWarsProfile());
+                AddProfile(CreateProofreadingProfile());
                 AddProfile(CreateMarvelProfile());
             }
         }
@@ -117,33 +118,17 @@ namespace SimpleXmlEditor.ExpertProfiles
             return new ExpertProfile
             {
                 Name = "星球大战 (Star Wars)",
-                Description = "星球大战宇宙游戏本地化",
-                Context = @"You are translating content from the Star Wars universe.
-Think like a Star Wars lore expert. 
-- Use the established Chinese translations from official Star Wars media and games.
-- Maintain the epic, mythic tone appropriate for the Star Wars galaxy.
-- Character names should use widely accepted Chinese translations.
-- Faction names and Force-related concepts have specific established translations — use them consistently.
+                Description = "星球大战：帝国战争（Empire at War）游戏及 mod 汉化专家",
+                Context = @"You are a senior localization expert for Star Wars: Empire at War (EaW) and its mods, translating game text into {LANGUAGE}.
+Think like an EaW player and a Star Wars lore expert.
+- Use the established Chinese translations from official Star Wars media, games, and the EaW Chinese localization community.
+- Maintain the epic, mythic tone appropriate for the Star Wars galaxy (military, grand fleet battles, space opera).
+- Ship, unit, faction, and character names have canonical Chinese translations - use them consistently; do NOT translate literally or invent new ones.
+- Preserve all numbers, statistics, and structural formatting exactly as in the source (e.g. '最高速度：2.5；护盾值：15000；' with '；' separators).
+- CRITICAL - Squadron composition entries: a list like '2 A-Wing (2), 1 Elite A-Wing (2), 2 PT-1 (2)' describes fighter SQUADRONS, displayed in-game squadron by squadron. Translate the count unit as '队' (squadron), e.g. '2 队 A翼（2），1 队精英A翼（2），2 队 PT-1（2）'. NEVER render them as individual aircraft like '1 架 XX（1）'.
+- Example: '2 X-Wing (4), 1 Y-Wing (2), 2 B-Wing (4)' -> '2 队 X翼（4），1 队 Y翼（2），2 队 B翼（4）'.
 - Do NOT invent new translations for well-known terms; always use the canonical ones.",
-                Glossary = new Dictionary<string, string>
-                {
-                    { "Jedi", "绝地" },
-                    { "Sith", "西斯" },
-                    { "lightsaber", "光剑" },
-                    { "The Force", "原力" },
-                    { "Padawan", "学徒" },
-                    { "Darth Vader", "达斯·维达" },
-                    { "Luke Skywalker", "卢克·天行者" },
-                    { "Stormtrooper", "暴风兵" },
-                    { "Death Star", "死星" },
-                    { "Millennium Falcon", "千年隼号" },
-                    { "Wookiee", "伍基人" },
-                    { "X-wing", "X翼战机" },
-                    { "TIE fighter", "钛战机" },
-                    { "Galactic Empire", "银河帝国" },
-                    { "Rebel Alliance", "义军同盟" },
-                    { "Bounty hunter", "赏金猎人" }
-                }
+                Glossary = new Dictionary<string, string>()  // 术语由独立的术语注入功能提供
             };
         }
 
@@ -181,6 +166,21 @@ Think like a Marvel comics and MCU lore expert.
                     { "Stark Tower", "斯塔克大厦" },
                     { "Wakanda", "瓦坎达" }
                 }
+            };
+        }
+
+        private ExpertProfile CreateProofreadingProfile()
+        {
+            return new ExpertProfile
+            {
+                Name = "校对专家 (Proofreading)",
+                Description = "游戏本地化校对：检查译文准确性、术语一致性与语境适配",
+                Context = @"You are a professional game localization proofreading expert. Your job is to review and correct existing AI-translated game text.
+- Provided terms are the DEFAULT preferred translation, NOT absolute rules. If a term is clearly wrong or unnatural in the specific context (different meaning, figurative use, part of a proper name, or a different sense), correct it to a natural contextual translation instead of forcing the term.
+- Check terminology consistency across entries: the same source term should use the same translation unless context clearly demands otherwise.
+- Preserve all numbers, statistics, and formatting exactly (e.g. '；' separators, squadron lists like '2 队 A翼（2）').
+- Provide concise corrections with clear reasons.",
+                Glossary = new Dictionary<string, string>()
             };
         }
 

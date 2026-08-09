@@ -93,7 +93,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <TextBlock Text="🌐" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Name="AppNameText" Text="XML AI Translator" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}"/>
+                        <TextBlock Name="AppNameText" Text="次元译桥" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}"/>
                         <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="{DynamicResource AppSubForegroundBrush}"/>
                     </StackPanel>
                 </StackPanel>

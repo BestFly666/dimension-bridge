@@ -16,8 +16,8 @@ namespace SimpleXmlEditor.Services
         string TargetLanguage { get; set; }
         HttpClient HttpClient { get; }
         
-        Dictionary<string, (double input, double output)> ModelPricing { get; }
-        Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits { get; }
+        ConcurrentDictionary<string, (double input, double output)> ModelPricing { get; }
+        ConcurrentDictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits { get; }
         ConcurrentQueue<DateTime> RecentRequests { get; }
         
         event Action<string> LogMessage;
@@ -28,10 +28,8 @@ namespace SimpleXmlEditor.Services
         event Action<int, int> ApiCharsCounted; // (inputChars, outputChars)
         
         Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null);
-        Task<string> TranslateSingleAsync(string text, int maxRetries = 3);
         Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null);
         double CalculateCost(int inputChars, int outputChars, string modelName);
-        int CalculateOptimalDelay();
         int GetModelTokenLimit(string modelName);
         void TrackRequest();
     }
@@ -61,8 +59,9 @@ namespace SimpleXmlEditor.Services
         void SyncScoresToCache(IEnumerable<LocalizationEntry> entries);
         int RestoreScores(IEnumerable<LocalizationEntry> entries);
         void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries);
+        /// <summary>对称写入缓存双键（Key + MD5(原文)），保持各写入路径一致。</summary>
+        void SetCacheEntry(string key, string originalText, string translation);
         Task SaveTranslationProgressAsync(IEnumerable<LocalizationEntry> entries);
-        Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries);
         int RestoreTranslationProgress(IEnumerable<LocalizationEntry> entries);
         void DeleteProgressFile();
         string GetCacheKey(string text);
@@ -80,7 +79,7 @@ namespace SimpleXmlEditor.Services
 
     public interface IGlossaryManager
     {
-        Dictionary<string, GlossaryTerm> Terms { get; }
+        ConcurrentDictionary<string, GlossaryTerm> Terms { get; }
         int Count { get; }
         bool TryGetValue(string sourceText, out string translated);
         Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries);

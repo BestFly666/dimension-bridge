@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using SimpleXmlEditor.Dictionary;
 using SimpleXmlEditor.ExpertProfiles;
 using SimpleXmlEditor.Localization;
+using SimpleXmlEditor.Utils;
 
 namespace SimpleXmlEditor.Services
 {
@@ -175,16 +176,36 @@ namespace SimpleXmlEditor.Services
 
                     if (batchResults.Count > 0)
                     {
+                        // value → 条目标识（批次内原文可能重复，取首个条目 Key）
+                        var entryKeyByValue = new Dictionary<string, string>();
+                        foreach (var entry in uncachedEntries)
+                            entryKeyByValue.TryAdd(entry.Value, entry.Key);
+
                         foreach (var kvp in batchResults)
                         {
-                            var cacheKey = _configService.GetCacheKey(kvp.Key);
-                            if (cacheKey != null)
-                                _configService.Cache[cacheKey] = kvp.Value;
+                            // 双键对称写（Key + MD5(原文)），与 SyncEntriesToCache 保持一致
+                            _configService.SetCacheEntry(entryKeyByValue[kvp.Key], kvp.Key, kvp.Value);
                             results[kvp.Key] = kvp.Value;
                         }
 
                         OnApiCall?.Invoke(1);
                         OnApiChars?.Invoke(prompt.Length, response.Length);
+
+                        // 部分结果校验：AI 只返回了部分条目（JSON 截断/漏译）时，
+                        // 静默接受会让这些条目丢失译文。把缺失条目拆半递归补译并合并。
+                        var missing = uncachedEntries.Where(e => !batchResults.ContainsKey(e.Value)).ToList();
+                        if (missing.Count > 0 && missing.Count < uncachedEntries.Count)
+                        {
+                            var retried = await RetryHalvedAsync(missing, forceRefresh, customPrompt);
+                            foreach (var kvp in retried)
+                            {
+                                if (!results.ContainsKey(kvp.Key))
+                                {
+                                    results[kvp.Key] = kvp.Value;
+                                    _configService.SetCacheEntry(entryKeyByValue[kvp.Key], kvp.Key, kvp.Value);
+                                }
+                            }
+                        }
                         return results;
                     }
                 }
@@ -236,11 +257,28 @@ namespace SimpleXmlEditor.Services
             prompt = prompt.Replace("{LANGUAGE}", _aiService.TargetLanguage);
             prompt = prompt.Replace("{CONTEXT}", "game localization");
 
-            var expertContext = BuildExpertContext();
-            prompt = prompt.Replace("{EXPERT_CONTEXT}", expertContext);
-
+            // 1) 先匹配术语：从词典中找出当前批次相关的术语
             var glossary = BuildGlossaryContext(entries);
-            prompt = prompt.Replace("{GLOSSARY}", glossary);
+
+            // 2) 术语并入专家提示词（成为专家知识的一部分）；
+            //    未选专家档案时，术语仍作为独立块注入，保证术语指导不失效
+            var expertContext = BuildExpertContext(glossary);
+            if (string.IsNullOrEmpty(expertContext) && !string.IsNullOrEmpty(glossary))
+                expertContext = glossary;
+            if (!string.IsNullOrEmpty(expertContext))
+            {
+                prompt = prompt.Contains("{EXPERT_CONTEXT}")
+                    ? prompt.Replace("{EXPERT_CONTEXT}", expertContext)
+                    : prompt + "\n\n" + expertContext;
+            }
+            else
+            {
+                prompt = prompt.Replace("{EXPERT_CONTEXT}", "");
+            }
+
+            // 3) 术语已并入专家块（{EXPERT_CONTEXT} 替换或追加到提示词尾部）：
+            //    若提示词模板仍含 {GLOSSARY} 占位符，替换为空，避免术语重复注入。
+            prompt = prompt.Replace("{GLOSSARY}", "");
 
             var textsBuilder = new StringBuilder();
             var hasChineseSource = false;
@@ -250,8 +288,8 @@ namespace SimpleXmlEditor.Services
                 if (isChinese) hasChineseSource = true;
 
                 // Sanitize text: escape quotes and limit length to prevent prompt injection
-                var safeKey = SanitizePromptText(entries[i].Key);
-                var safeText = SanitizePromptText(entries[i].Value);
+                var safeKey = PromptTextSanitizer.Sanitize(entries[i].Key);
+                var safeText = PromptTextSanitizer.Sanitize(entries[i].Value);
                 var tag = isChinese
                     ? " [EXISTING ZH — review & correct, NOT re-translate from scratch]"
                     : "";
@@ -270,28 +308,10 @@ namespace SimpleXmlEditor.Services
         }
 
         /// <summary>
-        /// Sanitizes text for safe inclusion in prompts by escaping quotes
-        /// and truncating overly long entries to prevent injection attacks.
+        /// 构建专家提示词块。glossary 为对当前批次匹配到的术语文本，
+        /// 会被并入专家块，与专家 Context 一起注入 API。
         /// </summary>
-        private static string SanitizePromptText(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return "";
-
-            // Limit individual text length to prevent prompt overflow
-            const int maxLength = 4000;
-            if (text.Length > maxLength)
-                text = text.Substring(0, maxLength) + "...[truncated]";
-
-            // Escape quotes to break out of the "..." wrapper
-            text = text.Replace("\\", "\\\\");
-            text = text.Replace("\"", "\\\"");
-
-            // Strip control characters that could break JSON parsing
-            var cleanChars = text.Where(c => c >= 32 || c == '\n' || c == '\t').ToArray();
-            return new string(cleanChars);
-        }
-
-        private string BuildExpertContext()
+        private string BuildExpertContext(string glossary)
         {
             if (string.IsNullOrEmpty(_profileManager.ActiveProfileName))
                 return "";
@@ -300,7 +320,7 @@ namespace SimpleXmlEditor.Services
             if (profile == null)
                 return "";
 
-            return profile.BuildExpertContextBlock(_aiService.TargetLanguage);
+            return profile.BuildExpertContextBlock(_aiService.TargetLanguage, glossary);
         }
 
         private string BuildGlossaryContext(List<LocalizationEntry> entries)
@@ -314,7 +334,12 @@ namespace SimpleXmlEditor.Services
             var sb = new StringBuilder();
             sb.AppendLine("\n!! GLOSSARY — Preferred translations (follow unless the context clearly conflicts):");
             foreach (var term in relevantTerms)
-                sb.AppendLine($"  \"{term.Key}\" = \"{term.Value}\"");
+            {
+                // 术语转义：防术语值含引号/控制字符时逃逸出提示词结构
+                var safeKey = PromptTextSanitizer.Sanitize(term.Key);
+                var safeValue = PromptTextSanitizer.Sanitize(term.Value);
+                sb.AppendLine($"  \"{safeKey}\" = \"{safeValue}\"");
+            }
             sb.AppendLine("When these terms appear in the text, use the glossary translation by default to keep terminology consistent.");
             sb.AppendLine("EXCEPTION: if a term is clearly used with a different meaning in this specific context (figurative use, part of a proper name, or a different sense), translate it naturally for that context instead. When in doubt, prefer the glossary translation.");
 

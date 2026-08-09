@@ -2,19 +2,27 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using SimpleXmlEditor.Utils;
 
 namespace SimpleXmlEditor.Services
 {
     public partial class TranslationEvaluator
     {
+        /// <summary>净化提示词插值文本（转义引号/控制字符，防注入）。</summary>
+        private static string Safe(string text) => PromptTextSanitizer.Sanitize(text);
+
+        /// <summary>净化可空 Context（空值时用通用游戏 UI 文案兜底）。</summary>
+        private static string SafeContext(string context)
+            => string.IsNullOrEmpty(context) ? "General gaming UI text" : Safe(context);
+
         private string BuildBatchedVotingPrompt(string original, string[] candidates, string targetLang, string context)
         {
-            var candidateList = string.Join("\n", candidates.Select((c, i) => $"{i + 1}. \"{c}\""));
+            var candidateList = string.Join("\n", candidates.Select((c, i) => $"{i + 1}. \"{Safe(c)}\""));
             return $@"You are a multi-agent translation review panel. Evaluate translation candidates from 3 perspectives.
 
-Original ({targetLang}): ""{original}""
+Original ({targetLang}): ""{Safe(original)}""
 
-Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+Context: {SafeContext(context)}
 
 Candidates:
 {candidateList}
@@ -63,11 +71,11 @@ Only return the JSON, no other text.";
         {
             return $@"You are a professional game localization quality evaluator. Evaluate the following translation.
 
-Original ({targetLang}): {original}
+Original ({targetLang}): {Safe(original)}
 
-Translation: {translated}
+Translation: {Safe(translated)}
 
-Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+Context: {SafeContext(context)}
 
 Rate the translation on a 0-10 scale and provide:
 1. Score (0-10, where 10 is perfect)
@@ -88,10 +96,10 @@ Only return the JSON, no other text.";
         {
             return $@"You are a professional game localization translator. Translate the following English text to {targetLang} and generate {count} DIFFERENT translation candidates.
 
-Original (English): {original}
+Original (English): {Safe(original)}
 Target language: {targetLang}
 
-Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+Context: {SafeContext(context)}
 
 All candidates MUST be in {targetLang}, NOT in English. The candidates should differ in wording/style but ALL preserve the exact meaning and fit gaming UI tone.
 
@@ -112,14 +120,14 @@ Only return the JSON, no other text.";
             for (int i = 0; i < items.Count; i++)
             {
                 lines.AppendLine($"### Entry {i + 1}");
-                lines.AppendLine($"Original ({targetLang}): {items[i].Original}");
-                lines.AppendLine($"Translation: {items[i].Translated}");
+                lines.AppendLine($"Original ({targetLang}): {Safe(items[i].Original)}");
+                lines.AppendLine($"Translation: {Safe(items[i].Translated)}");
                 lines.AppendLine();
             }
 
             return $@"You are a professional game localization quality evaluator. Evaluate ALL {items.Count} translations below.
 
-Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+Context: {SafeContext(context)}
 
 {lines}
 
@@ -142,16 +150,16 @@ Include ALL {items.Count} entries. Only return the JSON, no other text.";
             for (int i = 0; i < items.Count; i++)
             {
                 lines.AppendLine($"### Entry {i + 1}");
-                lines.AppendLine($"Original (English): {items[i].Original}");
+                lines.AppendLine($"Original (English): {Safe(items[i].Original)}");
                 lines.AppendLine($"Target language: {targetLang}");
                 for (int c = 0; c < items[i].Candidates.Length; c++)
-                    lines.AppendLine($"  Candidate {c + 1}: \"{items[i].Candidates[c]}\"");
+                    lines.AppendLine($"  Candidate {c + 1}: \"{Safe(items[i].Candidates[c])}\"");
                 lines.AppendLine();
             }
 
             return $@"You are a multi-agent translation review panel. For EACH entry below, evaluate its candidates from 3 perspectives (Fluency, Accuracy, Style), then pick the BEST candidate. All candidates are {targetLang} translations of the English original.
 
-Context: {(string.IsNullOrEmpty(context) ? "General gaming UI text" : context)}
+Context: {SafeContext(context)}
 
 {lines}
 

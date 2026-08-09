@@ -1,7 +1,7 @@
-# 项目文件索引 — XML AI Translator
+# 项目文件索引 — 次元译桥
 
-> **最后更新**：2026-08-06
-> **项目名称**：SimpleXmlEditor（XML AI Translator）
+> **最后更新**：2026-08-09
+> **项目名称**：次元译桥（Dimension Bridge，代码工程 SimpleXmlEditor）
 > **技术栈**：C# / .NET 8.0 / WPF / Newtonsoft.Json / Microsoft.Extensions.DI / xUnit
 > **说明**：本索引是 code review 与快速定位的首选入口 —— 找功能实现、查文件职责、确认架构分层，先查这里。
 >
@@ -47,7 +47,7 @@
 | 文件 | 职责 | 路径 |
 |------|------|------|
 | **App.xaml** | WPF 应用程序资源定义、全局主题资源（蓝色调）、按钮/DataGrid 共享样式 | [App.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/App.xaml) |
-| **App.xaml.cs** | 应用程序入口、DI 容器初始化、服务注册 | [App.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/App.xaml.cs) |
+| **App.xaml.cs** | 应用程序入口、DI 容器初始化、服务注册（**注意：`TranslationOrchestrator` 不注册进 DI**，由 MainViewModel 自建带真实日志回调的实例，避免 DI no-op 回调吞掉内部日志） | [App.xaml.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/App.xaml.cs) |
 
 ---
 
@@ -130,7 +130,7 @@
 | 文件 | 职责 | 路径 |
 |------|------|------|
 | **MainViewModel.cs** | 核心业务状态协调器（partial 主文件）：Outcome 模型、字段、事件、Commands、构造函数、基础方法 | [MainViewModel.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.cs) |
-| **MainViewModel.Properties.cs** | 全部绑定属性 + PropertyChanged/LogMessage 事件声明 | [MainViewModel.Properties.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Properties.cs) |
+| **MainViewModel.Properties.cs** | 全部绑定属性 + PropertyChanged/LogMessage 事件声明；`ActiveExpertProfileName` setter **同步 `_profileManager.ActiveProfileName` + SaveProfiles()**（双状态单向同步，保证 UI 选的专家在翻译执行路径生效） | [MainViewModel.Properties.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Properties.cs) |
 | **MainViewModel.Undo.cs** | Undo 栈：PushUndoSnapshot / UndoLast | [MainViewModel.Undo.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Undo.cs) |
 | **MainViewModel.Config.cs** | 配置读写：LoadConfig / SaveConfig / 缓存信息展示 | [MainViewModel.Config.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Config.cs) |
 | **MainViewModel.Cache.cs** | 缓存/评分协调：SyncEntriesToCache、SyncScoresToCache、SaveScoreCache、RestoreScores、SaveCache | [MainViewModel.Cache.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Cache.cs) |
@@ -170,7 +170,7 @@
 | **TranslationEvaluator.Prompts.cs** | — | 评估/投票提示词构建（partial） | [TranslationEvaluator.Prompts.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.Prompts.cs) |
 | **TranslationEvaluator.Parsing.cs** | — | 评估/投票响应解析（partial）：JSON 提取、正则回退（code fence 清理复用 `AiResponseParser.StripCodeFence`） | [TranslationEvaluator.Parsing.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.Parsing.cs) |
 | **TranslationEvaluator.Utils.cs** | — | 结果聚合工具（partial）：投票结果分组均分、多模型合并、Chunk | [TranslationEvaluator.Utils.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationEvaluator.Utils.cs) |
-| **TranslationOrchestrator.cs** | — | 翻译编排器：协调翻译流程各步骤（分批、术语注入、进度；响应解析委托给 AiResponseParser） | [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) |
+| **TranslationOrchestrator.cs** | — | 翻译编排器：协调翻译流程各步骤（分批、术语注入、**专家 Context 注入**——`BuildPrompt` 先 `BuildGlossaryContext` → `BuildExpertContext(glossary)` 并入专家块 → `{EXPERT_CONTEXT}` 替换或追加、`{GLOSSARY}` 兼容替换、进度；响应解析委托给 AiResponseParser） | [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) |
 | **AiResponseParser.cs** | — | 统一 AI 响应解析工具（static）：code fence 清理 `StripCodeFence`、标准 translations JSON 提取、三级回退策略（JSON 片段 → 正则 `N. "译文"` → 逐行解析）；供 TranslationOrchestrator / TranslationEvaluator 复用 | [AiResponseParser.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiResponseParser.cs) |
 | **ReviewExporter.cs** | — | 审校导出：审查状态 CSV、术语冲突/一致性检测结果 CSV 导出（`ConsistencyIssue` 数据模型） | [ReviewExporter.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ReviewExporter.cs) |
 | **PluginLoader.cs** | — | 文件格式插件加载器 | [PluginLoader.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/PluginLoader.cs) |
@@ -198,9 +198,9 @@
 
 | 文件 | 职责 | 路径 |
 |------|------|------|
-| **GlossaryManager.cs** | 术语表管理（partial 主文件）：字段、构造函数、`GlossaryTerm` 模型、Count | [GlossaryManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.cs) |
+| **GlossaryManager.cs** | 术语表管理（partial 主文件）：字段、构造函数、`GlossaryTerm` 模型、Count、`MAX_GLOSSARY_CONTEXT_TERMS = 200`（单批提示词术语注入容量上限，50 → 200）；`translation_dictionary.json`/`glossary_terms.json` 从**运行目录**加载（csproj 已配 `CopyToOutputDirectory`） | [GlossaryManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.cs) |
 | **GlossaryManager.Persistence.cs** | 持久化与导入导出（partial）：Load/Save、CSV/JSON 导入导出、MergeFromProfile | [GlossaryManager.Persistence.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Persistence.cs) |
-| **GlossaryManager.Index.cs** | 倒排索引与搜索（partial）：索引构建、术语匹配、上下文注入、分类/状态筛选 | [GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs) |
+| **GlossaryManager.Index.cs** | 倒排索引与搜索（partial）：索引构建、术语匹配、上下文注入、分类/状态筛选；**批量术语注入算法**——先全局验证收集命中术语 → 每条 entry 至少贡献自己的术语（最长优先）→ 剩余名额按命中条目数降序补充（防长术语挤掉短术语）；`IsTermRelated` 宽松相关判定（首核心词 + 类修饰词 / 按序命中半数核心词，仅用于 AI 提示注入） | [GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs) |
 | **GlossaryManager.Conflict.cs** | 冲突检测（partial）：`DetectConflicts`（支持进度回调）+ `GlossaryConflict` 模型 | [GlossaryManager.Conflict.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Conflict.cs) |
 | **GlossaryManager.Crud.cs** | 术语增删改（partial）：SetEntry/SetTerm/RemoveEntry/Clear | [GlossaryManager.Crud.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Crud.cs) |
 | **BlacklistManager.cs** | 黑名单规则管理：Key 前缀 + 原文精确匹配、持久化 blacklist.json（兼容旧版数组格式）、线程安全 | [BlacklistManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/BlacklistManager.cs) |
@@ -212,8 +212,8 @@
 
 | 文件 | 职责 | 路径 |
 |------|------|------|
-| **ExpertProfile.cs** | 专家配置数据模型 | [ExpertProfile.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ExpertProfiles/ExpertProfile.cs) |
-| **ExpertProfileManager.cs** | 专家配置管理：增删改查、持久化 | [ExpertProfileManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ExpertProfiles/ExpertProfileManager.cs) |
+| **ExpertProfile.cs** | 专家配置数据模型：Name/Description/Context/Glossary；`BuildExpertContextBlock(targetLanguage, glossary = "")` 构建专家知识块（Context 中 `{LANGUAGE}` 占位符替换，**并入批量匹配到的术语**，术语指导随专家一同进入 API） | [ExpertProfile.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ExpertProfiles/ExpertProfile.cs) |
+| **ExpertProfileManager.cs** | 专家配置管理：增删改查、持久化；`ProfilesFile` 在 **`AppContext.BaseDirectory`（bin 运行目录）** 的 expert_profiles.json；`EnsureDefaultsExist` 注册默认三档案（星球大战 EaW 汉化 / 漫威 / 校对）；`ActiveProfileName` 与 MainViewModel 双状态同步 | [ExpertProfileManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ExpertProfiles/ExpertProfileManager.cs) |
 
 ---
 
@@ -273,20 +273,28 @@
 | **translation_cache.json** | 翻译缓存（原文 → 译文），大幅降低 API 调用成本 | AppData 目录 |
 | **translation_progress.json** | 崩溃恢复临时文件（翻译中断时增量保存；QuickSave/翻译完成后删除） | AppData 目录（2026-08-05 起与主缓存统一，原在 bin 程序目录） |
 | **score_cache.json** | 评估分数缓存（按条目 Key 关联：分数 + 改进建议） | AppData 目录 |
-| **glossary_terms.json** | 术语对照表持久化文件 | AppData 目录 |
-| **expert_profiles.json** | 专家配置持久化文件 | AppData 目录 |
+| **glossary_terms.json** | 术语对照表持久化文件 | **运行目录**（bin，csproj `CopyToOutputDirectory` 自动复制；保存时写回运行目录） |
+| **translation_dictionary.json** | 翻译对照词典（原文 → 译文，术语注入候选源） | **运行目录**（bin，csproj `CopyToOutputDirectory` 自动复制） |
+| **expert_profiles.json** | 专家配置持久化文件（含 `ActiveProfileName`） | **bin 运行目录**（`AppContext.BaseDirectory`） |
 | **blacklist.json** | 黑名单规则持久化文件（`{"Prefixes":[...], "ExactOriginals":[...]}`） | AppData 目录 |
 
 ---
 
 ## 14. 脚本（scripts/）
 
-> 游戏本地化辅助 Python 脚本（4.0 引擎 DAT 相关），独立于 C# 主项目。
+> 游戏本地化辅助 Python 脚本，**存放于仓库外**的 `e:\translate\scripts\`（不在 `xml-ai-translator-main` 项目内），按版本前缀区分（`3.5_*` / `4.0_*` / `5.0_*`）与 `通用_*`（跨版本工具）。
 
 | 文件 | 用途 | 路径 |
 |------|------|------|
-| **datlib.py** | EAW 引擎 DAT 文件读写库：`read_dat` / `write_dat` / `to_xml` / `xml_to_dat` 命令行 | [datlib.py](file:///e:/translate/xml-ai-translator-main/scripts/datlib.py) |
-| **4.0_添加换行写入DAT.py** | 4.0 引擎翻译：34 字符硬截断换行 + 79 字符空格填充后写回 DAT | [4.0_添加换行写入DAT.py](file:///e:/translate/xml-ai-translator-main/scripts/4.0_添加换行写入DAT.py) |
+| **datlib.py** | EAW 引擎 DAT 文件读写库：`read_dat` / `write_dat` / `to_xml` / `xml_to_dat` 命令行（UTF-16LE + CRC32 索引，兼容重制版与 THR Alamo 格式） | [datlib.py](file:///e:/translate/scripts/datlib.py) |
+| **3.5_添加换行写入DAT.py** | 3.5 引擎翻译：34 字符硬截断换行 + 79 字符空格填充后写回 DAT；`EXCLUDE_KEYWORDS` 含 `GC_COMPLETE_DISC_ONEPLANET`（固定宽度文本不换行） | [3.5_添加换行写入DAT.py](file:///e:/translate/scripts/3.5_添加换行写入DAT.py) |
+| **4.0_添加换行写入DAT.py** | 4.0 引擎翻译：34 字符硬截断换行 + 79 字符空格填充后写回 DAT | [4.0_添加换行写入DAT.py](file:///e:/translate/scripts/4.0_添加换行写入DAT.py) |
+| **5.0_添加换行写入DAT.py** | 5.0 引擎翻译：加换行空格后写回 DAT（方案与 4.0 一致） | [5.0_添加换行写入DAT.py](file:///e:/translate/scripts/5.0_添加换行写入DAT.py) |
+| **4.0_字体加粗对齐.py** | 4.0 字体加粗对齐：按 5.0 英文版字重分布，对 4.0 相同控件块加粗/恢复普通（`EmpireAtWar-Bold`/`Arial Bold`/`Arial Black`） | [4.0_字体加粗对齐.py](file:///e:/translate/scripts/4.0_字体加粗对齐.py) |
+| **通用_XML翻译写入DAT.py** | 跨版本通用：XML 翻译批量写入 DAT（按 Key 替换） | [通用_XML翻译写入DAT.py](file:///e:/translate/scripts/通用_XML翻译写入DAT.py) |
+| **通用_合并翻译写入DAT.py** | 跨版本通用：合并多份翻译后写入 DAT | [通用_合并翻译写入DAT.py](file:///e:/translate/scripts/通用_合并翻译写入DAT.py) |
+| **通用_添加换行空格_v2.py** | 跨版本通用：中文文本加换行空格（宽度感知） | [通用_添加换行空格_v2.py](file:///e:/translate/scripts/通用_添加换行空格_v2.py) |
+| **通用_构建术语表.py / 通用_翻译校对.py / 通用_版本对比.py / 通用_对比manifest.py / 通用_查找缺失标签.py / 通用_检查XML错误.py / 通用_清理缓存污染.py** | 术语表构建、翻译校对、版本对比、manifest 对比、缺失标签查找、XML 错误检查、缓存污染清理 | `e:\translate\scripts\通用_*.py` |
 
 ---
 
@@ -366,8 +374,8 @@ xml-ai-translator-main/
 │   │   ├── BlacklistManager.cs                  ← 黑名单规则
 │   │   └── CsvHelper.cs                         ← CSV 工具
 │   ├── ExpertProfiles/
-│   │   ├── ExpertProfile.cs                     ← 数据模型
-│   │   └── ExpertProfileManager.cs              ← 管理逻辑
+│   │   ├── ExpertProfile.cs                     ← 数据模型 + BuildExpertContextBlock（并入术语）
+│   │   └── ExpertProfileManager.cs              ← 管理逻辑（默认三档案：星球大战/漫威/校对）
 │   ├── Localization/LocalizationManager.cs      ← 本地化（禁止硬编码文案）
 │   ├── Themes/DarkColors.xaml、LightColors.xaml ← 主题色板（运行时切换）
 │   └── Utils/
@@ -378,17 +386,23 @@ xml-ai-translator-main/
 │   ├── Program.cs                               ← translate/batch/export-tmx/validate
 │   └── SimpleXmlEditor.Cli.csproj
 │
-├── SimpleXmlEditor.Tests/                       ← 测试项目 (36/36 ✅)
+├── SimpleXmlEditor.Tests/                       ← 测试项目 (58/58 ✅)
 │   ├── BlacklistManagerTests.cs                 ← 黑名单（13）
+│   ├── GlossaryManagerTests.cs                  ← 术语表 + 宽松相关判定（15）
+│   ├── FileFormatPluginsTests.cs                ← 五格式插件（10）
 │   ├── TxtFilePluginTests.cs                    ← 键值对 TXT（7）
-│   ├── GlossaryManagerTests.cs                  ← 术语表（5）
 │   ├── ConfigServiceTests.cs                    ← 配置/缓存（4）
 │   ├── StringExtensionsTests.cs                 ← 字符串工具（4）
-│   └── XmlRepositoryTests.cs                    ← XML 嗅探（3）
+│   ├── XmlRepositoryTests.cs                    ← XML 嗅探（3）
+│   └── TranslationOrchestratorTests.cs          ← 翻译编排/动态批大小（2）
 │
-├── scripts/                                     ← 游戏本地化辅助脚本
-│   ├── datlib.py                                ← EAW DAT 读写库
-│   └── 4.0_添加换行写入DAT.py                   ← 4.0 换行写回 DAT
+├── scripts/（实际位于仓库外 e:\translate\scripts\）← 游戏本地化辅助脚本
+│   ├── datlib.py                                ← EAW DAT 读写库（UTF-16LE + CRC32）
+│   ├── 3.5_添加换行写入DAT.py                   ← 3.5 换行写回 DAT（含 GC_COMPLETE_DISC_ONEPLANET 排除）
+│   ├── 4.0_添加换行写入DAT.py                   ← 4.0 换行写回 DAT
+│   ├── 5.0_添加换行写入DAT.py                   ← 5.0 换行写回 DAT
+│   ├── 4.0_字体加粗对齐.py                      ← 按 5.0 字重对齐 4.0 字体
+│   └── 通用_*.py                                ← 跨版本工具（翻译写入/校对/版本对比等）
 │
 └── docs (README, PRODUCT_PLAN, DEVELOPMENT_LOG, HANDOVER, PROJECT_INDEX)
 ```

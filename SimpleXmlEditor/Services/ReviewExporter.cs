@@ -124,6 +124,12 @@ namespace SimpleXmlEditor.Services
         private static string EscapeCsv(string text)
         {
             if (string.IsNullOrEmpty(text)) return "";
+            // 防 CSV 公式注入：以 = + - @ \t \r 开头的字段前置单引号，防止 Excel 将其当作公式执行
+            if (text.Length > 0 && (text[0] == '=' || text[0] == '+' || text[0] == '-' ||
+                text[0] == '@' || text[0] == '\t' || text[0] == '\r'))
+            {
+                text = "'" + text;
+            }
             if (text.Contains(",") || text.Contains("\"") || text.Contains("\n"))
                 return $"\"{text.Replace("\"", "\"\"")}\"";
             return text;

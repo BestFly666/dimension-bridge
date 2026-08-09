@@ -37,7 +37,7 @@ namespace SimpleXmlEditor.Dictionary
 
         public bool RemoveEntry(string source)
         {
-            var removed = Terms.Remove(source);
+            var removed = Terms.TryRemove(source, out _);
             if (removed)
             {
                 _regexCache.Clear();

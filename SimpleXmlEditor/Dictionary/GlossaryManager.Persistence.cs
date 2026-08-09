@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,7 +23,7 @@ namespace SimpleXmlEditor.Dictionary
                 if (File.Exists(GlossaryFile))
                 {
                     var json = File.ReadAllText(GlossaryFile, Encoding.UTF8);
-                    Terms = new Dictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
+                    Terms = new ConcurrentDictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
 
                     // Try loading new format (array of GlossaryTerm) first
                     try
@@ -53,7 +54,7 @@ namespace SimpleXmlEditor.Dictionary
                 {
                     var json = File.ReadAllText(DictFile, Encoding.UTF8);
                     var loaded = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
-                    Terms = new Dictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
+                    Terms = new ConcurrentDictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
                     if (loaded != null)
                     {
                         foreach (var kvp in loaded)
@@ -70,7 +71,7 @@ namespace SimpleXmlEditor.Dictionary
             }
             catch (Exception ex)
             {
-                Terms = new Dictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
+                Terms = new ConcurrentDictionary<string, GlossaryTerm>(StringComparer.OrdinalIgnoreCase);
                 _sortedTerms = new List<KeyValuePair<string, GlossaryTerm>>();
                 System.Diagnostics.Debug.WriteLine($"Glossary load error: {ex.Message}");
             }

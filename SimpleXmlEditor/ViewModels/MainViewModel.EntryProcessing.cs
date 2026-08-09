@@ -28,7 +28,8 @@ namespace SimpleXmlEditor.ViewModels
             if (!string.IsNullOrEmpty(entry.Translation))
             {
                 if (!string.IsNullOrWhiteSpace(entry.Value))
-                    _configService.Cache.TryAdd(entry.Key, entry.Translation);
+                    // 双键对称写（Key + MD5(原文)），与 SyncEntriesToCache 保持一致
+                    _configService.SetCacheEntry(entry.Key, entry.Value, entry.Translation);
             }
             else if (!string.IsNullOrWhiteSpace(entry.Value))
             {

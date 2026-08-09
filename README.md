@@ -1,4 +1,4 @@
-# AI Translator
+# 次元译桥（Dimension Bridge）
 
 🌐 **基于 AI 批量翻译的现代化多格式本地化工具**
 
@@ -7,6 +7,7 @@
 ![平台](https://img.shields.io/badge/平台-.NET%208.0-blue)
 ![许可](https://img.shields.io/badge/许可-MIT-green)
 ![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
+![测试](https://img.shields.io/badge/测试-69%20通过-brightgreen)
 ![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
 
 > [!IMPORTANT]
@@ -175,7 +176,7 @@ dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 
 ```bash
 dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
-# 当前: 58/58 通过，0 失败，0 跳过
+# 当前: 69/69 通过，0 失败，0 跳过
 ```
 
 ### CI/CD

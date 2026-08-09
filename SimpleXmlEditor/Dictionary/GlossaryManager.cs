@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -17,8 +18,11 @@ namespace SimpleXmlEditor.Dictionary
     ///     matched terms into the AI prompt as translation guidance.
     ///   - TryGetValue (exact match): only for entries whose ENTIRE text matches a glossary
     ///     term (e.g., "UPGRADE_TECH" → "科技升级", or single-word entries).
-    ///   - SubstituteTerms: used only when the caller explicitly wants in-place term
-    ///     replacement (e.g., post-processing). NOT used in the hot translation path.
+    ///   - GetMatchingTerms: term-level lookup for AI context injection.
+    ///
+    /// 线程安全：Terms / _regexCache 用 ConcurrentDictionary；
+    /// _sortedTerms / _invertedIndex 通过"整表重建 + 引用替换"保证读者永远看到完整状态
+    /// （后台翻译线程读，UI 线程写）。
     /// </summary>
     public partial class GlossaryManager : IGlossaryManager
     {
@@ -26,7 +30,7 @@ namespace SimpleXmlEditor.Dictionary
         private static readonly string GlossaryFile = Path.Combine(Environment.CurrentDirectory, "glossary_terms.json");
 
         /// <summary>Key: English term (case-insensitive), Value: GlossaryTerm entry</summary>
-        public Dictionary<string, GlossaryTerm> Terms { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+        public ConcurrentDictionary<string, GlossaryTerm> Terms { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Sorted by key length descending for longest-match-first</summary>
         private List<KeyValuePair<string, GlossaryTerm>> _sortedTerms = new();
@@ -38,10 +42,10 @@ namespace SimpleXmlEditor.Dictionary
         private Dictionary<string, HashSet<string>> _invertedIndex = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Maximum glossary terms injected into a single batch prompt.</summary>
-        private const int MAX_GLOSSARY_CONTEXT_TERMS = 50;
+        private const int MAX_GLOSSARY_CONTEXT_TERMS = 200;
 
-        /// <summary>Regex cache shared across all methods (thread-safe reads, rebuild on import)</summary>
-        private static readonly Dictionary<string, Regex> _regexCache = new();
+        /// <summary>Regex cache shared across all methods (ConcurrentDictionary：并发读写安全)</summary>
+        private static readonly ConcurrentDictionary<string, Regex> _regexCache = new();
 
         /// <summary>类名/型号修饰词（class/mk/type 等），匹配宽容与宽松判定共用。</summary>
         private static readonly string ModifierTokenPattern = @"(?:class|mark|mk|type|series|version|model|variant|generation|prototype|standard)";

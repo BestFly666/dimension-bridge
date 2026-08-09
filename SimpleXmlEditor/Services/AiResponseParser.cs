@@ -208,7 +208,12 @@ namespace SimpleXmlEditor.Services
             {
                 lock (_logLock)
                 {
-                    var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "parse_errors.log");
+                    // 写到 AppData（与缓存/进度文件一致），避免污染程序目录（bin 随构建变化）
+                    var logDir = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "SimpleXmlEditor");
+                    Directory.CreateDirectory(logDir);
+                    var logPath = Path.Combine(logDir, "parse_errors.log");
                     var snippet = responseSnippet.Length > 300 ? responseSnippet[..300] + "..." : responseSnippet;
                     File.AppendAllText(logPath,
                         $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}\n" +

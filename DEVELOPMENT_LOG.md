@@ -1,4 +1,4 @@
-# 开发日志 — XML AI Translator
+# 开发日志 — 次元译桥
 
 > 项目仓库：`xml-ai-translator-main`  
 > 作者：Veloxcity、BestFly666  
@@ -9,9 +9,108 @@
 
 ## 项目概述
 
-**XML AI Translator** 是一款专为游戏本地化设计的 XML 批量翻译工具。核心定位是基于 AI（8 个提供商）对 Excel Spreadsheet 格式的 XML 本地化文件进行批量翻译，通过智能分批、翻译缓存、速率限制等机制大幅降低 API 调用成本（90%+），同时提供基于 **HandyControl 3.5.1** 组件库的现代桌面界面（浅色系配色，多彩按钮）。
+**次元译桥（Dimension Bridge）** 是一款专为游戏本地化设计的 XML 批量翻译工具。核心定位是基于 AI（8 个提供商）对 Excel Spreadsheet 格式的 XML 本地化文件进行批量翻译，通过智能分批、翻译缓存、速率限制等机制大幅降低 API 调用成本（90%+），同时提供基于 **HandyControl 3.5.1** 组件库的现代桌面界面（浅色系配色，多彩按钮）。
 
 **产品定位（2026-08-01 确认）**：面向**中文游戏本地化译者**的一站式 AI 翻译工作台——将术语一致性、质量评估、格式兼容等专业流程自动化；同时为**独立游戏开发者**提供开箱即用的极简版，让"游戏文本 → 多语言"从几周变成几小时。共享核心引擎，双入口形态。
+
+---
+
+## 2026-08-09 — 全面代码审计修复 + UI 编辑态崩溃修复 + 3.5 换行补丁 + 产品更名"次元译桥"
+
+> 背景：用户要求按代码审查员规则对项目做大规模审计并修复全部问题（34 项确认问题）；随后反馈 Ctrl+Z / 批量替换 / 筛选在"选中单元格内容"后崩溃；并决定把产品对外名称更改为"次元译桥"。以代码审查员 + 后端架构师身份处理。
+
+### A. 全面代码审计修复（1 critical + 14 major 全部修复）
+
+- **翻译流防重入（critical）**：翻译运行中禁止启动第二条流水线；`_translationCts` 用局部 CTS + `ReferenceEquals` 归属判断，杜绝被覆盖 / finally 误 Dispose
+- **进度保存并发**：节流保存 Task 化 + `DrainProgressSavesAsync` 排空在途保存 + `ConfigService._progressFileLock` 串行化同一进度文件的写 / 读 / 删
+- **Glossary 并发安全**：`Terms` / `_regexCache` 改 `ConcurrentDictionary`；`_sortedTerms` / `_invertedIndex` 维持整表重建 + 引用替换，后台读不阻塞 UI 写
+- **缓存双键对称写**：新增 `SetCacheEntry(key, original, translation)`，Key + MD5(原文) 双键与 `SyncEntriesToCache` 对称，消除单键写入遗漏
+- **部分批次结果丢失**：AI 只返回部分条目时自动拆半递归补译并合并，不再静默接受
+- **DPAPI 明文降级移除**：API Key 加密失败绝不写明文，保留 `LEGACY:` 前缀只读兼容旧配置
+- **提示注入转义**：`PromptTextSanitizer` 统一转义 Evaluator（5 处）/ Orchestrator / ExpertProfile 全部动态文本插值点；修复 `{GLOSSARY}` 重复注入
+- **成本统计线程安全**：`Interlocked.Add`（int）+ 锁（double）+ 显式通知；`FetchAvailableModelsAsync` 不再临时覆盖 `_apiKey`
+
+### B. UI 编辑态崩溃修复（Ctrl+Z / 批量替换 / 筛选）
+
+**现象**：双击选中单元格内容（进入编辑态）后，不取消选中直接按 Ctrl+Z、执行批量替换、或使用筛选，程序崩溃。
+
+**根因**：DataGrid 处于编辑状态（单元格未提交）时，调用 `CollectionView.Refresh()` 或修改 `view.Filter` 会抛 `InvalidOperationException`——视图在编辑中被重新评估。
+
+**修复**：新增 `ExitDataGridEditing()`（提交单元格 + 行编辑，异常静默）与 `SafeRefreshDataGrid()`（先提交再 Refresh），覆盖全部 10 个 Refresh/Filter 调用点（筛选 / 批量替换 / Undo / 重置排序 / Del 清空 / 清缓存 / 合并 / 加载 / 投票应用 / 预翻译 / 建议应用）；Undo 跳转前若目标行被当前筛选隐藏则自动清除筛选再定位。
+
+### C. 3.5 换行补丁
+
+`EXACT_INCLUDE_KEYS` 追加 `TEXT_UNIT_CEC_C9_SENTINEL_DESC`——该 Key 后缀为 `_DESC` 而非 `DESCRIPTION`，不命中任何 INCLUDE 关键词，此前被漏过；与 `TEXT_BUIDING_STARBASE_PIRATE_LV1_GARRISON` 一样精确指定处理。
+
+### D. 产品更名
+
+项目对外名称更改为 **次元译桥（Dimension Bridge）**：窗口标题 / AppName / About / 设置标题经 LocalizationManager 双向字典更新；README / 开发日志 / 交接文档 / 文件索引 / 产品规划同步改名。仓库名（xml-ai-translator-tool）与程序集名（SimpleXmlEditor）保持不变，AppData 数据路径（`%LocalAppData%\SimpleXmlEditor\`）不受影响，LICENSE 版权声明原样保留。
+
+### 验证
+
+- `dotnet build`：0 错误
+- `dotnet test`：69/69 通过（新增 AiResponseParser / 缓存双键测试，修正 Fake GetCacheKey）
+- 用户实测：编辑态下筛选 / 撤销 / 批量替换不再崩溃
+
+---
+
+## 2026-08-08/09 — 字体回退根治（4.0/5.0/3.5 统一 Microsoft YaHei UI）+ 专家/术语注入链路修复 + 3.5 换行
+
+> 背景：用户报告"机翻 mod 和自改字体都退回宋体"；专家选择后 AI 翻译完全不受影响；术语功能单条生效、批量失效；3.5 换行需排除固定宽度条目。以代码审查员 + 后端架构师身份处理。
+
+### A. 字体回退宋体根治（4.0/5.0/3.5）
+
+**现象**：机翻 mod（用 `Arial Unicode MS`）与本项目改的字体在游戏内都退回宋体。
+
+**根因**：
+1. 用户系统**缺失 `Arial Unicode MS`** → Windows 按字体名精确匹配失败 → 回退宋体（注册表 FontSubstitutes 验证正常，非全局设置被改）
+2. 此前自改用 `Microsoft YaHei`，但系统字体注册名是 **`Microsoft YaHei UI`**（带 UI 后缀，共用 msyh.ttc）——名字不一致同样匹配失败回退宋体
+
+**修复**：
+- **4.0 / 5.0（3728303149）**：GUIDIALOGS.XML、COMMANDBARCOMPONENTS.XML、Gameconstants.xml 全部字体 → `Microsoft YaHei UI`；**不加粗**（按用户要求避免退化）；`Alternate_Font_Name` → `Microsoft YaHei UI, Microsoft YaHei UI, Microsoft YaHei UI`
+- **3.5**：原版用 `STXihei`（华文细黑，Windows 常缺失）——COMMANDBARCOMPONENTS.XML 451 处 + GUIDIALOGS.XML 319 处（`<Name>` 字体标签）+ Gameconstants.xml 11 处，共 781 处全部 → `Microsoft YaHei UI`；无 `Alternate_Font_Name`；保持原编码（无 BOM UTF-8）、保留 Emboss/Outline 设置
+
+**验证**：用户实测生效（"终于成功了，就是字体名字不一致导致的"）。
+
+### B. 专家档案激活链路修复（"专家没生效"）
+
+**现象**：选择星球大战/漫威/校对专家后，AI 翻译结果完全不受影响。
+
+**根因链（4 层）**：
+1. **双状态未同步**：UI 只写 `MainViewModel.ActiveExpertProfileName`（持久化到 AppData config.json），而翻译执行路径 [TranslationOrchestrator.BuildExpertContext](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) 读的是 `ExpertProfileManager.ActiveProfileName`（expert_profiles.json）——**从未同步** → 专家 Context 永不注入
+2. **词典文件不在运行目录**：`GlossaryManager.DictFile` 从 `Environment.CurrentDirectory` 加载，bin 运行目录缺 `translation_dictionary.json`/`glossary_terms.json` → 术语注入为空 → csproj 补 `CopyToOutputDirectory`
+3. **自定义提示词缺 `{GLOSSARY}` 占位符**：占位符缺失时术语被 `Replace` 空转丢弃 → 改为**占位符缺失时追加到 prompt 末尾**
+4. **DI 空日志回调覆盖**：DI 容器把 `Action<string>` 注册为 no-op，MainViewModel 收到非 null 的 `TranslationOrchestrator`，`?? new` 短路 → orchestrator 内部日志（含错误/重试）被静默丢弃 → **从 DI 移除该注册**，由 MainViewModel 自建带真实日志回调的实例
+
+**修复**：`MainViewModel.ActiveExpertProfileName` setter 同步 `_profileManager.ActiveProfileName` + `SaveProfiles()`；csproj 词典复制；占位符追加模式；移除 DI 注册。
+
+### C. 术语注入批量失效修复（"单条生效、批量失效"）
+
+**现象**：单条翻译术语生效（A-Wing → A翼），批量翻译不生效（仍输出 A-Wing/一架）。
+
+**根因**：[GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs) `GetGlossaryContextTerms` 先把候选术语按**长度降序**排序，再逐个验证 `IsTermRelated` 并塞满 `MAX_GLOSSARY_CONTEXT_TERMS`——批量时 50 条文本产生数百候选，30-40 字符长术语先验证通过占满名额，**A-Wing 类短术语（17 字符）被挤出** → 注入失效。
+
+**修复**：改为**先全局验证**收集匹配术语（termKey → 命中条目数）并记录每条 entry 的命中集合 → **每条 entry 至少贡献自己的术语**（最长优先）→ 剩余名额按命中条目数降序补充（同数按长度降序）。短/冷门术语不再被高频长术语挤出。
+
+**容量**：`MAX_GLOSSARY_CONTEXT_TERMS` **50 → 200**（用户要求加大，最终定格 200）；200 条约 5K–6K token/批，占 64K 上下文约 8-9%，输入不影响批次输出预算。
+
+### D. 3.5 换行脚本（GC_COMPLETE_DISC_ONEPLANET 排除）
+
+- [3.5_添加换行写入DAT.py](file:///e:/translate/scripts/3.5_添加换行写入DAT.py) `EXCLUDE_KEYWORDS` 新增 `GC_COMPLETE_DISC_ONEPLANET`——该 key 含 `PLANET` 会被 `INCLUDE_KEYWORDS` 命中，但其为单行星完成提示文本，游戏预设 `\n` 换行、固定宽度，追加空格断行会破坏布局
+- 执行结果：1760 条加换行；DAT 写回后验证该 key 无 6+ 连续空格（换行特征），保留原 `\n`
+
+### 验证
+
+- `dotnet build`：0 错误 0 警告
+- 诊断日志确认专家 Context 注入链路打通（profile 名 + 长度 + glossary 布尔），验证后按用户要求移除
+- 用户实测：Microsoft YaHei UI 字体生效；术语注入容量可调
+
+### 经验教训
+
+1. **Windows 字体名精确匹配**：代码引用与系统注册名必须逐字符一致（`Microsoft YaHei UI` ≠ `Microsoft YaHei`），系统缺字体/名不匹配即回退宋体；排查字体回退先列 `HKLM\...\Fonts` 注册表核对注册名
+2. **双状态必须单向同步**：UI 状态（config.json）与执行路径状态（数据文件）分离时，setter 必须同步到执行路径，否则"UI 选了但没生效"且无任何报错
+3. **先排序后验证 vs 先验证后排序**：带截断上限的挑选必须先生成完整匹配集，再排序取舍；"边验证边截断"在排序键与相关性无关时（如按长度）会系统性挤掉目标项
+4. **DI 注册 no-op 的副作用**：`Action<T>` 等委托注册 no-op 后，依赖方 `?? new` 回退永久失效，内部日志被静默吞掉——排查"功能没日志"先核对 DI 是否覆盖了回调注入
 
 ---
 

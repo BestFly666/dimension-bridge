@@ -257,7 +257,7 @@ namespace SimpleXmlEditor
                     var applied = _viewModel.ApplyVotingSelections(selections);
                     if (applied > 0)
                     {
-                        EntriesGrid.Items.Refresh();
+                        SafeRefreshDataGrid();
                         _viewModel.SyncScoresToCache(_viewModel.Entries);
                         _viewModel.SaveScoreCache();
                         AddLog($"✅ {LocalizationManager.GetString("VoteAppliedBest", applied)}");
@@ -278,7 +278,7 @@ namespace SimpleXmlEditor
             AddLog($"🔮 {LocalizationManager.GetString("LogPreTranslate", outcome.Total, outcome.GlossaryFilled, outcome.CacheFilled)}");
             MessageBox.Show(msg, LocalizationManager.GetString("PreTranslate"), MessageBoxButton.OK, MessageBoxImage.Information);
 
-            EntriesGrid.Items.Refresh();
+            SafeRefreshDataGrid();
             UpdateGlossaryInfo();
             UpdateCacheInfo();
         }

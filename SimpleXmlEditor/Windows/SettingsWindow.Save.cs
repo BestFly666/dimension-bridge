@@ -14,7 +14,7 @@ namespace SimpleXmlEditor
 
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
-            ApiKey = ApiKeyTextBox.Text.Trim();
+            ApiKey = ApiKeyTextBox.Password.Trim();
             
             // Read AI provider
             if (AiProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem providerItem)
@@ -57,7 +57,7 @@ namespace SimpleXmlEditor
             // 评估模型配置
             if (EvalProviderComboBox.SelectedItem is System.Windows.Controls.ComboBoxItem evalItem)
                 EvalAiProvider = evalItem.Tag?.ToString() ?? "";
-            EvalApiKey = EvalApiKeyTextBox.Text.Trim();
+            EvalApiKey = EvalApiKeyTextBox.Password.Trim();
             EvalModel = EvalModelComboBox.Text.Trim();
             EvalModels = _evalModels.Select(m => (m.Provider, m.Model, m.ApiKey)).ToList();
 

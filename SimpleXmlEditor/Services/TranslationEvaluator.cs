@@ -37,7 +37,7 @@ namespace SimpleXmlEditor.Services
     /// Reuses the existing AiTranslationService for API communication.
     /// Partial 类拆分：Prompts（提示词构建）/ Parsing（响应解析）/ Utils（结果聚合）。
     /// </summary>
-    public partial class TranslationEvaluator : ITranslationEvaluator
+    public partial class TranslationEvaluator : ITranslationEvaluator, IDisposable
     {
         private readonly IAiTranslationService _aiService;
         private readonly IConfigService _configService;
@@ -144,6 +144,19 @@ namespace SimpleXmlEditor.Services
         private void RaiseLog(string message)
         {
             LogMessage?.Invoke(message);
+        }
+
+        /// <summary>
+        /// 释放评估专用服务实例（各自持有 HttpClient）。
+        /// 注入的主 _aiService 由调用方（MainWindow）负责生命周期，此处不释放。
+        /// </summary>
+        public void Dispose()
+        {
+            _evalAiService?.Dispose();
+            _evalAiService = null;
+            foreach (var svc in _evalServices.Values)
+                svc.Dispose();
+            _evalServices.Clear();
         }
 
         /// <summary>

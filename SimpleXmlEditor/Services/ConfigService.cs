@@ -49,7 +49,9 @@ namespace SimpleXmlEditor.Services
         private readonly string _cachePath;
         private readonly string _scoreCachePath;
         private readonly string _progressPath;
-        private readonly object _cacheLock = new object();
+        // 进度文件（translation_progress.json）写/读/删的串行化锁：
+        // 后台节流保存与最终保存/删除并发时，避免同一文件同时被写入和删除。
+        private readonly System.Threading.SemaphoreSlim _progressFileLock = new(1, 1);
 
         public AppConfig Config { get; private set; } = new();
 
@@ -125,7 +127,7 @@ namespace SimpleXmlEditor.Services
 
         /// <summary>
         /// Encrypts API key using Windows DPAPI and stores it as Base64.
-        /// Falls back to plaintext storage only if DPAPI is unavailable (non-Windows).
+        /// 安全约束：DPAPI 失败时绝不写入明文（仅日志提示），避免密钥以明文落盘。
         /// </summary>
         public void SetApiKey(string apiKey)
         {
@@ -135,46 +137,28 @@ namespace SimpleXmlEditor.Services
                 return;
             }
 
-            try
+            Config.EncryptedApiKey = EncryptSecret(apiKey);
+            if (string.IsNullOrEmpty(Config.EncryptedApiKey))
             {
-                byte[] encrypted = ProtectedData.Protect(
-                    Encoding.UTF8.GetBytes(apiKey),
-                    null,
-                    DataProtectionScope.CurrentUser);
-                Config.EncryptedApiKey = Convert.ToBase64String(encrypted);
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogApiKeyEncryptFailed", ex.Message));
-                // Fallback: store plaintext with a LEGACY prefix so GetApiKey can detect it
-                Config.EncryptedApiKey = "LEGACY:" + apiKey;
+                // 加密失败：不降级为明文存储，仅记录日志（密钥本次会话仍可用，重启后需重新输入）
+                RaiseLog(LocalizationManager.GetString("LogApiKeyEncryptFailed", "DPAPI unavailable"));
                 RaiseLog(LocalizationManager.GetString("LogApiKeyPlaintextWarning"));
             }
         }
 
         /// <summary>
         /// Decrypts API key from DPAPI-encrypted storage.
-        /// Supports migration from old plaintext configs (legacy GeminiApiKey field)
-        /// and non-Windows fallback (LEGACY: prefix).
+        /// 兼容读取旧配置中的 LEGACY: 明文前缀（仅读取，不再写入）。
         /// </summary>
         public string GetApiKey()
         {
             if (string.IsNullOrEmpty(Config.EncryptedApiKey))
                 return "";
-            if (Config.EncryptedApiKey.StartsWith("LEGACY:", StringComparison.Ordinal))
-                return Config.EncryptedApiKey.Substring(7);
 
-            try
-            {
-                byte[] encryptedBytes = Convert.FromBase64String(Config.EncryptedApiKey);
-                byte[] decrypted = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
-                return Encoding.UTF8.GetString(decrypted);
-            }
-            catch (Exception ex)
-            {
-                RaiseLog(LocalizationManager.GetString("LogApiKeyDecryptFailed", ex.Message));
-                return "";
-            }
+            var decrypted = DecryptSecret(Config.EncryptedApiKey);
+            if (string.IsNullOrEmpty(decrypted) && !Config.EncryptedApiKey.StartsWith("LEGACY:", StringComparison.Ordinal))
+                RaiseLog(LocalizationManager.GetString("LogApiKeyDecryptFailed", "DPAPI unavailable"));
+            return decrypted;
         }
 
         public void SetEvaluationApiKey(string apiKey)
@@ -184,34 +168,14 @@ namespace SimpleXmlEditor.Services
                 Config.EncryptedEvaluationApiKey = "";
                 return;
             }
-            try
-            {
-                byte[] encrypted = ProtectedData.Protect(
-                    Encoding.UTF8.GetBytes(apiKey), null, DataProtectionScope.CurrentUser);
-                Config.EncryptedEvaluationApiKey = Convert.ToBase64String(encrypted);
-            }
-            catch
-            {
-                Config.EncryptedEvaluationApiKey = "LEGACY:" + apiKey;
-            }
+            Config.EncryptedEvaluationApiKey = EncryptSecret(apiKey);
         }
 
         public string GetEvaluationApiKey()
         {
             if (string.IsNullOrEmpty(Config.EncryptedEvaluationApiKey))
                 return "";
-            if (Config.EncryptedEvaluationApiKey.StartsWith("LEGACY:", StringComparison.Ordinal))
-                return Config.EncryptedEvaluationApiKey.Substring(7);
-            try
-            {
-                byte[] encryptedBytes = Convert.FromBase64String(Config.EncryptedEvaluationApiKey);
-                byte[] decrypted = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
-                return Encoding.UTF8.GetString(decrypted);
-            }
-            catch
-            {
-                return "";
-            }
+            return DecryptSecret(Config.EncryptedEvaluationApiKey);
         }
 
         /// <summary>
@@ -249,7 +213,8 @@ namespace SimpleXmlEditor.Services
             }
             catch
             {
-                return "LEGACY:" + plain;
+                // 安全约束：绝不写入明文。调用方据此判断加密失败并提示用户。
+                return "";
             }
         }
 

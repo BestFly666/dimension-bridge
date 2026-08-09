@@ -83,6 +83,9 @@ namespace SimpleXmlEditor
 
         private void ApplyFilter()
         {
+            // 先退出编辑状态：单元格正在编辑时修改 Filter/Refresh 会抛 InvalidOperationException
+            ExitDataGridEditing();
+
             var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
             if (view == null) return;
 
@@ -181,6 +184,8 @@ namespace SimpleXmlEditor
                     }
                 }
 
+                // 先退出编辑状态，再刷新（编辑中 Refresh 会抛 InvalidOperationException）
+                ExitDataGridEditing();
                 var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
                 view?.Refresh();
 
@@ -199,16 +204,35 @@ namespace SimpleXmlEditor
                 return;
             }
 
+            // 先退出编辑状态，再刷新（编辑中 Refresh 会抛 InvalidOperationException）
+            ExitDataGridEditing();
             var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
             view?.Refresh();
 
             AddLog($"↩️ {LocalizationManager.GetString("UndoComplete", restored.Count)}");
 
-            // 实时跳转到第一个被撤销的行（Excel 风格：撤销后立即定位）
+            // 实时跳转到第一个被撤销的行（Excel 风格：撤销后立即定位）。
+            // 该行可能被当前筛选隐藏（例如撤销后译文变空、"只显示未翻译"生效），
+            // 此时先清除筛选再定位，保证用户能看到撤销结果。
             var firstEntry = restored[0];
+            var firstVisible = view != null && view.OfType<LocalizationEntry>().Any(e => e == firstEntry);
+            if (!firstVisible)
+                ClearFilters();
             EntriesGrid.ScrollIntoView(firstEntry);
             EntriesGrid.SelectedItem = firstEntry;
             EntriesGrid.Focus();
+        }
+
+        private void ClearFilters()
+        {
+            FilterKeyBox.Text = "";
+            FilterBox.Text = "";
+            FilterTranslationBox.Text = "";
+            _showUntranslatedOnly = false;
+            _hideBlacklisted = false;
+            if (UntranslatedToggle != null) UntranslatedToggle.IsChecked = false;
+            if (HideBlacklistToggle != null) HideBlacklistToggle.IsChecked = false;
+            ApplyFilter();
         }
 
         /// <summary>

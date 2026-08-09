@@ -15,4 +15,10 @@
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 术语注入词典：复制到输出目录，确保运行目录存在词典文件 -->
+    <None Update="translation_dictionary.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="glossary_terms.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

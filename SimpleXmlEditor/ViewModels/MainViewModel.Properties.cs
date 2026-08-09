@@ -45,6 +45,13 @@ namespace SimpleXmlEditor.ViewModels
             set
             {
                 _activeExpertProfileName = value;
+                // 同步到 ExpertProfileManager：翻译时 BuildExpertContext() 读取的
+                // 是 _profileManager.ActiveProfileName，二者不同步会导致专家 Context 永不注入。
+                if (_profileManager != null && _profileManager.ActiveProfileName != value)
+                {
+                    _profileManager.ActiveProfileName = value;
+                    _profileManager.SaveProfiles();
+                }
                 OnPropertyChanged();
             }
         }

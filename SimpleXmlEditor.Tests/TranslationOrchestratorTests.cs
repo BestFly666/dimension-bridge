@@ -83,8 +83,8 @@ namespace SimpleXmlEditor.Tests
             public string Model { get; set; } = "m";
             public string TargetLanguage { get; set; } = "zh";
             public HttpClient HttpClient => new HttpClient();
-            public Dictionary<string, (double input, double output)> ModelPricing => new();
-            public Dictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits => new();
+            public ConcurrentDictionary<string, (double input, double output)> ModelPricing => new();
+            public ConcurrentDictionary<string, (int requestsPerMinute, int requestsPerDay, int tokensPerMinute)> ModelLimits => new();
             public ConcurrentQueue<DateTime> RecentRequests => new();
 
             public event Action<string> LogMessage;
@@ -94,9 +94,6 @@ namespace SimpleXmlEditor.Tests
 
             public Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null)
                 => Task.FromResult(new List<string>());
-
-            public Task<string> TranslateSingleAsync(string text, int maxRetries = 3)
-                => Task.FromResult("");
 
             public Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null)
             {
@@ -115,7 +112,6 @@ namespace SimpleXmlEditor.Tests
             }
 
             public double CalculateCost(int inputChars, int outputChars, string modelName) => 0;
-            public int CalculateOptimalDelay() => 0;
             public int GetModelTokenLimit(string modelName) => 0;
             public void TrackRequest() { }
             public void Dispose() { }
@@ -136,10 +132,24 @@ namespace SimpleXmlEditor.Tests
             public int RestoreScores(IEnumerable<LocalizationEntry> entries) => 0;
             public void SyncEntriesToCache(IEnumerable<LocalizationEntry> entries) { }
         public Task SaveTranslationProgressAsync(IEnumerable<LocalizationEntry> entries) => Task.CompletedTask;
-        public Dictionary<string, string> GetCacheForSave(IEnumerable<LocalizationEntry> entries) => new();
+            public void SetCacheEntry(string key, string originalText, string translation)
+            {
+                if (string.IsNullOrWhiteSpace(originalText)) return;
+                Cache[key] = translation;
+                var cacheKey = GetCacheKey(originalText);
+                if (cacheKey != null) Cache[cacheKey] = translation;
+            }
+
             public int RestoreTranslationProgress(IEnumerable<LocalizationEntry> entries) => 0;
             public void DeleteProgressFile() { }
-            public string GetCacheKey(string text) => string.IsNullOrEmpty(text) ? null : text;
+            // 与生产实现一致：缓存键为原文的 MD5 hex（大写）
+            public string GetCacheKey(string text)
+            {
+                if (string.IsNullOrWhiteSpace(text)) return null;
+                using var md5 = System.Security.Cryptography.MD5.Create();
+                var hash = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(text));
+                return System.Convert.ToHexString(hash);
+            }
             public void UpdateConfig(Action<AppConfig> updater) { }
             public void SetApiKey(string apiKey) { }
             public string GetApiKey() => "";
@@ -152,7 +162,7 @@ namespace SimpleXmlEditor.Tests
 
         private class FakeGlossaryManager : IGlossaryManager
         {
-            public Dictionary<string, GlossaryTerm> Terms { get; } = new();
+            public ConcurrentDictionary<string, GlossaryTerm> Terms { get; } = new();
             public int Count => 0;
             public event Action<string> LogMessage;
 

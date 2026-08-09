@@ -109,7 +109,6 @@ namespace SimpleXmlEditor.ViewModels
         public event Action<string, string> MessageRequested;
 
         // ── Commands (ICommand bindings for toolbar / menu) ──
-        public RelayCommand TranslateSelectedCommand { get; }
         public RelayCommand TranslateAllCommand { get; }
         public RelayCommand EvaluateCommand { get; }
         public RelayCommand VoteCommand { get; }
@@ -146,9 +145,7 @@ namespace SimpleXmlEditor.ViewModels
             _orchestrator.OnApiCall += count => IncrementApiCalls();
             _orchestrator.OnApiChars += (input, output) =>
             {
-                TotalInputChars += input;
-                TotalOutputChars += output;
-                TotalCost += _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model);
+                AddTranslationStats(input, output, _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model));
             };
 
             _aiTranslationService.LogMessage += msg => OnLogMessage(msg);
@@ -156,9 +153,7 @@ namespace SimpleXmlEditor.ViewModels
             _aiTranslationService.ApiCallCounted += count => IncrementApiCalls();
             _aiTranslationService.ApiCharsCounted += (input, output) =>
             {
-                TotalInputChars += input;
-                TotalOutputChars += output;
-                TotalCost += _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model);
+                AddTranslationStats(input, output, _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model));
             };
 
             _xmlRepository.LogMessage += msg => OnLogMessage(msg);
@@ -166,7 +161,6 @@ namespace SimpleXmlEditor.ViewModels
             _evaluator.LogMessage += msg => OnLogMessage(msg);
 
             // ── Commands ──
-            TranslateSelectedCommand = new RelayCommand(_ => ExecuteTranslateSelected(), _ => !IsTranslationRunning);
             TranslateAllCommand = new RelayCommand(async _ => await ExecuteTranslateAllAsync(), _ => !IsTranslationRunning);
             EvaluateCommand = new RelayCommand(async p => await EvaluateEntriesAsync(ExtractEntries(p)), _ => !IsEvaluating);
             VoteCommand = new RelayCommand(async p => await VoteEntriesAsync(ExtractEntries(p)), _ => !IsEvaluating);
@@ -214,5 +208,23 @@ namespace SimpleXmlEditor.ViewModels
 
         /// <summary>Thread-safe API calls increment.</summary>
         public int IncrementApiCalls() => Interlocked.Increment(ref _apiCalls);
+
+        /// <summary>
+        /// 线程安全累加翻译统计（输入/输出字符 + 成本），由并发批次的后台线程调用。
+        /// int 用 Interlocked；double 成本用锁保护避免丢失更新。
+        /// WPF 绑定会自动将 PropertyChanged 封送到 UI 线程，这里直接通知即可。
+        /// </summary>
+        private void AddTranslationStats(int input, int output, double cost)
+        {
+            Interlocked.Add(ref _totalInputChars, input);
+            Interlocked.Add(ref _totalOutputChars, output);
+            lock (_translationLock)
+            {
+                _totalCost += cost;
+            }
+            OnPropertyChanged(nameof(TotalInputChars));
+            OnPropertyChanged(nameof(TotalOutputChars));
+            OnPropertyChanged(nameof(TotalCost));
+        }
     }
 }

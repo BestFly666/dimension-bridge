@@ -29,9 +29,9 @@ namespace SimpleXmlEditor
             foreach (var column in EntriesGrid.Columns)
                 column.SortDirection = null;
 
-            var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-            view?.SortDescriptions.Clear();
-            view?.Refresh();
+            var sortView = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
+            sortView?.SortDescriptions.Clear();
+            SafeRefreshDataGrid();
 
             AddLog("已重置排序（恢复原始顺序）");
             EntriesGrid.Focus();
@@ -84,8 +84,7 @@ namespace SimpleXmlEditor
                 // 静默清空 + 末尾 Refresh：全选时 entries 可能是全部行，逐条触发 PropertyChanged 会假死
                 foreach (var entry in entries)
                     entry.SetTranslationSilent("");
-                var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                view?.Refresh();
+                SafeRefreshDataGrid();
                 EntriesGrid.Focus();
                 return;
             }

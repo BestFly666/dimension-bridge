@@ -39,7 +39,8 @@ class Program
     {
         var inputPath = GetArg(args, 0, "-i", "--input");
         var outputPath = GetArg(args, 1, "-o", "--output");
-        var apiKey = GetArg(args, 2, "-k", "--api-key");
+        // API Key 优先从环境变量读取（避免 key 落入 shell 历史/进程列表），-k 参数作为兜底
+        var apiKey = GetArg(args, 2, "-k", "--api-key") ?? Environment.GetEnvironmentVariable("XML_AI_API_KEY");
         var provider = GetArg(args, 3, "-p", "--provider") ?? "GoogleGemini";
 
         if (string.IsNullOrEmpty(inputPath) || !File.Exists(inputPath))
@@ -113,7 +114,7 @@ class Program
     {
         var dir = GetArg(args, 0, "-d", "--dir");
         var provider = GetArg(args, 1, "-p", "--provider") ?? "GoogleGemini";
-        var apiKey = GetArg(args, 2, "-k", "--api-key");
+        var apiKey = GetArg(args, 2, "-k", "--api-key") ?? Environment.GetEnvironmentVariable("XML_AI_API_KEY");
 
         if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
         {
@@ -259,7 +260,7 @@ Options:
   -o, --output    Output file path
   -d, --dir       Directory containing XML files
   -p, --provider  AI provider (GoogleGemini, DeepSeek, OpenAI, etc.)
-  -k, --api-key   API key for the AI provider
+  -k, --api-key   API key for the AI provider (optional; XML_AI_API_KEY env var preferred)
 ");
     }
 

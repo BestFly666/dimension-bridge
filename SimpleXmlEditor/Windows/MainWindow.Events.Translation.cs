@@ -18,6 +18,9 @@ namespace SimpleXmlEditor
     {
         private void TranslateSelectedBtn_Click(object sender, RoutedEventArgs e)
         {
+            // 防重入：翻译运行中不允许再次启动/清空译文，避免覆盖流水线状态
+            if (_viewModel.IsTranslationRunning) return;
+
             // 统一走 GetSelectedEntries（支持逻辑选择标志），不依赖 IsSelected
             var entries = GetSelectedEntries();
             if (entries.Count == 0)
@@ -42,6 +45,9 @@ namespace SimpleXmlEditor
 
         private void CtxTranslateSelected_Click(object sender, RoutedEventArgs e)
         {
+            // 防重入：翻译运行中不允许再次启动/清空译文
+            if (_viewModel.IsTranslationRunning) return;
+
             var entries = GetSelectedEntries();
             if (entries.Count == 0)
             {
@@ -156,8 +162,7 @@ namespace SimpleXmlEditor
                 UpdateCacheInfo();
                 UpdateGlossaryInfo();
 
-                var view = CollectionViewSource.GetDefaultView(EntriesGrid.ItemsSource);
-                view?.Refresh();
+                SafeRefreshDataGrid();
 
                 AddLog($"🗑️ {LocalizationManager.GetString("LogCacheCleared")}");
             }

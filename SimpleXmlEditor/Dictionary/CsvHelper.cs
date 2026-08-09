@@ -69,6 +69,12 @@ namespace SimpleXmlEditor.Dictionary
         public static string EscapeCsvField(string field)
         {
             if (string.IsNullOrEmpty(field)) return "";
+            // 防 CSV 公式注入（OWASP）：= + - @ \t \r 开头前置 '，防 Excel 执行公式
+            if (field[0] == '=' || field[0] == '+' || field[0] == '-' ||
+                field[0] == '@' || field[0] == '\t' || field[0] == '\r')
+            {
+                field = "'" + field;
+            }
             if (field.Contains(",") || field.Contains("\"") || field.Contains("\n"))
                 return $"\"{field.Replace("\"", "\"\"")}\"";
             return field;

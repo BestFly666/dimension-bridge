@@ -12,8 +12,8 @@ namespace SimpleXmlEditor.Localization
             _translations["zh"] = new Dictionary<string, string>
             {
                 // === Window titles ===
-                ["WindowTitle"] = "XML AI 翻译器 by Veloxcity",
-                ["SettingsTitle"] = "设置 - XML AI 翻译器",
+                ["WindowTitle"] = "次元译桥 by Veloxcity & BestFly666",
+                ["SettingsTitle"] = "设置 - 次元译桥",
 
                 // === Main UI buttons ===
                 ["Load"] = "加载",
@@ -291,6 +291,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogBatchEfficiency"] = "批量效率: {0} 次 API 调用替代 {1} 次 (节省 {2} 次调用)",
                 ["LogRateLimitStatus"] = "速率限制状态: {0}/{1} 本分钟已用",
                 ["LogTranslationCancelled"] = "翻译已取消",
+                ["LogTranslationAlreadyRunning"] = "翻译已在运行中，请等待当前任务完成",
                 ["LogProgressSaveError"] = "进度保存失败: {0}",
                 ["LogCrashRecovery"] = "已从崩溃恢复文件恢复 {0} 条翻译",
                 ["LogRecoveryError"] = "恢复进度文件出错: {0}",
@@ -319,7 +320,7 @@ namespace SimpleXmlEditor.Localization
                 ["LogRateLimitedRetry"] = "速率限制 (HTTP 429)，重试 {0}/{1}，等待 {2}s",
                 ["LogScoreCacheLoaded"] = "评分缓存已加载 - {0} 条",
                 ["LogApiKeyEncryptFailed"] = "API 密钥加密失败：{0}",
-                ["LogApiKeyPlaintextWarning"] = "警告：DPAPI 加密失败，API 密钥以明文存储（非 Windows 环境？）",
+                ["LogApiKeyPlaintextWarning"] = "警告：DPAPI 加密失败，API 密钥不会被保存到磁盘（仅本次会话可用）",
                 ["LogApiKeyDecryptFailed"] = "API 密钥解密失败：{0}",
                 ["LogMigratedLegacyKey"] = "已将旧的明文 API 密钥迁移为加密存储",
                 ["LogMigrationFailed"] = "密钥迁移失败：{0}",
@@ -420,7 +421,7 @@ namespace SimpleXmlEditor.Localization
                 ["ExpertSystemTitle"] = "专家配置系统",
                 ["ExpertSystemDesc"] = "专家配置让你可以为 AI 翻译器定义特定领域的知识。每个配置包含思考指令和术语对照表。激活后，这些知识会自动注入每次翻译请求，确保专有名词和领域术语的翻译准确性。",
                 ["BatchLabel"] = "批次",
-                ["AppName"] = "XML AI 翻译器",
+                ["AppName"] = "次元译桥",
 
                 // === Custom prompt help ===
                 ["CustomPromptSyntaxHelp"] = "自定义 AI 翻译提示词。可用变量：{LANGUAGE}（目标语言）、{CONTEXT}（内容类型）、{TEXTS}（待翻译数据）、{EXPERT_CONTEXT}（专家配置知识，自动替换）、{GLOSSARY}（术语对照表，自动注入）、{MIXED_SOURCE_NOTE}（混合批次修正指令）。",
@@ -641,8 +642,8 @@ namespace SimpleXmlEditor.Localization
                 ["CloseTab"] = "关闭",
 
                 // === About ===
-                ["AboutTitle"] = "关于 XML AI 翻译器",
-                ["AboutText"] = "XML AI 翻译器 v1.0\n\nAI 驱动的游戏本地化工具。\n支持 XML、PO、JSON、Android Strings 格式。\n\n8 种 AI 提供商，30+ 种语言。",
+                ["AboutTitle"] = "关于次元译桥",
+                ["AboutText"] = "次元译桥 v1.0\n\nAI 驱动的游戏本地化工具。\n支持 XML、CSV、JSON、INI、YAML、RESX、PO、TXT、Android 格式。\n\n8 种 AI 提供商，30+ 种语言。",
 
                 // === Shortcuts ===
                 ["ShortcutsTitle"] = "键盘快捷键",

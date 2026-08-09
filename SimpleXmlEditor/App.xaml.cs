@@ -31,9 +31,8 @@ namespace SimpleXmlEditor
             // Infrastructure
             services.AddSingleton<IXmlRepository, XmlRepository>();
 
-            // Orchestrator (log action registered separately for DI resolution)
-            services.AddSingleton<Action<string>>(_ => { });
-            services.AddSingleton<TranslationOrchestrator>();
+            // Orchestrator is created by MainViewModel with the real log action
+            // (DI would inject a no-op Action<string>, silencing all orchestrator logs)
 
             // ViewModel
             services.AddSingleton<MainViewModel>();

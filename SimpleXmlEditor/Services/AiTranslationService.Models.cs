@@ -37,16 +37,9 @@ namespace SimpleXmlEditor.Services
 
             if (currentProvider == AIProvider.GoogleGemini)
             {
-                var originalApiKey = _apiKey;
-                _apiKey = apiKey;
-                try
-                {
-                    return await GetGeminiModelsAsync();
-                }
-                finally
-                {
-                    _apiKey = originalApiKey;
-                }
+                // 直接传参，不临时覆盖 _apiKey：
+                // 否则与正在运行的后台翻译（读 _apiKey 构造鉴权头）竞争，可能用错 Key
+                return await GetGeminiModelsAsync(apiKey);
             }
 
             // 优先尝试从厂商 API 动态拉取模型列表（OpenAI 兼容接口 GET /models）
@@ -137,16 +130,17 @@ namespace SimpleXmlEditor.Services
             }
         }
 
-        private async Task<List<string>> GetGeminiModelsAsync()
+        private async Task<List<string>> GetGeminiModelsAsync(string apiKey)
         {
-            if (string.IsNullOrEmpty(_apiKey))
+            if (string.IsNullOrEmpty(apiKey))
                 return new List<string>();
 
             try
             {
                 var url = "https://generativelanguage.googleapis.com/v1beta/models";
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                SetGeminiAuthHeader(request);
+                request.Headers.Remove("x-goog-api-key");
+                request.Headers.Add("x-goog-api-key", apiKey);
                 var response = await _httpClient.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 var responseText = await response.Content.ReadAsStringAsync();

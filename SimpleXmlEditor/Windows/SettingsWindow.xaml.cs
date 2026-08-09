@@ -62,11 +62,11 @@ namespace SimpleXmlEditor
                 AiProviderComboBox.SelectedIndex = 0;
             }
             
-            ApiKeyTextBox.Text = currentApiKey;
+            ApiKeyTextBox.Password = currentApiKey;
             DisableThinkingCheckBox.IsChecked = currentDisableThinking;
 
             // 评估模型配置
-            EvalApiKeyTextBox.Text = currentEvalApiKey;
+            EvalApiKeyTextBox.Password = currentEvalApiKey;
             EvalModelComboBox.Text = currentEvalModel;
             foreach (System.Windows.Controls.ComboBoxItem item in EvalProviderComboBox.Items)
             {
