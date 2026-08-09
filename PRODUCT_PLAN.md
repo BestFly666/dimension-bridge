@@ -172,7 +172,7 @@ MVVM 过渡完成度：100%
 
 ### 5.3 已发布版本
 
-- **预览版（Preview）**：已发布至 [GitHub Releases](https://github.com/BestFly666/xml-ai-translator-tool/releases)，便携版 zip，自包含 win-x64，解压后单文件夹，隐私数据硬校验通过
+- **预览版（Preview）**：已发布至 [GitHub Releases](https://github.com/BestFly666/dimension-bridge/releases)，便携版 zip，自包含 win-x64，解压后单文件夹，隐私数据硬校验通过
 - **验证范围**：完整流程（翻译 → 术语表 → 评估/投票 → 导出 → 游戏内验证）仅在 4.0 游戏实测通过；其他游戏/XML 结构/二进制格式未验证
 
 ### 5.4 已关闭的技术债务（历史审计）

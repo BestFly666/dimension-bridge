@@ -8,10 +8,10 @@
 ![许可](https://img.shields.io/badge/许可-MIT-green)
 ![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
 ![测试](https://img.shields.io/badge/测试-69%20通过-brightgreen)
-![CI](https://github.com/BestFly666/xml-ai-translator-tool/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/BestFly666/dimension-bridge/actions/workflows/ci.yml/badge.svg)
 
 > [!IMPORTANT]
-> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 星球大战重制版模组4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与二进制格式（.dat 等）尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 反馈。
+> **当前状态：Preview（预览版）** — 核心翻译流程已在真实的 星球大战重制版模组4.0 游戏汉化项目（翻译 → DAT 写入 → 游戏内实机验证）完整跑通；**其他游戏与二进制格式（.dat 等）尚未验证**，首次使用请先用副本测试。遇到问题请到 [GitHub Issues](https://github.com/BestFly666/dimension-bridge/issues) 反馈。
 
 ---
 
@@ -156,7 +156,7 @@
 
 ## 反馈与支持
 
-- 报告 Bug / 建议功能：前往 [GitHub Issues](https://github.com/BestFly666/xml-ai-translator-tool/issues) 创建 Issue
+- 报告 Bug / 建议功能：前往 [GitHub Issues](https://github.com/BestFly666/dimension-bridge/issues) 创建 Issue
 - 反馈前请提供：使用的 AI 提供商/模型、文件样例片段、操作步骤、预期结果与实际结果
 
 ---
@@ -164,8 +164,8 @@
 ## 构建（开发者）
 
 ```bash
-git clone https://github.com/BestFly666/xml-ai-translator-tool.git
-cd xml-ai-translator-tool
+git clone https://github.com/BestFly666/dimension-bridge.git
+cd dimension-bridge
 dotnet build
 dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 ```

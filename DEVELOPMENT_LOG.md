@@ -44,7 +44,7 @@
 
 ### D. 产品更名
 
-项目对外名称更改为 **次元译桥（Dimension Bridge）**：窗口标题 / AppName / About / 设置标题经 LocalizationManager 双向字典更新；README / 开发日志 / 交接文档 / 文件索引 / 产品规划同步改名。仓库名（xml-ai-translator-tool）与程序集名（SimpleXmlEditor）保持不变，AppData 数据路径（`%LocalAppData%\SimpleXmlEditor\`）不受影响，LICENSE 版权声明原样保留。
+项目对外名称更改为 **次元译桥（Dimension Bridge）**：窗口标题 / AppName / About / 设置标题经 LocalizationManager 双向字典更新；README / 开发日志 / 交接文档 / 文件索引 / 产品规划同步改名。GitHub 仓库名更改为 `dimension-bridge`（GitHub 仓库名仅支持 ASCII，中文名置于仓库描述）；程序集名（SimpleXmlEditor）保持不变，AppData 数据路径（`%LocalAppData%\SimpleXmlEditor\`）不受影响，LICENSE 版权声明原样保留。
 
 ### 验证
 
@@ -673,7 +673,7 @@ MVVM 过渡完成度：70% → 100%
 
 - `develop` 和 `stable` 分支原本与 `master` 不同步，缺少 `.sln` 修复
 - 通过 cherry-pick 将修复同步至两个分支，确认推送成功
-- 三个分支远程状态一致：[master](https://github.com/BestFly666/xml-ai-translator-tool) / [develop](https://github.com/BestFly666/xml-ai-translator-tool/tree/develop) / [stable](https://github.com/BestFly666/xml-ai-translator-tool/tree/stable)
+- 三个分支远程状态一致：[master](https://github.com/BestFly666/dimension-bridge) / [develop](https://github.com/BestFly666/dimension-bridge/tree/develop) / [stable](https://github.com/BestFly666/dimension-bridge/tree/stable)
 
 #### 产品规划讨论
 
