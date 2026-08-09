@@ -4,6 +4,7 @@
         xmlns:hc="https://handyorg.github.io/handycontrol"
         xmlns:local="clr-namespace:SimpleXmlEditor"
         Title="" Height="800" Width="1400"
+        Icon="Assets/logo.ico"
         MinWidth="1100" MinHeight="640"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource AppBackgroundBrush}" FontFamily="Segoe UI, Microsoft YaHei UI, sans-serif">
 
@@ -91,7 +92,9 @@
 
                 <!-- Logo + Title -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <TextBlock Text="🌐" FontSize="26" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Border Width="34" Height="34" CornerRadius="17" VerticalAlignment="Center" Margin="0,0,12,0" ClipToBounds="True" BorderBrush="{DynamicResource AppTitleForegroundBrush}" BorderThickness="1">
+                        <Image Source="Assets/logo.jpg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Border>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Name="AppNameText" Text="次元译桥" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTitleForegroundBrush}"/>
                         <TextBlock Name="StatusText" Text="Ready" FontSize="11" Foreground="{DynamicResource AppSubForegroundBrush}"/>

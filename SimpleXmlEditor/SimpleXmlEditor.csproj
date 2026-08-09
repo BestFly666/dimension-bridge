@@ -5,6 +5,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <Nullable>disable</Nullable>
+    <ApplicationIcon>Assets\logo.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +20,9 @@
     <!-- 术语注入词典：复制到输出目录，确保运行目录存在词典文件 -->
     <None Update="translation_dictionary.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="glossary_terms.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 应用图标资源：窗口图标 + 顶部 Logo 图片，复制到输出目录供运行时引用 -->
+    <None Update="Assets\logo.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Assets\logo.jpg" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
