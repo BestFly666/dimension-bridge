@@ -46,9 +46,45 @@
 
 项目对外名称更改为 **次元译桥（Dimension Bridge）**：窗口标题 / AppName / About / 设置标题经 LocalizationManager 双向字典更新；README / 开发日志 / 交接文档 / 文件索引 / 产品规划同步改名。GitHub 仓库名更改为 `dimension-bridge`（GitHub 仓库名仅支持 ASCII，中文名置于仓库描述）；程序集名（SimpleXmlEditor）保持不变，AppData 数据路径（`%LocalAppData%\SimpleXmlEditor\`）不受影响，LICENSE 版权声明原样保留。
 
+### E. GitHub 仓库更名 dimension-bridge（commit `4af94cb`）
+
+- GitHub 仓库名从 `xml-ai-translator-tool` 改为 `dimension-bridge`——GitHub 平台限制仓库名仅支持 ASCII，中文名"次元译桥"置于仓库描述
+- 本地 `git remote` 同步更新，指向新仓库地址
+- README / 开发日志 / 产品规划中全部仓库链接同步更新：CI badge、Issues、clone、Releases 等指向新仓库
+
+### F. 新增项目 Logo（commit `455a360`）
+
+- logo 图片 [docs/logo.jpg](file:///e:/translate/xml-ai-translator-main/docs/logo.jpg)（源自 `e:\translate\logo方案4_Q版角色站桥.jpg`）加入仓库
+- README 顶部居中展示该 Logo
+
+### G. Logo 转 .ico 作为 WPF 应用图标（commit `9a521f6`）
+
+- 用 PowerShell + System.Drawing 生成多尺寸 [logo.ico](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Assets/logo.ico)（16/24/32/48/64/128/256px，PNG 帧，等比居中不变形）到 `SimpleXmlEditor\Assets\logo.ico`
+- [SimpleXmlEditor.csproj](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/SimpleXmlEditor.csproj) 设置 `ApplicationIcon`（EXE / 任务栏 / 所有窗口图标）
+- 主界面顶部原 🌐 emoji 替换为 34px 圆形裁剪的 Logo 图片（[Assets/logo.jpg](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Assets/logo.jpg)）
+
+### H. 启动崩溃修复：WPF 资源路径解析（commit `c0be9e6`）
+
+**现象**：上一步（G）导致应用启动即崩溃。
+
+**根因**：WPF 资源路径解析机制——XAML 中 `Icon`/`Image` 的相对路径（如 `Assets/logo.ico`）会被解析为打包资源 URI（`pack://`），且基于 XAML 文件所在目录（`Windows/`），去程序集内找 `windows/Assets/logo.ico`；而图片只是 `CopyToOutputDirectory` 复制到磁盘、未编译进程序集，于是 `InitializeComponent` 抛 `XamlParseException`。
+
+**修复**：
+- 移除窗口 `Icon` 属性（窗口 / 任务栏继承 EXE 的 `ApplicationIcon`，由 Windows Shell 显示）
+- `logo.jpg` 改为 csproj `<Resource>` 内嵌资源，XAML 用 `pack://application:,,,/Assets/logo.jpg` 引用
+
+**经验教训**：
+1. WPF 中想用相对路径引用图片必须编译为 `Resource` 并用正确的 pack URI，仅复制到输出目录不生效
+2. 增量构建偶发复用旧 BAML——改 XAML 后运行仍报旧错时，需清理 `obj` 目录重建
+
+### I. 删除 AiTranslationService 死事件（commit `dc0457e`）
+
+- 删除 `CacheHit` / `ApiCallCounted` / `ApiCharsCounted` 三个 CS0067 警告事件——仅定义 + 订阅、从未触发；统计实际由 [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) 的 `OnCacheHit` / `OnApiCall` / `OnApiChars` 承担
+- 同步清理：接口 `IAiTranslationService` 声明、`MainViewModel` 无效订阅、测试 Fake 冗余声明
+
 ### 验证
 
-- `dotnet build`：0 错误
+- `dotnet build`：0 错误 0 警告
 - `dotnet test`：69/69 通过（新增 AiResponseParser / 缓存双键测试，修正 Fake GetCacheKey）
 - 用户实测：编辑态下筛选 / 撤销 / 批量替换不再崩溃
 
