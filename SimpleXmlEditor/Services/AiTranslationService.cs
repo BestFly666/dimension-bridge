@@ -66,11 +66,6 @@ namespace SimpleXmlEditor.Services
 
         public event Action<string> LogMessage;
 
-        // Statistics callbacks (raised for single-entry translation paths)
-        public event Action<int> CacheHit;
-        public event Action<int> ApiCallCounted;
-        public event Action<int, int> ApiCharsCounted; // (inputChars, outputChars)
-
         public AIProvider CurrentProvider
         {
             get => _currentProvider;

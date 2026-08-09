@@ -88,9 +88,6 @@ namespace SimpleXmlEditor.Tests
             public ConcurrentQueue<DateTime> RecentRequests => new();
 
             public event Action<string> LogMessage;
-            public event Action<int> CacheHit;
-            public event Action<int> ApiCallCounted;
-            public event Action<int, int> ApiCharsCounted;
 
             public Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null)
                 => Task.FromResult(new List<string>());

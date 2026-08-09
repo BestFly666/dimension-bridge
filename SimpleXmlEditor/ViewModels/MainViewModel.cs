@@ -149,12 +149,6 @@ namespace SimpleXmlEditor.ViewModels
             };
 
             _aiTranslationService.LogMessage += msg => OnLogMessage(msg);
-            _aiTranslationService.CacheHit += count => IncrementCacheHits();
-            _aiTranslationService.ApiCallCounted += count => IncrementApiCalls();
-            _aiTranslationService.ApiCharsCounted += (input, output) =>
-            {
-                AddTranslationStats(input, output, _aiTranslationService.CalculateCost(input, output, _aiTranslationService.Model));
-            };
 
             _xmlRepository.LogMessage += msg => OnLogMessage(msg);
             _configService.LogMessage += msg => OnLogMessage(msg);

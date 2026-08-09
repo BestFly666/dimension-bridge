@@ -22,11 +22,6 @@ namespace SimpleXmlEditor.Services
         
         event Action<string> LogMessage;
         
-        // Statistics callbacks (raised by the service itself for single-entry translation paths)
-        event Action<int> CacheHit;
-        event Action<int> ApiCallCounted;
-        event Action<int, int> ApiCharsCounted; // (inputChars, outputChars)
-        
         Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null);
         Task<string> TranslateBatchAsync(string prompt, int maxRetries = 3, bool? disableThinking = null);
         double CalculateCost(int inputChars, int outputChars, string modelName);
