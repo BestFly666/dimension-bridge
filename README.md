@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.jpg" alt="次元译桥 Logo" width="240"/>
+</p>
+
 # 次元译桥（Dimension Bridge）
 
 🌐 **基于 AI 批量翻译的现代化多格式本地化工具**
