@@ -9,7 +9,7 @@
 一款功能强大的 WPF 桌面应用，专为中文游戏本地化人员设计，支持**国内主流 AI 大模型**批量翻译主流本地化文件格式（XML / CSV / JSON / INI / YAML / RESX / PO / TXT / Android）。具备智能分批、翻译缓存、术语表管理、AI 质量评估等完善的本地化工作流功能。
 
 ![平台](https://img.shields.io/badge/平台-.NET%208.0-blue)
-![许可](https://img.shields.io/badge/许可-MIT-green)
+![许可](https://img.shields.io/badge/许可-GPLv3-blue)
 ![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
 ![测试](https://img.shields.io/badge/测试-69%20通过-brightgreen)
 ![CI](https://github.com/BestFly666/dimension-bridge/actions/workflows/ci.yml/badge.svg)
@@ -275,7 +275,7 @@ project-root/
 
 ## 许可
 
-MIT License — 详见 [LICENSE](LICENSE)  
+GPL-3.0 License — 详见 [LICENSE](LICENSE)  
 *基于 Veloxcity 的原始项目扩展维护*
 
 ---
