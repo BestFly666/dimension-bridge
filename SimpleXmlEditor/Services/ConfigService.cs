@@ -32,6 +32,16 @@ namespace SimpleXmlEditor.Services
 
         // 评估/投票专用模型列表（支持多模型投票；为空则回退到上方单组配置）
         public List<EvaluationModelConfig> EvaluationModels { get; set; } = new();
+
+        // ── 累计统计（持久化，重启保留；翻译完成/应用退出时写回 config.json）──
+        public long TotalApiCalls { get; set; }
+        public long TotalCacheHits { get; set; }
+        public long TotalGlossaryHits { get; set; }
+        public long TotalInputChars { get; set; }
+        public long TotalOutputChars { get; set; }
+        public double TotalCostUsd { get; set; }
+        // 费用显示汇率（美元 → 人民币），可在 config.json 中调整
+        public double CurrencyExchangeRate { get; set; } = 7.2;
     }
 
     /// <summary>评估/投票专用模型配置条目（支持多模型投票）。</summary>
@@ -58,16 +68,10 @@ namespace SimpleXmlEditor.Services
         public event Action<string> LogMessage;
 
         public ConfigService()
-        {
-            _appDataDir = Path.Combine(
+            : this(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "SimpleXmlEditor");
-            Directory.CreateDirectory(_appDataDir);
-            _configPath = Path.Combine(_appDataDir, "config.json");
-            _cachePath = Path.Combine(_appDataDir, "translation_cache.json");
-            _scoreCachePath = Path.Combine(_appDataDir, "score_cache.json");
-            _progressPath = Path.Combine(_appDataDir, "translation_progress.json");
-
+                "SimpleXmlEditor"))
+        {
             // 清理旧版本残留在程序目录（bin，随 Debug/Release 构建变化）的进度文件，
             // 统一缓存/进度文件到 AppData，避免"缓存文件变来变去"与删除译文被旧数据复活
             try
@@ -82,6 +86,17 @@ namespace SimpleXmlEditor.Services
             {
                 // 旧文件清理失败不影响主流程
             }
+        }
+
+        /// <summary>指定数据目录构造（测试用：隔离配置/缓存路径，避免污染用户 AppData）。</summary>
+        internal ConfigService(string appDataDir)
+        {
+            _appDataDir = appDataDir;
+            Directory.CreateDirectory(_appDataDir);
+            _configPath = Path.Combine(_appDataDir, "config.json");
+            _cachePath = Path.Combine(_appDataDir, "translation_cache.json");
+            _scoreCachePath = Path.Combine(_appDataDir, "score_cache.json");
+            _progressPath = Path.Combine(_appDataDir, "translation_progress.json");
         }
 
         private void RaiseLog(string message)

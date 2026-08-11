@@ -112,6 +112,8 @@ namespace SimpleXmlEditor
             // 释放评估专用服务（各持有独立 HttpClient）
             if (_viewModel.Evaluator is TranslationEvaluator eval)
                 eval.Dispose();
+            // 窗口关闭时落盘累计统计（API 调用/命中/费用），重启后保留
+            _viewModel.SaveConfig();
             base.OnClosed(e);
         }
 

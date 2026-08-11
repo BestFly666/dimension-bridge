@@ -147,6 +147,9 @@ namespace SimpleXmlEditor.ViewModels
             }
         }
 
+        /// <summary>美元 → 人民币显示汇率（读配置，默认 7.2，可在 config.json 调整）。</summary>
+        public double CostExchangeRate => _configService.Config.CurrencyExchangeRate;
+
         public bool IsTranslationPaused
         {
             get => _isTranslationPaused;

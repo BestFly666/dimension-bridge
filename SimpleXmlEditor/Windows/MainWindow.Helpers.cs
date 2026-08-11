@@ -66,7 +66,7 @@ namespace SimpleXmlEditor
 
         private void UpdateCacheInfo()
         {
-            var costText = _viewModel.TotalCost > 0 ? $" | {LocalizationManager.GetString("CostLabel")}: ${_viewModel.TotalCost:F4}" : "";
+            var costText = _viewModel.TotalCost > 0 ? $" | {LocalizationManager.GetString("CostLabel")}: ¥{_viewModel.TotalCost * _viewModel.CostExchangeRate:F2}" : "";
             CacheInfo.Text = $"💾 {LocalizationManager.GetString("CacheInfo", _viewModel.ConfigService.Cache.Count, _viewModel.CacheHits, _viewModel.ApiCalls, costText)}";
         }
 
@@ -112,7 +112,7 @@ namespace SimpleXmlEditor
             SpeedText.Text = _viewModel.TranslationSpeed > 0 ? $"⚡ {LocalizationManager.GetString("SpeedDisplay", _viewModel.TranslationSpeed)}" : "";
             EtaText.Text = !string.IsNullOrEmpty(_viewModel.EstimatedTimeRemaining) && _viewModel.EstimatedTimeRemaining != "..."
                 ? $"⏱ {LocalizationManager.GetString("EtaDisplay", _viewModel.EstimatedTimeRemaining)}" : "";
-            CostText.Text = _viewModel.TotalCost > 0 ? $"💰 {LocalizationManager.GetString("CostDisplay", _viewModel.TotalCost)}" : "";
+            CostText.Text = _viewModel.TotalCost > 0 ? $"💰 {LocalizationManager.GetString("CostDisplay", _viewModel.TotalCost * _viewModel.CostExchangeRate)}" : "";
         }
 
         private void DeleteProgressFile()

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -81,6 +82,67 @@ namespace SimpleXmlEditor.Tests
 
             Assert.False(service.Cache.ContainsKey("KEY1"));
             Assert.False(service.Cache.ContainsKey(md5Key));
+        }
+
+        [Fact]
+        public void CumulativeStats_ArePersistedAcrossReload()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "SimpleXmlEditorTests_" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                // 写入：设置累计统计并保存
+                var writer = new ConfigService(tempDir);
+                writer.Config.TotalApiCalls = 123;
+                writer.Config.TotalCacheHits = 456;
+                writer.Config.TotalGlossaryHits = 789;
+                writer.Config.TotalInputChars = 10000;
+                writer.Config.TotalOutputChars = 20000;
+                writer.Config.TotalCostUsd = 12.34;
+                writer.SaveConfig();
+
+                // 重新加载：新实例从同一目录恢复统计（模拟重启）
+                var reader = new ConfigService(tempDir);
+                reader.LoadConfig();
+
+                Assert.Equal(123, reader.Config.TotalApiCalls);
+                Assert.Equal(456, reader.Config.TotalCacheHits);
+                Assert.Equal(789, reader.Config.TotalGlossaryHits);
+                Assert.Equal(10000, reader.Config.TotalInputChars);
+                Assert.Equal(20000, reader.Config.TotalOutputChars);
+                Assert.Equal(12.34, reader.Config.TotalCostUsd);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public void CurrencyExchangeRate_DefaultsTo7_2_And_CanBeOverridden()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "SimpleXmlEditorTests_" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                // 默认值 7.2
+                var writer = new ConfigService(tempDir);
+                Assert.Equal(7.2, writer.Config.CurrencyExchangeRate);
+
+                // 修改后持久化并恢复
+                writer.Config.CurrencyExchangeRate = 7.0;
+                writer.SaveConfig();
+
+                var reader = new ConfigService(tempDir);
+                reader.LoadConfig();
+                Assert.Equal(7.0, reader.Config.CurrencyExchangeRate);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
         }
     }
 }

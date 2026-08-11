@@ -28,6 +28,14 @@ namespace SimpleXmlEditor.ViewModels
                 _aiTranslationService.Model = _configService.Config.GeminiModel;
             if (_configService.Config.TargetLanguage != null)
                 _aiTranslationService.TargetLanguage = _configService.Config.TargetLanguage;
+
+            // 加载累计统计（重启后恢复 API 调用/命中/费用）
+            _cacheHits = (int)_configService.Config.TotalCacheHits;
+            _apiCalls = (int)_configService.Config.TotalApiCalls;
+            _glossaryHits = (int)_configService.Config.TotalGlossaryHits;
+            _totalInputChars = (int)_configService.Config.TotalInputChars;
+            _totalOutputChars = (int)_configService.Config.TotalOutputChars;
+            _totalCost = _configService.Config.TotalCostUsd;
         }
 
         public void SaveConfig()
@@ -42,6 +50,14 @@ namespace SimpleXmlEditor.ViewModels
             _configService.SetApiKey(_aiTranslationService.ApiKey);
             _configService.Config.GeminiModel = _aiTranslationService.Model;
             _configService.Config.TargetLanguage = _aiTranslationService.TargetLanguage;
+
+            // 同步累计统计到配置后写盘（重启保留）
+            _configService.Config.TotalCacheHits = _cacheHits;
+            _configService.Config.TotalApiCalls = _apiCalls;
+            _configService.Config.TotalGlossaryHits = _glossaryHits;
+            _configService.Config.TotalInputChars = _totalInputChars;
+            _configService.Config.TotalOutputChars = _totalOutputChars;
+            _configService.Config.TotalCostUsd = _totalCost;
             _configService.SaveConfig();
         }
 

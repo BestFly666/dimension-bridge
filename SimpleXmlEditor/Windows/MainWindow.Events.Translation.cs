@@ -147,10 +147,14 @@ namespace SimpleXmlEditor
                 ResetSelectionState();
                 _viewModel.LastLoadedFilePath = null;
                 _viewModel.ConfigService.Config.LastLoadedFilePath = null;
-                _viewModel.SaveConfig();
+                // 清空缓存时同步清零统计（API 调用/命中），随 SaveConfig 落盘防止重启后旧值恢复
                 _viewModel.CacheHits = 0;
                 _viewModel.ApiCalls = 0;
                 _viewModel.GlossaryHits = 0;
+                _viewModel.ConfigService.Config.TotalCacheHits = 0;
+                _viewModel.ConfigService.Config.TotalApiCalls = 0;
+                _viewModel.ConfigService.Config.TotalGlossaryHits = 0;
+                _viewModel.SaveConfig();
 
                 FilterKeyBox.Text = "";
                 FilterBox.Text = "";

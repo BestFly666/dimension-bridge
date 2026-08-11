@@ -194,14 +194,29 @@ namespace SimpleXmlEditor.ViewModels
         public ITranslationEvaluator Evaluator => _evaluator;
         public TranslationOrchestrator Orchestrator => _orchestrator;
 
-        /// <summary>Thread-safe glossary hits increment.</summary>
-        public int IncrementGlossaryHits() => Interlocked.Increment(ref _glossaryHits);
+        /// <summary>Thread-safe glossary hits increment（同步累计统计到配置）。</summary>
+        public int IncrementGlossaryHits()
+        {
+            var v = Interlocked.Increment(ref _glossaryHits);
+            _configService.Config.TotalGlossaryHits = v;
+            return v;
+        }
 
-        /// <summary>Thread-safe cache hits increment.</summary>
-        public int IncrementCacheHits() => Interlocked.Increment(ref _cacheHits);
+        /// <summary>Thread-safe cache hits increment（同步累计统计到配置）。</summary>
+        public int IncrementCacheHits()
+        {
+            var v = Interlocked.Increment(ref _cacheHits);
+            _configService.Config.TotalCacheHits = v;
+            return v;
+        }
 
-        /// <summary>Thread-safe API calls increment.</summary>
-        public int IncrementApiCalls() => Interlocked.Increment(ref _apiCalls);
+        /// <summary>Thread-safe API calls increment（同步累计统计到配置）。</summary>
+        public int IncrementApiCalls()
+        {
+            var v = Interlocked.Increment(ref _apiCalls);
+            _configService.Config.TotalApiCalls = v;
+            return v;
+        }
 
         /// <summary>
         /// 线程安全累加翻译统计（输入/输出字符 + 成本），由并发批次的后台线程调用。
@@ -210,12 +225,18 @@ namespace SimpleXmlEditor.ViewModels
         /// </summary>
         private void AddTranslationStats(int input, int output, double cost)
         {
-            Interlocked.Add(ref _totalInputChars, input);
-            Interlocked.Add(ref _totalOutputChars, output);
+            var newInput = Interlocked.Add(ref _totalInputChars, input);
+            var newOutput = Interlocked.Add(ref _totalOutputChars, output);
+            double newCost;
             lock (_translationLock)
             {
                 _totalCost += cost;
+                newCost = _totalCost;
             }
+            // 同步累计统计到配置（翻译完成/退出时随 config.json 持久化）
+            _configService.Config.TotalInputChars = newInput;
+            _configService.Config.TotalOutputChars = newOutput;
+            _configService.Config.TotalCostUsd = newCost;
             OnPropertyChanged(nameof(TotalInputChars));
             OnPropertyChanged(nameof(TotalOutputChars));
             OnPropertyChanged(nameof(TotalCost));

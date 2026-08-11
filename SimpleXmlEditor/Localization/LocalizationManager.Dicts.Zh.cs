@@ -578,7 +578,7 @@ namespace SimpleXmlEditor.Localization
                 ["ProgressDisplay"] = "{0:F1}% ({1}/{2})",
                 ["SpeedDisplay"] = "{0:F1}/s",
                 ["EtaDisplay"] = "{0}",
-                ["CostDisplay"] = "${0:F4}",
+                ["CostDisplay"] = "¥{0:F2}",
                 ["FindPosition"] = "{0} / {1}",
                 ["LogFileClosed"] = "文件已关闭",
                 ["NoFileLoaded"] = "未加载文件",

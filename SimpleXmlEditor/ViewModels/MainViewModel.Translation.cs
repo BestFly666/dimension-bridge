@@ -169,11 +169,7 @@ namespace SimpleXmlEditor.ViewModels
                 // Session begin — UI shows controls and resets progress display
                 TranslationStarted?.Invoke(0);
 
-                // Reset cost tracking for this translation session
-                TotalCost = 0;
-                TotalInputChars = 0;
-                TotalOutputChars = 0;
-
+                // 统计为累计值（持久化），翻译会话开始不再清零
                 var successCount = 0;
                 var failCount = 0;
 
@@ -388,6 +384,8 @@ namespace SimpleXmlEditor.ViewModels
                 if (ReferenceEquals(_translationCts, cts))
                     _translationCts = null;
                 cts.Dispose();
+                // 持久化累计统计（API 调用/命中/费用），重启后仍保留
+                SaveConfig();
                 TranslationFinished?.Invoke();
             }
         }
