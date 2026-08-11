@@ -17,7 +17,8 @@ namespace SimpleXmlEditor.Services
             { AIProvider.Zhipu, new List<string> { "glm-4", "glm-4-flash", "glm-4-air", "glm-4-long", "glm-4-plus", "glm-4.5" } },
             { AIProvider.Moonshot, new List<string> { "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k" } },
             { AIProvider.Wenxin, new List<string> { "ernie-4.0-turbo", "ernie-4.0", "ernie-3.5", "ernie-speed" } },
-            { AIProvider.Xunfei, new List<string> { "general-v3.5", "general-v3", "general-v2", "general-1.5" } }
+            { AIProvider.Xunfei, new List<string> { "general-v3.5", "general-v3", "general-v2", "general-1.5" } },
+            { AIProvider.OpenRouter, new List<string> { "openai/gpt-5", "openai/gpt-5-mini", "anthropic/claude-sonnet-4.5", "google/gemini-3-pro-preview", "google/gemini-2.5-flash", "x-ai/grok-4", "mistralai/mistral-large-latest", "meta-llama/llama-4-scout", "cohere/command-a" } }
         };
 
         public static readonly Dictionary<AIProvider, Dictionary<string, (int rpm, int rpd, int tpm)>> ProviderRateLimits = new()
@@ -28,7 +29,8 @@ namespace SimpleXmlEditor.Services
             { AIProvider.Zhipu, new Dictionary<string, (int, int, int)> { ["glm-4"] = (50, -1, -1), ["glm-4-flash"] = (100, -1, -1), ["glm-4-air"] = (100, -1, -1), ["glm-4-long"] = (20, -1, -1), ["glm-4-plus"] = (50, -1, -1), ["glm-4.5"] = (50, -1, -1) } },
             { AIProvider.Moonshot, new Dictionary<string, (int, int, int)> { ["moonshot-v1-8k"] = (60, -1, -1), ["moonshot-v1-32k"] = (60, -1, -1), ["moonshot-v1-128k"] = (60, -1, -1) } },
             { AIProvider.Wenxin, new Dictionary<string, (int, int, int)> { ["ernie-4.0-turbo"] = (50, -1, -1), ["ernie-4.0"] = (30, -1, -1), ["ernie-3.5"] = (50, -1, -1), ["ernie-speed"] = (100, -1, -1) } },
-            { AIProvider.Xunfei, new Dictionary<string, (int, int, int)> { ["general-v3.5"] = (50, -1, -1), ["general-v3"] = (50, -1, -1), ["general-v2"] = (50, -1, -1), ["general-1.5"] = (100, -1, -1) } }
+            { AIProvider.Xunfei, new Dictionary<string, (int, int, int)> { ["general-v3.5"] = (50, -1, -1), ["general-v3"] = (50, -1, -1), ["general-v2"] = (50, -1, -1), ["general-1.5"] = (100, -1, -1) } },
+            { AIProvider.OpenRouter, new Dictionary<string, (int, int, int)> { ["openai/gpt-5"] = (30, -1, -1), ["openai/gpt-5-mini"] = (30, -1, -1), ["anthropic/claude-sonnet-4.5"] = (30, -1, -1), ["google/gemini-3-pro-preview"] = (30, -1, -1), ["google/gemini-2.5-flash"] = (30, -1, -1), ["x-ai/grok-4"] = (30, -1, -1), ["mistralai/mistral-large-latest"] = (30, -1, -1), ["meta-llama/llama-4-scout"] = (30, -1, -1), ["cohere/command-a"] = (30, -1, -1) } }
         };
 
         public async Task<List<string>> FetchAvailableModelsAsync(string apiKey, AIProvider? provider = null)
@@ -137,46 +139,87 @@ namespace SimpleXmlEditor.Services
 
             try
             {
-                var url = "https://generativelanguage.googleapis.com/v1beta/models";
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Remove("x-goog-api-key");
-                request.Headers.Add("x-goog-api-key", apiKey);
-                var response = await _httpClient.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-                var responseText = await response.Content.ReadAsStringAsync();
-                var json = JObject.Parse(responseText);
-
-                var models = new List<string>();
+                // 清空缓存须在分页循环外执行一次，否则后一页会清掉前一页已填充的 ModelLimits
                 ModelPricing.Clear();
                 ModelLimits.Clear();
 
-                if (json["models"] is JArray modelsArray)
+                var models = new List<string>();
+                string nextPageToken = null;
+
+                // 按 pageSize=100 分页拉取，直到 nextPageToken 为空取完全部模型
+                do
                 {
-                    foreach (var model in modelsArray)
+                    var url = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=100";
+                    if (!string.IsNullOrEmpty(nextPageToken))
+                        url += $"&pageToken={Uri.EscapeDataString(nextPageToken)}";
+
+                    using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    request.Headers.Remove("x-goog-api-key");
+                    request.Headers.Add("x-goog-api-key", apiKey);
+                    var response = await _httpClient.SendAsync(request);
+                    response.EnsureSuccessStatusCode();
+                    var responseText = await response.Content.ReadAsStringAsync();
+                    var json = JObject.Parse(responseText);
+
+                    if (json["models"] is JArray modelsArray)
                     {
-                        var modelName = model["name"]?.ToString().Replace("models/", "");
-                        var methods = model["supportedGenerationMethods"] as JArray;
-
-                        if (methods != null && methods.Any(m => m.ToString() == "generateContent"))
+                        foreach (var model in modelsArray)
                         {
-                            models.Add(modelName ?? string.Empty);
+                            var modelName = model["name"]?.ToString().Replace("models/", "");
+                            var methods = model["supportedGenerationMethods"] as JArray;
 
-                            var inputTokenLimit = model["inputTokenLimit"]?.ToObject<int>() ?? 0;
-                            var outputTokenLimit = model["outputTokenLimit"]?.ToObject<int>() ?? 0;
+                            if (methods != null && methods.Any(m => m.ToString() == "generateContent"))
+                            {
+                                models.Add(modelName ?? string.Empty);
 
-                            var estimatedLimits = EstimateRateLimits(modelName, inputTokenLimit, outputTokenLimit);
-                            ModelLimits[modelName] = estimatedLimits;
+                                var inputTokenLimit = model["inputTokenLimit"]?.ToObject<int>() ?? 0;
+                                var outputTokenLimit = model["outputTokenLimit"]?.ToObject<int>() ?? 0;
+
+                                var estimatedLimits = EstimateRateLimits(modelName, inputTokenLimit, outputTokenLimit);
+                                ModelLimits[modelName] = estimatedLimits;
+                            }
                         }
                     }
-                }
 
-                return models;
+                    nextPageToken = json["nextPageToken"]?.ToString();
+                }
+                while (!string.IsNullOrEmpty(nextPageToken));
+
+                // 排序后返回：3.x 优先于 2.x，旧系列与 gemma 靠后，类内倒序（新版本在前）
+                return SortGeminiModels(models);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Fetch models error: {ex.Message}");
                 return new List<string>();
             }
+        }
+
+        /// <summary>
+        /// Gemini 模型列表排序：分类优先级
+        /// ① 名称含 "gemini-3" ② 含 "gemini-2" ③ 含 "gemini-1"/"gemini-pro"/"gemini-flash"（无版本号旧系列） ④ 其他（gemma-* 等）。
+        /// 类内按 OrdinalIgnoreCase 名称倒序（新版本在前），过滤空模型名。
+        /// </summary>
+        public static List<string> SortGeminiModels(IEnumerable<string> models)
+        {
+            if (models == null)
+                return new List<string>();
+
+            int GetCategory(string name)
+            {
+                if (name.Contains("gemini-3", StringComparison.OrdinalIgnoreCase)) return 0;
+                if (name.Contains("gemini-2", StringComparison.OrdinalIgnoreCase)) return 1;
+                if (name.Contains("gemini-1", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("gemini-pro", StringComparison.OrdinalIgnoreCase)
+                    || name.Contains("gemini-flash", StringComparison.OrdinalIgnoreCase)) return 2;
+                return 3;
+            }
+
+            return models
+                .Where(m => !string.IsNullOrEmpty(m))
+                .OrderBy(GetCategory)
+                .ThenByDescending(m => m, StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
 
         public (int requestsPerMinute, int requestsPerDay, int tokensPerMinute) EstimateRateLimits(string modelName, int inputTokenLimit, int outputTokenLimit)

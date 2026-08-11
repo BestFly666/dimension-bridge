@@ -210,6 +210,7 @@ namespace SimpleXmlEditor.Localization
                 ["NoModelsFound"] = "No models found. Please check your API key.",
                 ["ModelsFoundSuccess"] = "Found {0} models with rate limit information",
                 ["ErrorFetchingModels"] = "Error fetching models: {0}",
+                ["GeminiKeyFormatWarning"] = "The Gemini API key starts with 'sk-', which is typical of other providers (e.g. DeepSeek). Google Gemini keys usually start with 'AIza'. Please verify the key is correct.",
                 ["ConfigLoadError"] = "Config load error: {0}",
                 ["ConfigSaveError"] = "Config save error: {0}",
                 ["ErrorLoadingXml"] = "Error loading XML: {0}",

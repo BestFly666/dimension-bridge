@@ -20,7 +20,8 @@ namespace SimpleXmlEditor.Services
         Zhipu,
         Moonshot,
         Wenxin,
-        Xunfei
+        Xunfei,
+        OpenRouter
     }
 
     public static class ProviderConfig
@@ -34,7 +35,8 @@ namespace SimpleXmlEditor.Services
             { AIProvider.Zhipu, "https://open.bigmodel.cn/api/paas/v4" },
             { AIProvider.Moonshot, "https://api.moonshot.cn/v1" },
             { AIProvider.Wenxin, "https://qianfan.cloud.baidu.com/v2" },
-            { AIProvider.Xunfei, "https://spark-api-open.xfyun.cn/v1" }
+            { AIProvider.Xunfei, "https://spark-api-open.xfyun.cn/v1" },
+            { AIProvider.OpenRouter, "https://api.openrouter.ai/api/v1" }
         };
 
         public static readonly Dictionary<AIProvider, bool> UsesOpenAiFormat = new()
@@ -46,7 +48,8 @@ namespace SimpleXmlEditor.Services
             { AIProvider.Zhipu, true },
             { AIProvider.Moonshot, true },
             { AIProvider.Wenxin, true },
-            { AIProvider.Xunfei, true }
+            { AIProvider.Xunfei, true },
+            { AIProvider.OpenRouter, true }
         };
     }
 

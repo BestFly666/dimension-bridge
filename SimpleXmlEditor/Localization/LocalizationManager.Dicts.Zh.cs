@@ -210,6 +210,7 @@ namespace SimpleXmlEditor.Localization
                 ["NoModelsFound"] = "未找到模型，请检查 API 密钥。",
                 ["ModelsFoundSuccess"] = "找到 {0} 个模型（含速率限制信息）",
                 ["ErrorFetchingModels"] = "获取模型出错: {0}",
+                ["GeminiKeyFormatWarning"] = "Gemini API Key 以 'sk-' 开头，这通常是其他厂商（如 DeepSeek）的密钥。Google Gemini 的密钥通常以 'AIza' 开头，请确认填写正确。",
                 ["ConfigLoadError"] = "配置加载错误: {0}",
                 ["ConfigSaveError"] = "配置保存错误: {0}",
                 ["ErrorLoadingXml"] = "加载 XML 出错: {0}",

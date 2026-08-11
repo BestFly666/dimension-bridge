@@ -132,6 +132,14 @@ namespace SimpleXmlEditor
             try
             {
                 var selectedProvider = GetSelectedProvider();
+
+                // Gemini 槽位填入其他厂商（sk- 开头，如 DeepSeek）Key 时提示可能填错，但继续拉取
+                if (selectedProvider == AIProvider.GoogleGemini && apiKey.StartsWith("sk-"))
+                {
+                    MessageBox.Show(LocalizationManager.GetString("GeminiKeyFormatWarning"),
+                        LocalizationManager.GetString("MsgWarning"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+
                 var models = await _mainWindow.FetchAvailableModelsAsync(apiKey, selectedProvider);
 
                 if (models.Count > 0)
@@ -329,6 +337,7 @@ namespace SimpleXmlEditor
             "Moonshot" => "Kimi",
             "Wenxin" => "文心一言",
             "Xunfei" => "讯飞星火",
+            "OpenRouter" => "OpenRouter",
             _ => provider
         };
     }

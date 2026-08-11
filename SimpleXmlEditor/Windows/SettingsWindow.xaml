@@ -49,6 +49,7 @@
                                     <ComboBoxItem Content="🟠 Kimi (月之暗面)" Tag="Moonshot"/>
                                     <ComboBoxItem Content="🔵 文心一言 (百度)" Tag="Wenxin"/>
                                     <ComboBoxItem Content="⚪ 讯飞星火 (Xunfei)" Tag="Xunfei"/>
+                                    <ComboBoxItem Content="🔶 OpenRouter" Tag="OpenRouter"/>
                                 </hc:ComboBox>
                                 <TextBlock Name="SelectAiProviderText" Text="选择 AI 翻译服务提供商" FontSize="11" Foreground="#666" Margin="0,4,0,0"/>
                             </StackPanel>
@@ -290,6 +291,7 @@
                                     <ComboBoxItem Content="🟠 Kimi" Tag="Moonshot"/>
                                     <ComboBoxItem Content="🔵 文心一言" Tag="Wenxin"/>
                                     <ComboBoxItem Content="⚪ 讯飞星火" Tag="Xunfei"/>
+                                    <ComboBoxItem Content="🔶 OpenRouter" Tag="OpenRouter"/>
                                 </hc:ComboBox>
                             </StackPanel>
 
