@@ -166,6 +166,9 @@
                                 <TextBlock Name="ConcurrentLabelText" Text=" 并发:" Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0"/>
                                 <hc:TextBox Name="ConcurrentBatchesTxt" Text="3" Width="36" FontSize="13"
                                             VerticalAlignment="Center" TextChanged="ConcurrentBatchesTxt_TextChanged" TextAlignment="Center"/>
+                                <TextBlock Name="GlossaryLimitLabelText" Text=" 术语:" Foreground="{DynamicResource AppSubForegroundBrush}" FontSize="12" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                <hc:TextBox Name="GlossaryLimitTxt" Text="350" Width="46" FontSize="13"
+                                            VerticalAlignment="Center" TextChanged="GlossaryLimitTxt_TextChanged" TextAlignment="Center"/>
                             </StackPanel>
                         </Border>
 

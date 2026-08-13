@@ -124,7 +124,7 @@ namespace SimpleXmlEditor
             _original = existing;
             Title = existing == null ? LocalizationManager.GetString("TermAddTitle") : LocalizationManager.GetString("TermEditTitle");
             Width = 520;
-            Height = 380;
+            Height = 400;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             ResizeMode = ResizeMode.NoResize;
             Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5));
@@ -180,22 +180,24 @@ namespace SimpleXmlEditor
                 row++;
             }
 
-            // Buttons
-            {
-                var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-                Grid.SetRow(btnPanel, row);
-                grid.Children.Add(btnPanel);
+            // Buttons（不放入 grid 最后一行：固定高度窗口下字段多时按钮会被挤出可视区，
+            // 改为 DockPanel 固定在窗口底部，内容区用 ScrollViewer 滚动，确定按钮始终可点）
+            var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
+            var cancelBtn = new Button { Content = LocalizationManager.GetString("GlossaryCancel"), Width = 80, Height = 30, Margin = new Thickness(4, 0, 0, 0) };
+            cancelBtn.Click += (_, _) => { DialogResult = false; Close(); };
+            btnPanel.Children.Add(cancelBtn);
 
-                var cancelBtn = new Button { Content = LocalizationManager.GetString("GlossaryCancel"), Width = 80, Height = 30, Margin = new Thickness(4, 0, 0, 0) };
-                cancelBtn.Click += (_, _) => { DialogResult = false; Close(); };
-                btnPanel.Children.Add(cancelBtn);
+            var saveBtn = new Button { Content = LocalizationManager.GetString("GlossarySave"), Width = 80, Height = 30, Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)), Foreground = Brushes.White, FontWeight = FontWeights.Medium, BorderThickness = new Thickness(0) };
+            saveBtn.Click += (_, _) => SaveAndClose();
+            btnPanel.Children.Add(saveBtn);
 
-                var saveBtn = new Button { Content = LocalizationManager.GetString("GlossarySave"), Width = 80, Height = 30, Background = new SolidColorBrush(Color.FromRgb(0x4C, 0xAF, 0x50)), Foreground = Brushes.White, FontWeight = FontWeights.Medium, BorderThickness = new Thickness(0) };
-                saveBtn.Click += (_, _) => SaveAndClose();
-                btnPanel.Children.Add(saveBtn);
-            }
+            var root = new DockPanel();
+            DockPanel.SetDock(btnPanel, Dock.Bottom);
+            root.Children.Add(btnPanel);
+            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = grid };
+            root.Children.Add(scroll);
 
-            Content = grid;
+            Content = root;
         }
 
         private void SaveAndClose()

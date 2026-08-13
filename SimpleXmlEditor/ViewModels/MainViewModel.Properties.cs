@@ -76,6 +76,20 @@ namespace SimpleXmlEditor.ViewModels
             }
         }
 
+        public int MaxGlossaryContextTerms
+        {
+            get => _maxGlossaryContextTerms;
+            set
+            {
+                _maxGlossaryContextTerms = value;
+                // 同步到 GlossaryManager：翻译时 GetGlossaryContextTerms() 读取的
+                // 是 _glossary.MaxGlossaryContextTerms，二者不同步会导致术语注入上限不生效。
+                if (_glossary != null)
+                    _glossary.MaxGlossaryContextTerms = value;
+                OnPropertyChanged();
+            }
+        }
+
         public AIProvider AiProvider
         {
             get => _aiProvider;

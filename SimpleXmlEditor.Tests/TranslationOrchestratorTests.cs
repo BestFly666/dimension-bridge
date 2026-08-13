@@ -161,6 +161,7 @@ namespace SimpleXmlEditor.Tests
         {
             public ConcurrentDictionary<string, GlossaryTerm> Terms { get; } = new();
             public int Count => 0;
+            public int MaxGlossaryContextTerms { get; set; } = 350;
             public event Action<string> LogMessage;
 
             public bool TryGetValue(string sourceText, out string translated)
@@ -169,7 +170,7 @@ namespace SimpleXmlEditor.Tests
                 return false;
             }
 
-            public Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries) => new();
+            public List<GlossaryContextTerm> GetGlossaryContextTerms(List<LocalizationEntry> entries) => new();
             public (int added, int updated, int skipped) ImportCsv(string filePath) => (0, 0, 0);
             public (int added, int updated) ImportJson(string filePath) => (0, 0);
             public void SetEntry(string source, string translation, string category = "", string status = "confirmed", string tags = "") { }

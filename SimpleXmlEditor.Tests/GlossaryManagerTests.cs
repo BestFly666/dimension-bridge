@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using SimpleXmlEditor.Dictionary;
@@ -124,11 +125,12 @@ namespace SimpleXmlEditor.Tests
             };
 
             var terms = manager.GetGlossaryContextTerms(entries);
+            var map = terms.ToDictionary(t => t.Key, StringComparer.OrdinalIgnoreCase);
 
-            Assert.Contains("Stormtrooper", terms.Keys);
-            Assert.Contains("Jedi", terms.Keys);
-            Assert.Contains("Box", terms.Keys);
-            Assert.Equal("暴风兵", terms["Stormtrooper"]);
+            Assert.Contains("Stormtrooper", map.Keys);
+            Assert.Contains("Jedi", map.Keys);
+            Assert.Contains("Box", map.Keys);
+            Assert.Equal("暴风兵", map["Stormtrooper"].Chinese);
             manager.Clear();
         }
 
@@ -210,10 +212,47 @@ namespace SimpleXmlEditor.Tests
             };
 
             var terms = manager.GetGlossaryContextTerms(entries);
+            var map = terms.ToDictionary(t => t.Key, StringComparer.OrdinalIgnoreCase);
 
-            Assert.Contains("Xyston-class Star Destroyer", terms.Keys);
-            Assert.Contains("Quasar Fire-class cruiser-carrier", terms.Keys);
-            Assert.Equal("长矛级歼星舰", terms["Xyston-class Star Destroyer"]);
+            Assert.Contains("Xyston-class Star Destroyer", map.Keys);
+            Assert.Contains("Quasar Fire-class cruiser-carrier", map.Keys);
+            Assert.Equal("长矛级歼星舰", map["Xyston-class Star Destroyer"].Chinese);
+            manager.Clear();
+        }
+
+        [Fact]
+        public void GetGlossaryContextTerms_BatchBudget_FairPerEntry()
+        {
+            // 回归保护：批量翻译时匹配术语总数超过 MaxGlossaryContextTerms(200)，
+            // 预算必须均分给每条 entry——否则靠后条目的术语会被全部挤出（术语注入"时好时坏"的根因）。
+            var manager = new GlossaryManager();
+            manager.Clear();
+            // 上限已属性化（默认 350），手动设 200 复现原"60×4=240 术语超预算"场景
+            manager.MaxGlossaryContextTerms = 200;
+            int entryCount = 60; // 60×4 = 240 个匹配术语 > 200
+            var entries = new List<LocalizationEntry>();
+            for (int i = 0; i < entryCount; i++)
+            {
+                manager.SetEntry($"KadalbeBattleships{i:D2}", $"译{i}");
+                manager.SetEntry($"KraytGunship{i:D2}", $"译{i}");
+                manager.SetEntry($"Starviper{i:D2}", $"译{i}");
+                manager.SetEntry($"Basilisk{i:D2}", $"译{i}");
+                entries.Add(new LocalizationEntry
+                {
+                    Key = $"K{i}",
+                    Value = $"KadalbeBattleships{i:D2} KraytGunship{i:D2} Starviper{i:D2} Basilisk{i:D2}"
+                });
+            }
+
+            var terms = manager.GetGlossaryContextTerms(entries);
+            var keys = terms.Select(t => t.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            // 每条 entry 至少保住其最长匹配术语（旧算法按全局长度排序，后 10 条 entry 全部术语被挤出）
+            for (int i = 0; i < entryCount; i++)
+                Assert.Contains($"KadalbeBattleships{i:D2}", keys);
+
+            // 均分预算（200/60≈3 每 entry）下，排在各自 entry 匹配集前 3 的 Starviper 也应注入
+            Assert.Contains("Starviper00", keys);
             manager.Clear();
         }
     }

@@ -71,34 +71,44 @@ namespace SimpleXmlEditor.ViewModels
                 _progressSavePending = true;
                 if (_progressSaveTask != null)
                     return _progressSaveTask; // 已有保存在执行，稍后会自动补一次
-                _progressSaveTask = RunProgressSaveLoop();
-                return _progressSaveTask;
+
+                var task = RunProgressSaveLoop();
+                _progressSaveTask = task;
+
+                // 清理 _progressSaveTask 统一交给 continuation，而不是 RunProgressSaveLoop 的 finally：
+                // RunProgressSaveLoop 可能同步完成（最小间隔内被跳过直接 break，其 finally 会在赋值前
+                // 把 _progressSaveTask 置空），若调用方再把"已完成任务"写回 _progressSaveTask，
+                // DrainProgressSavesAsync 会永远读到"非 null 且立即完成"的 task 而死循环（UI 卡死，即本 bug），
+                // 后续保存请求也会误判"有保存在执行"而不再创建新循环。
+                // 仅在 _progressSaveTask 仍指向本任务时才置空，避免误清后续新建的循环任务。
+                _ = task.ContinueWith(completed =>
+                {
+                    lock (_progressSaveGate)
+                    {
+                        if (ReferenceEquals(_progressSaveTask, completed))
+                            _progressSaveTask = null;
+                    }
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+
+                return task;
             }
         }
 
         private async Task RunProgressSaveLoop()
         {
-            try
+            while (_progressSavePending)
             {
-                while (_progressSavePending)
-                {
-                    _progressSavePending = false;
-                    // 最小保存间隔：批次完成密集时避免连续全量序列化+写文件（CPU/IO 风暴）。
-                    // 跳过的保存由最终 SaveCache / SaveProgressFinalAsync 兜底，进度不丢。
-                    var now = DateTime.UtcNow.Ticks;
-                    if (now - Interlocked.Read(ref _lastProgressSaveTicks) < MinProgressSaveIntervalTicks)
-                        break;
-                    Interlocked.Exchange(ref _lastProgressSaveTicks, now);
-                    await _configService.SaveTranslationProgressAsync(Entries);
-                }
+                _progressSavePending = false;
+                // 最小保存间隔：批次完成密集时避免连续全量序列化+写文件（CPU/IO 风暴）。
+                // 跳过的保存由最终 SaveCache / SaveProgressFinalAsync 兜底，进度不丢。
+                var now = DateTime.UtcNow.Ticks;
+                if (now - Interlocked.Read(ref _lastProgressSaveTicks) < MinProgressSaveIntervalTicks)
+                    break;
+                Interlocked.Exchange(ref _lastProgressSaveTicks, now);
+                await _configService.SaveTranslationProgressAsync(Entries);
             }
-            finally
-            {
-                lock (_progressSaveGate)
-                {
-                    _progressSaveTask = null;
-                }
-            }
+            // 注意：不再在此处清理 _progressSaveTask —— 该字段由 SaveProgressThrottledAsync 的
+            // continuation 统一清理（ReferenceEquals 防误清），避免"同步完成的任务被写回字段"的死循环 bug。
         }
 
         /// <summary>
@@ -113,6 +123,13 @@ namespace SimpleXmlEditor.ViewModels
                 lock (_progressSaveGate)
                 {
                     current = _progressSaveTask;
+                    if (current != null && current.IsCompleted)
+                    {
+                        // 防御：不持有已完成任务（正常情况下由 continuation 及时清理），
+                        // 避免读到"非 null 且立即完成"的 task 时死循环
+                        _progressSaveTask = null;
+                        current = null;
+                    }
                 }
                 if (current == null) break;
                 await current;
@@ -241,7 +258,6 @@ namespace SimpleXmlEditor.ViewModels
                         {
                             // Track request for rate limiting
                             TrackRequest();
-
                             // 批次计时：Stopwatch 包裹 API 调用，含拆半重试的总耗时
                             var sw = System.Diagnostics.Stopwatch.StartNew();
                             var batchResults = await _orchestrator.TranslateBatchAsync(batch, forceRefresh, CustomPrompt);

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
+using SimpleXmlEditor.Utils;
 
 namespace SimpleXmlEditor.Services
 {
@@ -200,6 +201,52 @@ namespace SimpleXmlEditor.Services
                         results[i + 1] = line;
                 }
             }
+        }
+
+        /// <summary>
+        /// 清洗 AI 回显污染：模型偶尔把输入行（index. [KEY] "原文"）整体回显进译文，
+        /// 导致译文混入条目 KEY 与英文原文。仅在译文确实包含本条目 KEY 时才清洗，
+        /// 避免误伤合法译文（例如译文里保留英文原名）：
+        ///   1) [KEY] "译文" 包装 → 只保留引号内内容，丢弃其后回显的 KEY/原文
+        ///   2) 无包装 → 移除裸 KEY
+        ///   3) 英文原文回显在末尾 → 剥离（中文源不剥离，防误删）
+        /// 清洗后若为空，调用方应视为"无有效译文"（走缺失补译），而非把 KEY 当译文。
+        /// </summary>
+        public static string CleanTranslationEcho(string translation, string entryKey, string originalValue)
+        {
+            var text = translation?.Trim();
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(entryKey))
+                return text;
+
+            // 未带出 KEY 的译文不处理（避免误伤合法内容）
+            if (!text.Contains($"[{entryKey}]", StringComparison.Ordinal) &&
+                !text.Contains(entryKey, StringComparison.Ordinal))
+                return text;
+
+            // 1) [KEY] "译文" 包装：提取引号内内容，丢弃包装外的全部回显
+            var wrapped = Regex.Match(text,
+                $@"\[\s*{Regex.Escape(entryKey)}\s*\]\s*[""\u201C](.+?)[""\u201D]",
+                RegexOptions.Singleline);
+            if (wrapped.Success)
+            {
+                text = wrapped.Groups[1].Value.Trim();
+            }
+            else
+            {
+                // 2) 无包装：移除裸 KEY
+                text = text.Replace($"[{entryKey}]", " ").Replace(entryKey, " ");
+            }
+
+            // 3) 英文原文回显在末尾 → 剥离（中文源不剥离，防误删中文）
+            if (!string.IsNullOrEmpty(originalValue) && !originalValue.HasChineseChars())
+            {
+                var trimmed = text.TrimEnd();
+                if (trimmed.EndsWith(originalValue, StringComparison.Ordinal))
+                    text = trimmed[..^originalValue.Length].TrimEnd();
+            }
+
+            // 4) 折叠多余空白
+            return Regex.Replace(text, @"\s+", " ").Trim();
         }
 
         private static void LogParseError(string message, string responseSnippet)

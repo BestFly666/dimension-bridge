@@ -84,6 +84,16 @@ namespace SimpleXmlEditor
             }
         }
 
+        private void GlossaryLimitTxt_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_viewModel == null) return;
+
+            if (int.TryParse(GlossaryLimitTxt.Text, out int value) && value >= 1 && value <= 2000)
+            {
+                _viewModel.MaxGlossaryContextTerms = value;
+            }
+        }
+
         private void PauseBtn_Click(object sender, RoutedEventArgs e)
         {
             if (!_viewModel.IsTranslationRunning) return;
@@ -147,13 +157,19 @@ namespace SimpleXmlEditor
                 ResetSelectionState();
                 _viewModel.LastLoadedFilePath = null;
                 _viewModel.ConfigService.Config.LastLoadedFilePath = null;
-                // 清空缓存时同步清零统计（API 调用/命中），随 SaveConfig 落盘防止重启后旧值恢复
+                // 清空缓存时同步清零统计（API 调用/命中/费用），随 SaveConfig 落盘防止重启后旧值恢复
                 _viewModel.CacheHits = 0;
                 _viewModel.ApiCalls = 0;
                 _viewModel.GlossaryHits = 0;
+                _viewModel.TotalInputChars = 0;
+                _viewModel.TotalOutputChars = 0;
+                _viewModel.TotalCost = 0;
                 _viewModel.ConfigService.Config.TotalCacheHits = 0;
                 _viewModel.ConfigService.Config.TotalApiCalls = 0;
                 _viewModel.ConfigService.Config.TotalGlossaryHits = 0;
+                _viewModel.ConfigService.Config.TotalInputChars = 0;
+                _viewModel.ConfigService.Config.TotalOutputChars = 0;
+                _viewModel.ConfigService.Config.TotalCostUsd = 0;
                 _viewModel.SaveConfig();
 
                 FilterKeyBox.Text = "";

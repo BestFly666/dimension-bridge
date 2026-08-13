@@ -422,6 +422,7 @@ namespace SimpleXmlEditor.Localization
                 ["ExpertSystemTitle"] = "专家配置系统",
                 ["ExpertSystemDesc"] = "专家配置让你可以为 AI 翻译器定义特定领域的知识。每个配置包含思考指令和术语对照表。激活后，这些知识会自动注入每次翻译请求，确保专有名词和领域术语的翻译准确性。",
                 ["BatchLabel"] = "批次",
+                ["GlossaryLimitLabel"] = "术语",
                 ["AppName"] = "次元译桥",
 
                 // === Custom prompt help ===

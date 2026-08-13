@@ -18,6 +18,7 @@ namespace SimpleXmlEditor.ViewModels
                 LastLoadedFilePath = _configService.Config.LastLoadedFilePath;
             BatchSize = _configService.Config.BatchSize;
             MaxConcurrentBatches = _configService.Config.MaxConcurrentBatches;
+            MaxGlossaryContextTerms = _configService.Config.MaxGlossaryContextTerms;
             AiProvider = Enum.TryParse<AIProvider>(_configService.Config.AiProvider, out var provider) ? provider : AIProvider.GoogleGemini;
             if (_configService.Config.ProgramLanguage != null)
                 ProgramLanguage = _configService.Config.ProgramLanguage;
@@ -36,6 +37,9 @@ namespace SimpleXmlEditor.ViewModels
             _totalInputChars = (int)_configService.Config.TotalInputChars;
             _totalOutputChars = (int)_configService.Config.TotalOutputChars;
             _totalCost = _configService.Config.TotalCostUsd;
+
+            // 术语注入上限同步到 GlossaryManager（属性 setter 已同步，此处显式确保一致）
+            _glossary.MaxGlossaryContextTerms = _configService.Config.MaxGlossaryContextTerms;
         }
 
         public void SaveConfig()
@@ -45,6 +49,7 @@ namespace SimpleXmlEditor.ViewModels
             _configService.Config.LastLoadedFilePath = LastLoadedFilePath;
             _configService.Config.BatchSize = BatchSize;
             _configService.Config.MaxConcurrentBatches = MaxConcurrentBatches;
+            _configService.Config.MaxGlossaryContextTerms = MaxGlossaryContextTerms;
             _configService.Config.AiProvider = AiProvider.ToString();
             _configService.Config.ProgramLanguage = ProgramLanguage;
             _configService.SetApiKey(_aiTranslationService.ApiKey);

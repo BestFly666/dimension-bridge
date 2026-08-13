@@ -35,14 +35,14 @@ namespace SimpleXmlEditor.ViewModels
             {
                 if (_configService.Cache.TryGetValue(entry.Key, out var cachedByKey))
                 {
-                    entry.Translation = cachedByKey;
+                    entry.Translation = ApplyCleanedCacheValue(entry, cachedByKey);
                 }
                 else
                 {
                     var cacheKey = _configService.GetCacheKey(entry.Value);
                     if (cacheKey != null && _configService.Cache.TryGetValue(cacheKey, out var cachedByValue))
                     {
-                        entry.Translation = cachedByValue;
+                        entry.Translation = ApplyCleanedCacheValue(entry, cachedByValue);
                     }
                 }
 
@@ -51,6 +51,22 @@ namespace SimpleXmlEditor.ViewModels
 
             Entries.Add(entry);
             return entry;
+        }
+
+        /// <summary>
+        /// 从缓存恢复译文时清洗 AI 回显污染（译文混入 [KEY]/原文），
+        /// 并写回清洗结果自愈缓存。清洗后为空则不应用（保持待译状态）。
+        /// </summary>
+        private string ApplyCleanedCacheValue(LocalizationEntry entry, string cached)
+        {
+            var cleaned = AiResponseParser.CleanTranslationEcho(cached, entry.Key, entry.Value);
+            if (string.IsNullOrEmpty(cleaned))
+                return null;
+
+            if (cleaned != cached)
+                // 自愈：覆盖污染的双键缓存，避免下次加载再次读到带 KEY 的旧值
+                _configService.SetCacheEntry(entry.Key, entry.Value, cleaned);
+            return cleaned;
         }
 
         /// <summary>

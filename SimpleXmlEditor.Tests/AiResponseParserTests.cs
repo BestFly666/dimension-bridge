@@ -88,5 +88,57 @@ namespace SimpleXmlEditor.Tests
             Assert.Equal("甲", result[1]);
             Assert.Equal("丙", result[3]);
         }
+
+        // ─── CleanTranslationEcho（AI 回显污染清洗） ──────────────
+
+        [Fact]
+        public void CleanTranslationEcho_WrappedKey_ExtractsQuotedContent()
+        {
+            // 用户实测案例：模型把 [KEY] "译文" 连同 KEY 与英文原文一起回显
+            var polluted = "[TEXT_UPGRADE_RL_HEAVY_ARMOR_L2] \"复合材料装甲板 II\"TEXT_UPGRADE_RL_HEAVY_ARMOR_L2  Composite Armor Plates II";
+            var cleaned = AiResponseParser.CleanTranslationEcho(
+                polluted, "TEXT_UPGRADE_RL_HEAVY_ARMOR_L2", "Composite Armor Plates II");
+
+            Assert.Equal("复合材料装甲板 II", cleaned);
+        }
+
+        [Fact]
+        public void CleanTranslationEcho_BareKeyAndOriginal_RemovesBoth()
+        {
+            // 无 [KEY] 包装，但含裸 KEY 与末尾英文原文
+            var polluted = "复合材料装甲板 II TEXT_UPGRADE_RL_HEAVY_ARMOR_L2 Composite Armor Plates II";
+            var cleaned = AiResponseParser.CleanTranslationEcho(
+                polluted, "TEXT_UPGRADE_RL_HEAVY_ARMOR_L2", "Composite Armor Plates II");
+
+            Assert.Equal("复合材料装甲板 II", cleaned);
+        }
+
+        [Fact]
+        public void CleanTranslationEcho_NoKey_Untouched()
+        {
+            // 合法译文（含英文原名）不含 KEY → 不清洗，防止误伤
+            var legit = "复合材料装甲板 II (Composite Armor Plates II)";
+            var cleaned = AiResponseParser.CleanTranslationEcho(
+                legit, "TEXT_UPGRADE_RL_HEAVY_ARMOR_L2", "Composite Armor Plates II");
+
+            Assert.Equal(legit, cleaned);
+        }
+
+        [Fact]
+        public void CleanTranslationEcho_OnlyKey_ReturnsEmpty()
+        {
+            // 整条都是 KEY 回显 → 清洗后为空，调用方按"缺失"处理
+            var cleaned = AiResponseParser.CleanTranslationEcho(
+                "TEXT_UPGRADE_RL_HEAVY_ARMOR_L2", "TEXT_UPGRADE_RL_HEAVY_ARMOR_L2", "Composite Armor Plates II");
+
+            Assert.Equal(string.Empty, cleaned);
+        }
+
+        [Fact]
+        public void CleanTranslationEcho_NullOrEmpty_ReturnsAsIs()
+        {
+            Assert.Null(AiResponseParser.CleanTranslationEcho(null, "K", "V"));
+            Assert.Equal(string.Empty, AiResponseParser.CleanTranslationEcho("", "K", "V"));
+        }
     }
 }

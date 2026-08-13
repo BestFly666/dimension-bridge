@@ -15,7 +15,140 @@
 
 ---
 
-## 2026-08-09 — 全面代码审计修复 + UI 编辑态崩溃修复 + 3.5 换行补丁 + 产品更名"次元译桥"
+## 2026-08-12/13 — 批量翻译结束崩溃修复 + AI 回显 KEY 污染清洗 + 术语注入容量可配置/分类注入 + CDATA 解析修复 + 5.0 换行补丁
+
+> 背景：用户报告批量翻译结束后容易崩溃（UI 卡死）；翻译结果偶尔混入 KEY 与英文原文（模型回显 prompt 输入行）；术语注入上限需在界面可调；5.0 长描述需加换行。以代码审查员 + 后端架构师身份处理。
+
+### A. 批量翻译结束崩溃修复（SaveProgressThrottledAsync 竞态死循环）
+
+**现象**：批量翻译结束（`DrainProgressSavesAsync` 排空在途保存）时 UI 线程死循环，表现为批量翻译结束容易崩溃。
+
+**根因**：[MainViewModel.Translation.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Translation.cs) `SaveProgressThrottledAsync` 中 `_progressSaveTask = RunProgressSaveLoop()` 存在竞态：
+1. 循环因最小 2s 保存间隔被跳过时**同步完成**，其 `finally` 在调用方赋值**之前**执行，把 `_progressSaveTask` 置空
+2. 调用方随后把"已完成任务"写回 `_progressSaveTask`
+3. `DrainProgressSavesAsync` 的 `while(true)` 永远读到"非 null 且立即完成"的任务 → `await` 立即返回 → 死循环（UI 卡死）
+
+**修复**：
+- 字段清理改由 `ContinueWith`（`ExecuteSynchronously` + `ReferenceEquals` 防误清）统一负责——仅当 `_progressSaveTask` 仍指向本任务时才置空
+- `RunProgressSaveLoop` **移除 finally 自清理**（不再与 continuation 竞争清理）
+- `DrainProgressSavesAsync` 增加 `IsCompleted` 防御：读到已完成任务先置空再跳过，杜绝死循环
+
+### B. AI 回显 KEY 污染清洗（CleanTranslationEcho）
+
+**现象**：模型偶尔把 prompt 输入行（`index. [KEY] "原文"`）整体回显进译文，导致译文混入 KEY 与英文原文。
+
+**修复**：
+- [AiResponseParser.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiResponseParser.cs) 新增 `CleanTranslationEcho(translation, entryKey, originalValue)`——**仅当译文含本条目 KEY 才清洗**（避免误伤合法译文，如译文里保留英文原名）：
+  1. `[KEY] "译文"` 包装 → 只保留引号内内容，丢弃其后回显的 KEY/原文
+  2. 无包装 → 移除裸 KEY
+  3. 末尾英文原文回显 → 剥离（中文源不剥离，防误删中文）
+  4. 折叠多余空白；清洗后为空视为"无有效译文"
+- [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) `ParseResponse` 应用：清洗为空视为缺失，走拆半补译
+- [MainViewModel.EntryProcessing.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.EntryProcessing.cs) `ProcessEntry` 恢复缓存时经 `ApplyCleanedCacheValue` 清洗，并用 `SetCacheEntry` **写回自愈**（覆盖污染的双键缓存，避免下次加载再读到带 KEY 旧值）
+- 新增 5 个单元测试（[AiResponseParserTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/AiResponseParserTests.cs)）：包装提取 / 裸 KEY+原文剥离 / 无 KEY 不动 / 纯 KEY 清空 / null 空串原样返回
+
+### C. 术语注入：容量 UI 可配置 + 分类注入 + 预算均分
+
+- **容量可配置**（此前常量 `MAX_GLOSSARY_CONTEXT_TERMS` 定格 200）：改为 [GlossaryManager.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.cs) `MaxGlossaryContextTerms` 属性（默认 **350**）；[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs) `AppConfig` 新增同名字段持久化；MainViewModel 新增同名属性（setter 同步 `_glossary`）+ Load/SaveConfig 接线；主界面新增"术语"输入框（1-2000 校验，[MainWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.xaml)），本地化 key `GlossaryLimitLabel`
+- **分类注入**：新增 `GlossaryContextTerm(Key, Chinese, Category)` record（[GlossaryManager.Index.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Dictionary/GlossaryManager.Index.cs)）；`GetGlossaryContextTerms` 返回 `List<GlossaryContextTerm>`；prompt 术语表带分类 `"key" (category) = "译文"`（[TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs)），帮助模型区分专有名词词义（如 Enforcer 为星际飞船专名，作普通词义时应自然翻译）
+- **预算均分**：第一优先从"每条 entry 至少贡献最长术语"改为"预算均分给每条 entry（每 entry 最多 `Max/条目数` 个，长度降序）"——修复批量翻译术语注入"时好时坏"（长句条目命中大量术语会把短术语如 StarViper 挤出）
+- `IGlossaryManager` 接口同步修改（[Interfaces.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/Interfaces.cs)）；新增 2 个测试（默认 350 + 跨重载持久化；60 条目 × 4 术语超预算时每条 entry 保住自己的最长术语）
+
+### D. CDATA 解析修复（5.0 文件格式）
+
+- [XmlRepository.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/XmlRepository.cs) `LoadXml` 优先取 `Translation` 元素的 `XCData` 内容：LocalisationData 文件被美化格式化后（CDATA 独占一行带换行缩进），`XElement.Value` 会拼接元素内全部文本节点（含缩进空白）→ 原文多出前导/尾随空白。优先 CDATA 后解析干净，值精确无空白
+- 新增 1 个测试（[XmlRepositoryTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/XmlRepositoryTests.cs)）：pretty-printed CDATA 无前导空白
+
+### E. 清空缓存时费用清零（对 08-11 累计统计的补充）
+
+- [MainWindow.Events.Translation.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Events.Translation.cs) 清空缓存时在原有 API 调用/命中清零基础上，新增 `TotalInputChars` / `TotalOutputChars` / `TotalCost` 及 Config 侧 `TotalInputChars` / `TotalOutputChars` / `TotalCostUsd` 同步清零——防止重启后旧费用值复活
+
+### F. TermEditDialog 按钮栏修复
+
+- [GlossaryWindow.TermOps.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/GlossaryWindow.TermOps.cs) 按钮栏不再放入 grid 最后一行（固定高度窗口下字段多时按钮被挤出可视区、保存不可点），改为 DockPanel 固定在窗口底部 + 内容区 ScrollViewer 滚动，确定/取消按钮始终可点；窗口高度 380 → 400
+
+### G. 5.0 换行写入 DAT 脚本修复（仓库外脚本 `e:\translate\scripts\5.0_添加换行写入DAT.py`）
+
+- 路径从错误的 `5.0_ai` 修正为 `5.0`
+- `INCLUDE_KEYWORDS` 增加 `SKIRMISH`：使 `TEXT_SKIRMISH_MISC_DESC_UPGRADE_FREE` 一族 **15 条长描述**参与换行处理
+
+### 验证
+
+- `dotnet test`：**83/83 通过**（新增 CleanTranslationEcho 5 + 术语容量 1 + 预算均分 1 + CDATA 1；既有测试断言适配 `List<GlossaryContextTerm>` 返回类型，无回归）
+- `dotnet build`：0 错误 0 警告
+
+---
+
+## 2026-08-11 — 累计统计持久化（重启保留）+ 费用显示改人民币 + API 泄露与密钥安全专项审查
+
+> 背景：用户要求 API 调用 / 缓存命中 / 费用等统计数据在重启后保留（此前每次翻译会话开始即清零，费用按美元显示且汇率不可配）；随后由安全工程师完成 API 泄露与密钥安全专项审查。以后端架构师 + 安全工程师身份处理。
+
+### A. 累计统计持久化（commit `6adb411`）
+
+**AppConfig 新增累计字段**（[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs#L37-L44)）：
+- `TotalApiCalls` / `TotalCacheHits` / `TotalGlossaryHits` / `TotalInputChars` / `TotalOutputChars` / `TotalCostUsd`
+- `CurrencyExchangeRate`（默认 **7.2**，可在 config.json 中调整）
+
+**统计累加同步写 Config**（[MainViewModel.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.cs#L198-L243)）：
+- `IncrementApiCalls` / `IncrementCacheHits` / `IncrementGlossaryHits`：`Interlocked.Increment` 后同步写入 `Config.Total*`，不再只改内存字段
+- `AddTranslationStats`：`Interlocked.Add`（int 字符数）+ 锁（double 成本）后同步写入 `Config.TotalInputChars` / `TotalOutputChars` / `TotalCostUsd`
+
+**启动恢复**（[MainViewModel.Config.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Config.cs#L33-L38)）：`LoadConfig` 时将 6 个累计值从 Config 恢复到内存字段，重启后 UI 直接显示历史累计值。
+
+**三处落盘**：
+1. 翻译会话 `finally` 块（[MainViewModel.Translation.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/ViewModels/MainViewModel.Translation.cs#L388)）：`SaveConfig()` 持久化累计统计，翻译结束即落盘
+2. 窗口关闭 `OnClosed`（[MainWindow.FileOps.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.FileOps.cs#L115-L116)）：兜底保证退出不丢
+3. 清空缓存按钮（[MainWindow.Events.Translation.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Events.Translation.cs#L150-L157)）：清零统计后同步 `SaveConfig()`，防止重启后旧值复活
+
+**行为变更**：翻译会话开始**不再清零统计**（此前每轮翻译从 0 开始计数），改为累计值持久化、跨会话 / 跨重启累计。
+
+### B. 费用显示改人民币
+
+- `CostDisplay` 本地化 key 由 `"${0:F2}"` 改为 **`"¥{0:F2}"`**（[LocalizationManager.Dicts.En.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Localization/LocalizationManager.Dicts.En.cs#L581) / [LocalizationManager.Dicts.Zh.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Localization/LocalizationManager.Dicts.Zh.cs#L581) 同步）
+- 显示值 × `CurrencyExchangeRate`：[MainWindow.Helpers.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Helpers.cs#L69) 状态栏费用（`TotalCost * CostExchangeRate:F2`）与 [L115](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/MainWindow.Helpers.cs#L115) 费用展示（`CostDisplay` 传入换算后金额）两处显示逻辑更新
+
+### C. 测试与测试基建
+
+- 新增 2 个测试（[ConfigServiceTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/ConfigServiceTests.cs#L87-L146)）：
+  - `CumulativeStats_ArePersistedAcrossReload`：写入统计 → 保存 → 新实例加载 → 全部恢复（模拟重启）
+  - `CurrencyExchangeRate_DefaultsTo7_2_And_CanBeOverridden`：默认 7.2 → 改为 7.0 持久化并恢复
+- `ConfigService` 新增 **internal 构造 `ConfigService(string appDataDir)`**（[ConfigService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/ConfigService.cs#L92-L100)）：测试传入隔离数据目录，避免污染用户 AppData 的 config/cache
+- [SimpleXmlEditor.csproj](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/SimpleXmlEditor.csproj#L12) 增加 `InternalsVisibleTo Include="SimpleXmlEditor.Tests"`
+
+### D. API 泄露与密钥安全专项审查结论（安全工程师完成）
+
+**总体评级：低（Low）**——无严重 / 高危问题；GitHub 仓库历史干净（config.json 从未入库、全历史无密钥命中、公开仓库已确认）。
+
+**已确认安全项**：
+1. DPAPI 加密失败**绝不写明文**（`ProtectedData.Protect` 异常时仅日志提示，保留 `LEGACY:` 前缀只读兼容旧配置）
+2. 密钥仅经 **HTTP 头**传输（Gemini `x-goog-api-key` / OpenAI 兼容 `Authorization: Bearer`），无 URL 参数
+3. **无全局 HttpClient 默认头**——每个请求显式携带自己的 Key，并发请求不串凭据
+4. 评估 / 投票**多模型专用密钥同样 DPAPI 加密**（`EncryptedEvaluationApiKey` + 模型级 `EncryptedApiKey`）
+5. 无硬编码密钥
+6. **XXE 防护**：[XmlRepository.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/XmlRepository.cs#L34-L38) `DtdProcessing.Prohibit` + `XmlResolver = null`
+7. 依赖无已知高危 CVE：Newtonsoft.Json 13.0.3、YamlDotNet 18.1.0、HandyControl 3.5.1
+
+**待改进建议**（记录为后续待办，不强制本次实现）：
+
+| 编号 | 等级 | 建议 |
+|---|---|---|
+| M1 | 中 | 日志脱敏只覆盖 `AiTranslationService.SanitizeLogMessage` 单一入口，建议下沉到 `MainViewModel.OnLogMessage` / `MainWindow.Helpers.FlushPendingUi` 统一出口（成本最低收益最大） |
+| M2 | 中 | CLI 通过 `-k/--api-key` 命令行参数接收密钥（[Program.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Cli/Program.cs#L43)），建议删除改环境变量 / 交互输入 |
+| L1 | 低 | 脱敏正则盲区：`key=` 不匹配 `api_key=`、大小写敏感；建议加 `(?i)` 与高熵 token 掩码 |
+| L2 | 低 | 评估密钥加密失败无告警 |
+| L3 | 低 | 历史明文迁移失败时明文残留 |
+| I1 | 信息 | DPAPI `CurrentUser` 作用域（可选升级 Credential Manager） |
+| I2 | 信息 | `parse_errors.log` 落盘 AI 响应片段 |
+| I3 | 信息 | [.gitignore](file:///e:/translate/xml-ai-translator-main/.gitignore) 补充 `score_cache.json` |
+
+### 验证
+
+- `dotnet test`：**75/75 通过**（新增累计统计 2 个；含此前 Gemini 排序 4 个，无回归）
+- `dotnet build`：0 错误 0 警告
+
+---
+
+## 2026-08-09/10 — 全面代码审计修复 + UI 编辑态崩溃修复 + 3.5 换行补丁 + 产品更名"次元译桥"（更新：OpenRouter 接入 / Gemini 修复 / GPL-3.0）
 
 > 背景：用户要求按代码审查员规则对项目做大规模审计并修复全部问题（34 项确认问题）；随后反馈 Ctrl+Z / 批量替换 / 筛选在"选中单元格内容"后崩溃；并决定把产品对外名称更改为"次元译桥"。以代码审查员 + 后端架构师身份处理。
 
@@ -82,10 +215,29 @@
 - 删除 `CacheHit` / `ApiCallCounted` / `ApiCharsCounted` 三个 CS0067 警告事件——仅定义 + 订阅、从未触发；统计实际由 [TranslationOrchestrator.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/TranslationOrchestrator.cs) 的 `OnCacheHit` / `OnApiCall` / `OnApiChars` 承担
 - 同步清理：接口 `IAiTranslationService` 声明、`MainViewModel` 无效订阅、测试 Fake 冗余声明
 
+### J. 接入 OpenRouter 聚合厂商 + 修复 Gemini 模型列表问题（commit `a58fb56`）
+
+**OpenRouter 聚合厂商接入**：
+- `AIProvider` 枚举新增 `OpenRouter`（[AiTranslationService.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.cs#L24)）；端点 `https://api.openrouter.ai/api/v1`（[L39](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.cs#L39)），走 OpenAI 兼容格式（`UsesOpenAiFormat = true`，[L52](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.cs#L52)）
+- 模型 ID 采用"厂商/模型"格式：`openai/gpt-5`、`anthropic/claude-sonnet-4.5`、`google/gemini-3-pro-preview`、`x-ai/grok-4` 等（[AiTranslationService.Models.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.Models.cs#L21)）
+- 静态模型表 9 个 + 对应限流表（统一 30 次/分钟，RPM 上限取平台公共限制，[L33](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.Models.cs#L33)）——一个 Key 访问聚合平台全模型
+- 设置窗口新增 `🔶 OpenRouter` 选项（[SettingsWindow.xaml](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/SettingsWindow.xaml#L52)）
+
+**Gemini 模型列表问题修复**（此前刷新只拉到约前 20 个模型，`gemini-3` 等新模型缺失）：
+- **分页拉全**：[GetGeminiModelsAsync](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.Models.cs#L135-L190) 改为 `pageSize=100` + `pageToken`/`nextPageToken` 循环拉取，直到分页取完全部模型
+- **全量列表排序**：新增 `SortGeminiModels`（[L199-L214](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Services/AiTranslationService.Models.cs#L199-L214)）——① 名称含 `gemini-3` ② 含 `gemini-2` ③ 含 `gemini-1`/`gemini-pro`/`gemini-flash`（无版本号旧系列）④ 其他（`gemma-*` 等），类内按名称倒序（新版本在前），刷新后最新模型排最前
+- **Key 格式警告**：设置页检测 Gemini Key 以 `sk-` 开头时弹窗警告（Google Gemini 密钥通常以 `AIza` 开头，`sk-` 多为 DeepSeek 等其他厂商密钥），新增本地化 key `GeminiKeyFormatWarning`（[SettingsWindow.Models.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor/Windows/SettingsWindow.Models.cs#L139)）
+- 新增 [AiTranslationServiceModelsTests.cs](file:///e:/translate/xml-ai-translator-main/SimpleXmlEditor.Tests/AiTranslationServiceModelsTests.cs)（4 个 SortGeminiModels 测试：排序优先级 / 空输入 / null 输入 / 类内新版本在前）
+
+### K. 开源协议更换为 GPL-3.0（commit `efe55bb`）
+
+- LICENSE 从 MIT 更换为 **GPL-3.0**——对接开源社区生态，与同类游戏本地化工具（LunaTranslator 等 GPLv3）许可证口径保持一致
+- README 徽章与许可证声明同步更新
+
 ### 验证
 
 - `dotnet build`：0 错误 0 警告
-- `dotnet test`：69/69 通过（新增 AiResponseParser / 缓存双键测试，修正 Fake GetCacheKey）
+- `dotnet test`：73/73 通过（新增 AiResponseParser / 缓存双键测试、SortGeminiModels 4 个，修正 Fake GetCacheKey）
 - 用户实测：编辑态下筛选 / 撤销 / 批量替换不再崩溃
 
 ---

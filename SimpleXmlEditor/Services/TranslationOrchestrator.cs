@@ -337,8 +337,12 @@ namespace SimpleXmlEditor.Services
             {
                 // 术语转义：防术语值含引号/控制字符时逃逸出提示词结构
                 var safeKey = PromptTextSanitizer.Sanitize(term.Key);
-                var safeValue = PromptTextSanitizer.Sanitize(term.Value);
-                sb.AppendLine($"  \"{safeKey}\" = \"{safeValue}\"");
+                var safeValue = PromptTextSanitizer.Sanitize(term.Chinese);
+                // 分类注入：帮助模型区分专有名词词义（如 Enforcer 为星际飞船专名，作普通词义时应自然翻译）
+                var cat = string.IsNullOrWhiteSpace(term.Category)
+                    ? ""
+                    : $" ({PromptTextSanitizer.Sanitize(term.Category)})";
+                sb.AppendLine($"  \"{safeKey}\"{cat} = \"{safeValue}\"");
             }
             sb.AppendLine("When these terms appear in the text, use the glossary translation by default to keep terminology consistent.");
             sb.AppendLine("EXCEPTION: if a term is clearly used with a different meaning in this specific context (figurative use, part of a proper name, or a different sense), translate it naturally for that context instead. When in doubt, prefer the glossary translation.");
@@ -355,7 +359,13 @@ namespace SimpleXmlEditor.Services
             foreach (var kvp in parsed)
             {
                 if (kvp.Key >= 1 && kvp.Key <= entries.Count)
-                    results[entries[kvp.Key - 1].Value] = kvp.Value;
+                {
+                    var entry = entries[kvp.Key - 1];
+                    // 清洗 AI 回显（模型偶尔把 [KEY] "..." 整体回显进译文）；清洗后为空视为缺失，走补译
+                    var cleaned = AiResponseParser.CleanTranslationEcho(kvp.Value, entry.Key, entry.Value);
+                    if (!string.IsNullOrEmpty(cleaned))
+                        results[entry.Value] = cleaned;
+                }
             }
             return results;
         }

@@ -42,7 +42,7 @@ namespace SimpleXmlEditor.Dictionary
         private Dictionary<string, HashSet<string>> _invertedIndex = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>Maximum glossary terms injected into a single batch prompt.</summary>
-        private const int MAX_GLOSSARY_CONTEXT_TERMS = 200;
+        public int MaxGlossaryContextTerms { get; set; } = 350;
 
         /// <summary>Regex cache shared across all methods (ConcurrentDictionary：并发读写安全)</summary>
         private static readonly ConcurrentDictionary<string, Regex> _regexCache = new();

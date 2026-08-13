@@ -82,7 +82,18 @@ namespace SimpleXmlEditor.Services
             {
                 var key = localisation.Attribute("Key")?.Value ?? "";
                 var translationElem = localisation.Descendants("Translation").FirstOrDefault();
-                var value = translationElem?.Value ?? "";
+                string value;
+                if (translationElem == null)
+                {
+                    value = "";
+                }
+                else
+                {
+                    // 优先取 CDATA 内容：LocalisationData 文件可能被美化格式化（CDATA 独占一行带换行缩进），
+                    // XElement.Value 会拼接元素内所有文本节点（含缩进空白），导致内容多出前导/尾随空白
+                    var cdata = translationElem.DescendantNodes().OfType<XCData>().FirstOrDefault();
+                    value = cdata != null ? cdata.Value : translationElem.Value;
+                }
 
                 if (string.IsNullOrEmpty(key) && string.IsNullOrEmpty(value))
                     continue;

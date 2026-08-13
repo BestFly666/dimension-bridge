@@ -80,6 +80,7 @@ namespace SimpleXmlEditor
             MenuReplace.ToolTip = L("TipBatchReplace");
 
             BatchLabelText.Text = $"{L("BatchLabel")}:";
+            GlossaryLimitLabelText.Text = $"{L("GlossaryLimitLabel")}:";
 
             if (EntriesGrid.Columns.Count >= 6)
             {

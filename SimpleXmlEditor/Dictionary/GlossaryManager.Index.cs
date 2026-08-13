@@ -7,6 +7,9 @@ using SimpleXmlEditor.Services;
 
 namespace SimpleXmlEditor.Dictionary
 {
+    /// <summary>注入 AI 提示词的术语条目（原文 + 译文 + 分类，分类帮助模型区分专有名词词义）。</summary>
+    public sealed record GlossaryContextTerm(string Key, string Chinese, string Category);
+
     /// <summary>
     /// GlossaryManager: index & search responsibilities — inverted-index construction,
     /// whole-word matching, glossary-context building, and search/filter helpers.
@@ -177,16 +180,16 @@ namespace SimpleXmlEditor.Dictionary
 
         /// <summary>
         /// Fast glossary context builder using inverted index.
-        /// For a batch of entries, finds up to MAX_GLOSSARY_CONTEXT_TERMS matching terms.
-        /// Returns dictionary of (term_key → chinese_translation) for prompt injection.
+        /// For a batch of entries, finds up to MaxGlossaryContextTerms matching terms.
+        /// Returns ordered list of (term_key → chinese_translation, category) for prompt injection.
         /// 
         /// Performance: O(batch_word_count × avg_candidates_per_word) instead of
         /// O(glossary_size × batch_size). With 100k glossary and 50 entries per batch,
         /// this is ~1000x faster than iterating all glossary terms.
         /// </summary>
-        public Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries)
+        public List<GlossaryContextTerm> GetGlossaryContextTerms(List<LocalizationEntry> entries)
         {
-            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var result = new List<GlossaryContextTerm>();
             if (entries.Count == 0 || _invertedIndex.Count == 0)
                 return result;
 
@@ -224,7 +227,7 @@ namespace SimpleXmlEditor.Dictionary
             // 先全局验证：candidates → 实际匹配的术语（termKey → 命中条目数），
             // 同时记录每条 entry 各自命中了哪些术语。
             // 注意：不能先按长度排序再验证截断——批量候选几百个时，长术语会先
-            // 验证通过占满 MAX_GLOSSARY_CONTEXT_TERMS，短/冷门术语（如 A-Wing）
+            // 验证通过占满 MaxGlossaryContextTerms，短/冷门术语（如 A-Wing）
             // 被挤出导致术语注入失效（单条生效、批量失效的根因）。
             var matchedTerms = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var entryMatched = new List<HashSet<string>>(entries.Count);
@@ -249,22 +252,25 @@ namespace SimpleXmlEditor.Dictionary
 
             if (matchedTerms.Count == 0) return result;
 
-            // 第一优先：每条 entry 至少贡献其匹配术语（最长者优先），
-            // 保证每条文本的术语都有机会注入，不被高频长术语挤掉。
+            // 第一优先：预算均分给每条 entry（每 entry 最多 quota 个匹配术语，长度降序），
+            // 保证每条文本的术语都有机会注入。避免按全局长度排序时，长句条目命中大量术语
+            // 导致短术语（如 StarViper）被长术语/靠前条目挤出——这是批量翻译术语注入
+            // "时好时坏"的根因（同一条目单独翻译正常、批量翻译失效）。
             var chosen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int entryQuota = Math.Max(1, MaxGlossaryContextTerms / Math.Max(1, entries.Count));
             foreach (var set in entryMatched)
             {
-                if (chosen.Count >= MAX_GLOSSARY_CONTEXT_TERMS) break;
-                foreach (var key in set.OrderByDescending(k => k.Length))
+                if (chosen.Count >= MaxGlossaryContextTerms) break;
+                foreach (var key in set.OrderByDescending(k => k.Length).Take(entryQuota))
                 {
                     chosen.Add(key);
-                    if (chosen.Count >= MAX_GLOSSARY_CONTEXT_TERMS) break;
+                    if (chosen.Count >= MaxGlossaryContextTerms) break;
                 }
             }
 
             // 第二优先：剩余名额按命中条目数降序补充（多条目共有的核心术语），
             // 同命中数按长度降序（更具体术语优先）。
-            if (chosen.Count < MAX_GLOSSARY_CONTEXT_TERMS)
+            if (chosen.Count < MaxGlossaryContextTerms)
             {
                 foreach (var kvp in matchedTerms
                     .Where(k => !chosen.Contains(k.Key))
@@ -272,14 +278,14 @@ namespace SimpleXmlEditor.Dictionary
                     .ThenByDescending(k => k.Key.Length))
                 {
                     chosen.Add(kvp.Key);
-                    if (chosen.Count >= MAX_GLOSSARY_CONTEXT_TERMS) break;
+                    if (chosen.Count >= MaxGlossaryContextTerms) break;
                 }
             }
 
             foreach (var key in chosen)
             {
                 if (Terms.TryGetValue(key, out var term))
-                    result[key] = term.Chinese;
+                    result.Add(new GlossaryContextTerm(term.English, term.Chinese, term.Category));
             }
 
             return result;

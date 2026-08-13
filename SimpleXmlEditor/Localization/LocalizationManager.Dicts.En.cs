@@ -373,6 +373,7 @@ namespace SimpleXmlEditor.Localization
                 ["ExpertSystemTitle"] = "Expert Profile System",
                 ["ExpertSystemDesc"] = "Expert profiles let you define domain-specific knowledge. Each contains thinking instructions and a terminology glossary. When activated, this knowledge is injected into every translation request for maximum accuracy.",
                 ["BatchLabel"] = "Batch",
+                ["GlossaryLimitLabel"] = "Terms",
                 ["AppName"] = "Dimension Bridge",
 
                 // === Find bar ===

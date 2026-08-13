@@ -25,6 +25,7 @@ namespace SimpleXmlEditor
 
             BatchSizeTxt.Text = _viewModel.BatchSize.ToString();
             ConcurrentBatchesTxt.Text = _viewModel.MaxConcurrentBatches.ToString();
+            GlossaryLimitTxt.Text = _viewModel.MaxGlossaryContextTerms.ToString();
             _viewModel.ProfileManager.EnsureDefaultsExist();
             RefreshExpertProfileCombo();
             ApplyLocalization();

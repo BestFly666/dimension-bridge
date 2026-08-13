@@ -76,8 +76,9 @@ namespace SimpleXmlEditor.Services
     {
         ConcurrentDictionary<string, GlossaryTerm> Terms { get; }
         int Count { get; }
+        int MaxGlossaryContextTerms { get; set; }
         bool TryGetValue(string sourceText, out string translated);
-        Dictionary<string, string> GetGlossaryContextTerms(List<LocalizationEntry> entries);
+        List<GlossaryContextTerm> GetGlossaryContextTerms(List<LocalizationEntry> entries);
         (int added, int updated, int skipped) ImportCsv(string filePath);
         (int added, int updated) ImportJson(string filePath);
         void SetEntry(string source, string translation, string category = "", string status = "confirmed", string tags = "");

@@ -23,6 +23,7 @@ namespace SimpleXmlEditor.Services
         public string LastLoadedFilePath { get; set; } = "";
         public int BatchSize { get; set; } = 50;
         public int MaxConcurrentBatches { get; set; } = 3;
+        public int MaxGlossaryContextTerms { get; set; } = 350;
         public bool DisableThinking { get; set; } = true;
 
         // 评估/投票专用模型配置（留空则使用翻译模型）

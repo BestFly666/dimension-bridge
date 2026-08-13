@@ -55,6 +55,30 @@ namespace SimpleXmlEditor.Tests
         }
 
         [Fact]
+        public void LoadXml_LocalisationData_PrettyPrintedCdata_NoLeadingWhitespace()
+        {
+            // 5.0 文件格式：CDATA 独占一行带换行缩进，解析后不得残留前导/尾随空白
+            var xml = @"<LocalisationData>
+  <Localisation Key=""TEXT_INTRO_1"">
+    <TranslationData>
+      <Translation Language=""ENGLISH"">
+        <![CDATA[***Temporary short and to the point description***]]>
+      </Translation>
+    </TranslationData>
+  </Localisation>
+</LocalisationData>";
+
+            using var temp = TempXml(xml);
+            var repo = new XmlRepository();
+
+            var entries = repo.LoadXml(temp.Path);
+
+            Assert.Single(entries);
+            Assert.Equal("TEXT_INTRO_1", entries[0].Key);
+            Assert.Equal("***Temporary short and to the point description***", entries[0].Value);
+        }
+
+        [Fact]
         public void LoadXml_UnrecognizedRoot_ThrowsInvalidDataException()
         {
             var xml = @"<UnknownRoot><Data>hello</Data></UnknownRoot>";

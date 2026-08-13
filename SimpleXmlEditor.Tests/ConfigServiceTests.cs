@@ -144,5 +144,31 @@ namespace SimpleXmlEditor.Tests
                     Directory.Delete(tempDir, true);
             }
         }
+
+        [Fact]
+        public void MaxGlossaryContextTerms_DefaultsTo350_And_PersistsAcrossReload()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "SimpleXmlEditorTests_" + Guid.NewGuid().ToString("N"));
+
+            try
+            {
+                // 默认值 350
+                var writer = new ConfigService(tempDir);
+                Assert.Equal(350, writer.Config.MaxGlossaryContextTerms);
+
+                // 修改后持久化并恢复
+                writer.Config.MaxGlossaryContextTerms = 500;
+                writer.SaveConfig();
+
+                var reader = new ConfigService(tempDir);
+                reader.LoadConfig();
+                Assert.Equal(500, reader.Config.MaxGlossaryContextTerms);
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, true);
+            }
+        }
     }
 }
