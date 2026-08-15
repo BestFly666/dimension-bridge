@@ -6,12 +6,12 @@
 
 🌐 **基于 AI 批量翻译的现代化多格式本地化工具**
 
-一款功能强大的 WPF 桌面应用，专为中文游戏本地化人员设计，支持**国内主流 AI 大模型**批量翻译主流本地化文件格式（XML / CSV / JSON / INI / YAML / RESX / PO / TXT / Android）。具备智能分批、翻译缓存、术语表管理、AI 质量评估等完善的本地化工作流功能。
+一款功能强大的 WPF 桌面应用，专为中文游戏本地化人员设计，支持**国内外主流 AI 大模型**批量翻译主流本地化文件格式（XML / CSV / JSON / INI / YAML / RESX / PO / TXT / Android）。具备智能分批、翻译缓存、术语表管理、AI 质量评估等完善的本地化工作流功能。
 
 ![平台](https://img.shields.io/badge/平台-.NET%208.0-blue)
 ![许可](https://img.shields.io/badge/许可-GPLv3-blue)
-![AI](https://img.shields.io/badge/AI-8%20家国产模型-orange)
-![测试](https://img.shields.io/badge/测试-69%20通过-brightgreen)
+![AI](https://img.shields.io/badge/AI-9%20家模型-orange)
+![测试](https://img.shields.io/badge/测试-83%20通过-brightgreen)
 ![CI](https://github.com/BestFly666/dimension-bridge/actions/workflows/ci.yml/badge.svg)
 
 > [!IMPORTANT]
@@ -34,18 +34,19 @@
 
 ## 支持的大模型
 
-全部为国内可直接使用的 AI 服务：
+涵盖国内可直接使用的 AI 服务，以及 OpenRouter 聚合网关（接入 GPT-5、Claude、Gemini 3、Grok 4 等国际模型）：
 
 | 提供商 | 可用模型示例 |
 |--------|------------|
-| **Google Gemini** | gemini-2.5-flash、gemini-2.5-pro（动态获取全部） |
+| **Google Gemini** | gemini-3-pro-preview、gemini-3-flash-preview、gemini-2.5-flash、gemini-2.5-pro（动态获取全部） |
 | **DeepSeek（深度求索）** | deepseek-v4-flash、deepseek-v4-pro |
-| **豆包（火山引擎）** | doubao-pro、doubao-lite、doubao-thinking-pro |
-| **千问（阿里云）** | qwen-plus、qwen-max、qwen-turbo、qwen-long |
-| **智谱 AI** | glm-4、glm-4-flash、glm-4-air、glm-4.5 |
+| **豆包（火山引擎）** | doubao-pro-32k、doubao-pro-128k、doubao-lite-32k、doubao-thinking-pro |
+| **千问（阿里云）** | qwen-plus、qwen-max、qwen-turbo、qwen-long、qwen2.5-7b、qwen2.5-72b |
+| **智谱 AI** | glm-4、glm-4-flash、glm-4-air、glm-4-plus、glm-4.5 |
 | **Kimi（月之暗面）** | moonshot-v1-8k、moonshot-v1-32k、moonshot-v1-128k |
 | **文心一言（百度）** | ernie-4.0-turbo、ernie-4.0、ernie-3.5、ernie-speed |
-| **讯飞星火** | general-v3.5、general-v3、general-v2 |
+| **讯飞星火** | general-v3.5、general-v3、general-v2、general-1.5 |
+| **OpenRouter（聚合网关）** | openai/gpt-5、anthropic/claude-sonnet-4.5、google/gemini-3-pro-preview、x-ai/grok-4、mistralai/mistral-large-latest、meta-llama/llama-4-scout 等 |
 
 在设置中点击"刷新模型"即可从厂商服务器在线拉取完整模型列表，并显示各模型的速率限制和价格信息（厂商升级模型名也不会失效）。
 
@@ -180,7 +181,7 @@ dotnet run --project SimpleXmlEditor/SimpleXmlEditor.csproj
 
 ```bash
 dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
-# 当前: 69/69 通过，0 失败，0 跳过
+# 当前: 83/83 通过，0 失败，0 跳过
 ```
 
 ### CI/CD
@@ -195,7 +196,7 @@ dotnet test SimpleXmlEditor.Tests/SimpleXmlEditor.Tests.csproj
 project-root/
 ├── SimpleXmlEditor/                     # WPF 主项目
 │   ├── Services/                        # 服务层（全部接口化）
-│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（8 个提供商）
+│   │   ├── AiTranslationService.cs      # IAiTranslationService — AI 翻译核心（9 个提供商）
 │   │   ├── AiTranslationService.Models.cs   # 模型列表与速率限制
 │   │   ├── AiTranslationService.Providers.cs # 各提供商 API 实现
 │   │   ├── AiResponseParser.cs          # AI 响应解析（截断检测 + 三级回退）
@@ -246,11 +247,17 @@ project-root/
 │   │   └── TextEncodingDetector.cs     # 共享编码检测（UTF-8/GBK）
 │   ├── ExpertProfiles/                  # 专家配置
 │   └── SimpleXmlEditor.csproj           # .NET 8.0 WPF 项目文件
-├── SimpleXmlEditor.Tests/               # xUnit 测试项目（58 个测试）
+├── SimpleXmlEditor.Tests/               # xUnit 测试项目（83 个测试）
 │   ├── TranslationOrchestratorTests.cs  # 分批/翻译/Key注入 测试
+│   ├── AiResponseParserTests.cs         # AI 响应解析/回显清洗 测试
+│   ├── AiTranslationServiceModelsTests.cs # 模型列表/限流 测试
 │   ├── BlacklistManagerTests.cs         # 黑名单过滤测试
-│   ├── XmlRepositoryTests.cs            # XML 读写测试
+│   ├── ConfigServiceTests.cs            # 配置/缓存 测试
+│   ├── FileFormatPluginsTests.cs        # 文件格式插件 测试
 │   ├── GlossaryManagerTests.cs          # 术语表测试
+│   ├── StringExtensionsTests.cs         # 字符串工具 测试
+│   ├── TxtFilePluginTests.cs            # TXT 插件 测试
+│   ├── XmlRepositoryTests.cs            # XML 读写测试
 │   └── SimpleXmlEditor.Tests.csproj
 ├── .github/workflows/ci.yml             # GitHub Actions CI/CD
 ├── scripts/                             # 附加工具脚本（参考示例）
